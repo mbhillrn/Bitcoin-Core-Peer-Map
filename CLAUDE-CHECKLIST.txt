@@ -122,12 +122,12 @@ TODO CHECKLIST
 ================================================================================
 
 TERMINAL PEER LIST:
-  [ ] Show table immediately without waiting for geo
-  [ ] Background thread(s) for geo lookups
-  [ ] Live update display as geo completes
-  [ ] Detect new peers mid-session, queue geo lookups
-  [ ] 'q' quits properly
-  [ ] Scrolling works
+  [x] Show table immediately without waiting for geo
+  [x] Background thread(s) for geo lookups
+  [x] Live update display as geo completes
+  [x] Detect new peers mid-session, queue geo lookups
+  [x] 'q' quits properly
+  [ ] Scrolling works (terminal limits rows, shows "X more peers")
 
 DATABASE:
   [x] Database in ./data/peers.db
@@ -172,5 +172,13 @@ COMPLETED ITEMS
 [x] Config saved to ./data/config.conf (2026-01-29)
 [x] Database path set to ./data/peers.db (2026-01-29)
 [x] Removed unnecessary backwards compatibility code (2026-01-29)
+[x] Peer list shows immediately - no blocking on geo lookups (2026-01-29)
+[x] Background thread for geo lookups (2026-01-29)
+[x] Live display updates as geo completes (2026-01-29)
+[x] New peers queued for geo lookup automatically (2026-01-29)
+[x] RFC1918 private IP detection added (2026-01-29)
+[x] 'q' properly quits peer list (2026-01-29)
+[x] Ctrl+C handled gracefully (2026-01-29)
+[x] CLAUDE-CHECKLIST.txt created (2026-01-29)
 
 ================================================================================
