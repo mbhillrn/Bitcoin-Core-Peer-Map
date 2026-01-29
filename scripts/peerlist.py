@@ -38,9 +38,7 @@ GEO_API_FIELDS = "status,country,countryCode,region,regionName,city,district,lat
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / 'data'
-CONFIG_DIR = DATA_DIR
-CONFIG_FILE = CONFIG_DIR / 'config.conf'
-CONFIG_FILE_OLD = CONFIG_DIR / 'detection_cache.conf'  # Backwards compat
+CONFIG_FILE = DATA_DIR / 'config.conf'
 DB_FILE = DATA_DIR / 'peers.db'
 
 # Geo status codes
@@ -94,17 +92,11 @@ class Config:
 
     def load(self) -> bool:
         """Load config from cache file"""
-        # Check new location first, then old for backwards compat
-        config_file = None
-        if CONFIG_FILE.exists():
-            config_file = CONFIG_FILE
-        elif CONFIG_FILE_OLD.exists():
-            config_file = CONFIG_FILE_OLD
-        else:
+        if not CONFIG_FILE.exists():
             return False
 
         try:
-            with open(config_file, 'r') as f:
+            with open(CONFIG_FILE, 'r') as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith('#') or '=' not in line:

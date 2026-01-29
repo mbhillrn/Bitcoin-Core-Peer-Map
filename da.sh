@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="0.3.0"
+VERSION="0.2.2"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CTRL+C HANDLING
@@ -337,7 +337,8 @@ main() {
 
         case "$startup_choice" in
             1)
-                msg_ok "Configuration confirmed"
+                save_config
+                msg_ok "Configuration saved"
                 ;;
             2)
                 run_detection

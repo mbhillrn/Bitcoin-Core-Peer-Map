@@ -37,26 +37,13 @@ export MBTC_CONFIGURED=0
 # Load configuration from cache file
 # Returns: 0 if loaded successfully, 1 if no config exists
 load_config() {
-    local config_file="$MBTC_CACHE_FILE"
-
-    # Check new location first
-    if [[ ! -f "$config_file" ]]; then
-        # Try old location for backwards compatibility
-        local old_cache="${XDG_CONFIG_HOME:-$HOME/.config}/mbtc-dash/detection_cache.conf"
-        if [[ -f "$old_cache" ]]; then
-            config_file="$old_cache"
-        else
-            return 1
-        fi
-    fi
+    [[ ! -f "$MBTC_CACHE_FILE" ]] && return 1
 
     # Source the config file to load variables
-    source "$config_file" 2>/dev/null || return 1
+    source "$MBTC_CACHE_FILE" 2>/dev/null || return 1
 
     # Validate we have at least CLI path
-    if [[ -z "$MBTC_CLI_PATH" ]]; then
-        return 1
-    fi
+    [[ -z "$MBTC_CLI_PATH" ]] && return 1
 
     MBTC_CONFIGURED=1
     return 0
@@ -66,28 +53,21 @@ load_config() {
 save_config() {
     mkdir -p "$MBTC_CONFIG_DIR"
 
-    local config_content="# MBTC-DASH Configuration
+    cat > "$MBTC_CACHE_FILE" << EOF
+# MBTC-DASH Configuration
 # Generated: $(date)
-# Do not edit manually - use detection script to update
 
-MBTC_CLI_PATH=\"$MBTC_CLI_PATH\"
-MBTC_DATADIR=\"$MBTC_DATADIR\"
-MBTC_CONF=\"$MBTC_CONF\"
-MBTC_NETWORK=\"$MBTC_NETWORK\"
-MBTC_RPC_HOST=\"$MBTC_RPC_HOST\"
-MBTC_RPC_PORT=\"$MBTC_RPC_PORT\"
-MBTC_RPC_USER=\"$MBTC_RPC_USER\"
-MBTC_COOKIE_PATH=\"$MBTC_COOKIE_PATH\"
-MBTC_CONFIGURED=1"
-
-    # Save to new location
-    echo "$config_content" > "$MBTC_CACHE_FILE"
+MBTC_CLI_PATH="$MBTC_CLI_PATH"
+MBTC_DATADIR="$MBTC_DATADIR"
+MBTC_CONF="$MBTC_CONF"
+MBTC_NETWORK="$MBTC_NETWORK"
+MBTC_RPC_HOST="$MBTC_RPC_HOST"
+MBTC_RPC_PORT="$MBTC_RPC_PORT"
+MBTC_RPC_USER="$MBTC_RPC_USER"
+MBTC_COOKIE_PATH="$MBTC_COOKIE_PATH"
+MBTC_CONFIGURED=1
+EOF
     chmod 600 "$MBTC_CACHE_FILE"
-
-    # Also save to old location for backwards compatibility
-    local old_cache="$MBTC_CONFIG_DIR/detection_cache.conf"
-    echo "$config_content" > "$old_cache"
-    chmod 600 "$old_cache"
 }
 
 # Check if config exists and is valid
@@ -98,7 +78,6 @@ config_exists() {
 # Clear saved configuration
 clear_config() {
     rm -f "$MBTC_CACHE_FILE"
-    rm -f "$MBTC_CONFIG_DIR/detection_cache.conf"
     MBTC_CLI_PATH=""
     MBTC_DATADIR=""
     MBTC_CONF=""
