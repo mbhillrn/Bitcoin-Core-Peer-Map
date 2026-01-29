@@ -37,6 +37,7 @@ GEO_API_FIELDS = "status,country,countryCode,region,regionName,city,district,lat
 CONFIG_DIR = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'mbtc-dash'
 DATA_DIR = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local' / 'share')) / 'mbtc-dash'
 CONFIG_FILE = CONFIG_DIR / 'config.conf'
+CONFIG_FILE_OLD = CONFIG_DIR / 'detection_cache.conf'  # Backwards compat
 DB_FILE = DATA_DIR / 'peers.db'
 
 # Geo status codes
@@ -86,11 +87,17 @@ class Config:
 
     def load(self) -> bool:
         """Load config from cache file"""
-        if not CONFIG_FILE.exists():
+        # Check new location first, then old for backwards compat
+        config_file = None
+        if CONFIG_FILE.exists():
+            config_file = CONFIG_FILE
+        elif CONFIG_FILE_OLD.exists():
+            config_file = CONFIG_FILE_OLD
+        else:
             return False
 
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(config_file, 'r') as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith('#') or '=' not in line:

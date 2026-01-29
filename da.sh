@@ -166,7 +166,7 @@ main() {
         exit 1
     fi
 
-    # Check if config exists, if not run detection
+    # Check if config exists
     if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
         echo ""
         msg_info "No configuration found. Running Bitcoin Core detection..."
@@ -174,6 +174,41 @@ main() {
         echo -en "${T_DIM}Press Enter to continue...${RST}"
         read -r
         run_detection
+    else
+        # Config exists - ask if it's correct on first run
+        show_status
+
+        echo ""
+        echo -e "${T_WARN}?${RST} Is this configuration correct?"
+        echo ""
+        echo -e "  ${T_INFO}1)${RST} Yes, continue to main menu"
+        echo -e "  ${T_INFO}2)${RST} No, run detection again"
+        echo -e "  ${T_INFO}3)${RST} No, reset and reconfigure"
+        echo -e "  ${T_ERROR}q)${RST} Quit"
+        echo ""
+
+        echo -en "${T_DIM}Choice [1-3/q]:${RST} "
+        read -r startup_choice
+
+        case "$startup_choice" in
+            1)
+                msg_ok "Configuration confirmed"
+                ;;
+            2)
+                run_detection
+                ;;
+            3)
+                clear_config
+                run_detection
+                ;;
+            q|Q)
+                msg_info "Goodbye!"
+                exit 0
+                ;;
+            *)
+                msg_ok "Using existing configuration"
+                ;;
+        esac
     fi
 
     # Main loop

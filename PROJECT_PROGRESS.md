@@ -80,6 +80,21 @@ lib/
   - MBTC_COOKIE_PATH, MBTC_RPC_USER
   - MBTC_CONFIGURED (flag for config loaded)
 
+## UI/UX Guidelines
+
+**Menu Navigation Rules:**
+- ALL menus MUST have an option to go back ('b') or exit/quit ('q')
+- Main menu: 'q' to quit
+- Sub-menus: 'b' to go back to parent menu
+- Detection steps: 'b' to go back to previous step
+- Never trap users in a menu with no way out
+- Ctrl+C should always work (first warns, second force quits)
+
+**Startup Flow:**
+- Show prerequisites check
+- If config exists: Ask "Is this correct?" with options to continue, reconfigure, or quit
+- If no config: Auto-run detection
+
 ## Planned Features
 - [ ] Peer map visualization (web-based)
 - [ ] Blockchain info display (height, difficulty, sync status)
@@ -87,6 +102,7 @@ lib/
 - [ ] System metrics (CPU, RAM, disk)
 - [ ] Wallet balance + price conversion
 - [ ] Security checks for exposed ports
+- [ ] Web dashboard (replaces terminal menu once ready)
 
 ---
-*Last updated: Python Rich integration, menu system, peer connection tracking*
+*Last updated: Config path fixes, startup confirmation, menu guidelines*
