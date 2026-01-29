@@ -95,6 +95,39 @@ lib/
 - If config exists: Ask "Is this correct?" with options to continue, reconfigure, or quit
 - If no config: Auto-run detection
 
+### v0.2.1 - Crash Fixes, Two-Panel Layout, UX Improvements
+- **Fixed Rich Live Display Crash**: Geo lookups now happen BEFORE entering Live context
+  - Root cause: Nested Live displays (console.status inside Live) not allowed
+  - Progress bar: "X Bitcoin Peers found. Currently stalking each one's location..."
+  - All geo lookups complete first, then Live table display begins
+
+- **Two-Panel Layout** for peer list:
+  - Top: Main peer table with all connection details
+  - Bottom: Recent changes panel showing connections/disconnections (last 30s)
+  - Format: `+ip network connected (HH:MM:SS)` or `-ip network disconnected`
+
+- **Detection UX Improvements**:
+  - Changed "Extracted" to "Detected" in process output
+  - After detection: Shows "These are the settings I found:" with full summary
+  - Confirmation prompt: "Does this look correct? y/n/q"
+  - Saves config only after user confirms
+
+- **Manual Configuration Option**:
+  - Startup option 3: "No, enter settings manually"
+  - User enters bitcoin.conf path and datadir
+  - Auto-detects remaining settings (CLI, network, auth) from those inputs
+  - Validates files exist before proceeding
+
+- **Auth Method Display**:
+  - Status now shows "Auth: Cookie" or "Auth: RPC User (username)"
+  - Detection results include Auth Method, Cookie File, or RPC User
+  - Clearer indication of which auth mechanism is being used
+
+- **Startup Flow Cleanup**:
+  - Removed "Press Enter to continue" after "No config found"
+  - Detection runs automatically with 1-second pause
+  - Smoother first-run experience
+
 ## Planned Features
 - [ ] Peer map visualization (web-based)
 - [ ] Blockchain info display (height, difficulty, sync status)
@@ -105,4 +138,4 @@ lib/
 - [ ] Web dashboard (replaces terminal menu once ready)
 
 ---
-*Last updated: Config path fixes, startup confirmation, menu guidelines*
+*Last updated: v0.2.1 - Fixed peer list crash, two-panel layout, manual config, auth display*
