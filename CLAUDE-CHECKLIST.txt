@@ -1,0 +1,176 @@
+================================================================================
+CLAUDE LOOK HERE - MBTC-DASH Development Checklist
+================================================================================
+
+Last Updated: 2026-01-29
+Current Version: 0.2.2
+
+================================================================================
+USER SETTINGS / DECISIONS
+================================================================================
+
+Database Location: ./data/ folder (local to project)
+Database stores: IP only (no port) for geo cache
+  - Multiple peers can share same IP on different ports
+  - Display full ip:port in tables
+  - Show warning when multiple peers share same IP
+
+Web Dashboard Layout (top to bottom):
+  1. MAP - shows peer locations
+  2. Main Peer Table - full peer list
+  3. Recent Changes Table - adds/removes in last 20 seconds (same columns as main)
+
+Map Library: Professional, free, lightweight (Leaflet.js)
+Web Port: Dynamic per run in 49152-65535 range, auto-detect conflicts
+Framework: FastAPI (not Flask)
+Auth: Single password prompt per startup for remote/LAN access
+
+================================================================================
+CRITICAL REQUIREMENTS (FROM PROJ-PLAN)
+================================================================================
+
+[!] PEER LIST MUST:
+  - Show table IMMEDIATELY with all peers
+  - Update locations in REAL TIME as geo lookups complete
+  - Do NOT wait for all geo lookups to finish
+  - New peers that connect mid-session MUST trigger geo lookups
+  - 'q' should quit (not require Ctrl+C)
+  - Table should be scrollable
+
+================================================================================
+GEO-LOOKUP LOGIC
+================================================================================
+
+Address Classification:
+  [ ] Onion (.onion) -> PRIVATE LOCATION, skip API
+  [ ] I2P (.i2p) -> PRIVATE LOCATION, skip API
+  [ ] CJDNS (fc/fd prefix) -> PRIVATE LOCATION, skip API
+  [ ] RFC1918 IPv4 (10.x, 172.16-31.x, 192.168.x) -> PRIVATE LOCATION, skip API
+  [ ] Private IPv6 -> PRIVATE LOCATION, skip API
+  [ ] Public IPv4/IPv6 -> Attempt geo lookup
+
+Future Map Placement:
+  - PRIVATE LOCATION -> Antarctica
+  - LOCATION UNAVAILABLE -> North Pole
+  - Public geo -> real lat/lon
+
+================================================================================
+GEO CACHE STRATEGY
+================================================================================
+
+When public IP appears:
+  1. If in DB with geo_status = GEO_OK -> Use cached, NO API call
+  2. If in DB with geo_status = PRIVATE -> Use cached, NO API call
+  3. If in DB with geo_status = GEO_UNAVAILABLE:
+     - Retry ONLY if: now - geo_last_lookup > retry_interval
+     - Retry cadence: 1 day -> 3 days -> 7 days -> forever 7 days
+  4. If NOT in DB -> Call API once, insert row
+
+Reset options needed (future):
+  [ ] Reset only unavailable entries
+  [ ] Reset entire geo cache
+
+================================================================================
+DISPLAY COLUMNS (Terminal + Web)
+================================================================================
+
+Default visible:
+  - Peer ID
+  - IP
+  - Port
+  - Direction (IN/OUT)
+  - Protocol/Network
+  - Country
+  - State/Region
+  - City
+  - Version/subver (with node name)
+  - Ping (ms)
+  - Bytes received
+  - Bytes sent
+  - Last received time (Eastern)
+  - Last sent time (Eastern)
+
+Additional fields (available but maybe not default):
+  - Services (abbreviated: N W NL P with tooltip)
+  - Time Connected (formatted: Xm, Xh Xm, Xd Xh)
+  - Relay/Throttle status (addr_relay_enabled, addr_rate_limited)
+  - Connection type (outbound-full-relay, etc)
+
+Sorting: Default by Peer ID (preserves connection order)
+
+================================================================================
+DATABASE STORAGE
+================================================================================
+
+Store persistently:
+  - IP address (no port)
+  - Network type
+  - geo_status (GEO_OK=0, PRIVATE=1, GEO_UNAVAILABLE=2)
+  - All geo API fields (country, countryCode, region, regionName, city,
+    district, lat, lon, isp, as, hosting)
+  - first_seen timestamp
+  - last_seen timestamp
+  - geo_last_lookup timestamp
+  - geo_retry_count
+
+Do NOT store (changes too frequently):
+  - Most getpeerinfo stats
+  - Anything that changes every 10 seconds
+
+================================================================================
+TODO CHECKLIST
+================================================================================
+
+TERMINAL PEER LIST:
+  [ ] Show table immediately without waiting for geo
+  [ ] Background thread(s) for geo lookups
+  [ ] Live update display as geo completes
+  [ ] Detect new peers mid-session, queue geo lookups
+  [ ] 'q' quits properly
+  [ ] Scrolling works
+
+DATABASE:
+  [x] Database in ./data/peers.db
+  [ ] Gracefully handle multiple peers with same IP
+  [ ] Verify all geo cache rules implemented
+
+PREREQS/DEPENDENCIES:
+  [ ] Add FastAPI to prereqs check
+  [ ] Add uvicorn to prereqs check
+  [ ] Add any other web dependencies
+  [ ] Offer to install missing deps
+  [ ] Track what THIS program installs (for uninstaller)
+
+UNINSTALLER:
+  [ ] Create tracking of installed dependencies
+  [ ] Uninstaller removes only what we installed
+  [ ] Does not affect pre-existing packages
+
+WEB DASHBOARD:
+  [ ] FastAPI server (not Flask)
+  [ ] Dynamic port selection (49152-65535)
+  [ ] Port conflict detection
+  [ ] Single password auth for remote access
+  [ ] Detect local IPs/interfaces
+  [ ] Show user correct URL to access
+  [ ] Map at top (Leaflet.js)
+  [ ] Main peer table
+  [ ] Recent changes table (20 second window)
+  [ ] Clean shutdown on Ctrl+C
+  [ ] DB integrity check on startup
+
+DOCUMENTATION:
+  [ ] Update PROJECT_PROGRESS.md
+  [ ] Update PROJ-Plan with [DONE] markers
+  [ ] Update PREREQS.md
+  [ ] Update README.md
+
+================================================================================
+COMPLETED ITEMS
+================================================================================
+
+[x] Config saved to ./data/config.conf (2026-01-29)
+[x] Database path set to ./data/peers.db (2026-01-29)
+[x] Removed unnecessary backwards compatibility code (2026-01-29)
+
+================================================================================
