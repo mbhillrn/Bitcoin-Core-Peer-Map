@@ -113,12 +113,9 @@ peer_ip_map_lock = threading.Lock()
 geo_pending_count = 0
 geo_pending_lock = threading.Lock()
 
-# Historical data cache: {ip: {first_seen, last_seen, times_seen}}
-history_cache = {}
-history_cache_lock = threading.Lock()
-
-# Queue for background DB writes (non-blocking)
-history_queue = queue.Queue()
+# Addrman cache: {addr: True/False} - populated from getnodeaddresses
+addrman_cache = set()
+addrman_cache_lock = threading.Lock()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -265,77 +262,29 @@ def get_db_stats() -> dict:
             'private': row[2] or 0, 'unavailable': row[3] or 0}
 
 
-def load_history_cache():
-    """Load all historical data from DB into memory on startup"""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.execute('SELECT ip, first_seen, last_seen, connection_count FROM peers_geo')
-    with history_cache_lock:
-        for row in cursor.fetchall():
-            history_cache[row[0]] = {
-                'first_seen': row[1] or 0,
-                'last_seen': row[2] or 0,
-                'times_seen': row[3] or 0
-            }
-    conn.close()
+def refresh_addrman_cache():
+    """Refresh the addrman cache from getnodeaddresses"""
+    global addrman_cache
+    try:
+        cmd = config.get_cli_command() + ['getnodeaddresses', '0']  # 0 = all addresses
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            addresses = json.loads(result.stdout)
+            new_cache = set()
+            for addr_info in addresses:
+                addr = addr_info.get('address', '')
+                if addr:
+                    new_cache.add(addr)
+            with addrman_cache_lock:
+                addrman_cache = new_cache
+    except Exception as e:
+        print(f"Addrman refresh error: {e}")
 
 
-def get_history(ip: str) -> dict:
-    """Get historical data from cache (instant)"""
-    with history_cache_lock:
-        return history_cache.get(ip, {'first_seen': 0, 'last_seen': 0, 'times_seen': 0})
-
-
-def update_history(ip: str, network_type: str):
-    """Update history in cache and queue DB write"""
-    now = int(time.time())
-    with history_cache_lock:
-        if ip in history_cache:
-            # Existing IP - update last_seen, increment times_seen
-            history_cache[ip]['last_seen'] = now
-            history_cache[ip]['times_seen'] = history_cache[ip].get('times_seen', 0) + 1
-        else:
-            # New IP - set first_seen
-            history_cache[ip] = {
-                'first_seen': now,
-                'last_seen': now,
-                'times_seen': 1
-            }
-        # Queue for background DB write
-        history_queue.put((ip, network_type, history_cache[ip].copy()))
-
-
-def history_db_worker():
-    """Background thread for writing history to DB (non-blocking)"""
-    while not stop_flag.is_set():
-        try:
-            ip, network_type, data = history_queue.get(timeout=1)
-        except queue.Empty:
-            continue
-
-        try:
-            conn = sqlite3.connect(DB_FILE)
-            # Check if exists
-            cursor = conn.execute('SELECT first_seen FROM peers_geo WHERE ip = ?', (ip,))
-            row = cursor.fetchone()
-
-            if row:
-                # Update existing
-                conn.execute('''
-                    UPDATE peers_geo
-                    SET last_seen = ?, connection_count = ?
-                    WHERE ip = ?
-                ''', (data['last_seen'], data['times_seen'], ip))
-            else:
-                # Insert new
-                conn.execute('''
-                    INSERT INTO peers_geo (ip, network_type, first_seen, last_seen, connection_count)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (ip, network_type, data['first_seen'], data['last_seen'], data['times_seen']))
-
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"History DB error: {e}")
+def is_in_addrman(ip: str) -> bool:
+    """Check if an IP is in the addrman cache"""
+    with addrman_cache_lock:
+        return ip in addrman_cache
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -566,12 +515,19 @@ def refresh_worker():
     """Background thread for periodic data refresh - uses SESSION CACHE"""
     global current_peers, recent_changes, geo_pending_count
     previous_ids = set()
+    addrman_refresh_counter = 0
 
     while not stop_flag.is_set():
         peers = get_peer_info()
 
         with peers_lock:
             current_peers = peers
+
+        # Refresh addrman cache every 6 cycles (60 seconds)
+        addrman_refresh_counter += 1
+        if addrman_refresh_counter >= 6:
+            refresh_addrman_cache()
+            addrman_refresh_counter = 0
 
         # Track changes
         current_ids = set()
@@ -594,8 +550,6 @@ def refresh_worker():
                 if previous_ids:  # Only add to changes after first run
                     with changes_lock:
                         recent_changes.append((now, 'connected', {'ip': ip, 'port': port, 'network': network_type}))
-                # Update historical data (first_seen, last_seen, times_seen)
-                update_history(ip, network_type)
 
             # Queue geo lookup if not already cached
             cached = get_cached_geo(ip)
@@ -762,10 +716,8 @@ async def api_peers(auth: bool = Depends(verify_password)):
             'lon': geo.get('lon', 0) if geo else 0,
             'isp': geo.get('isp', '') if geo else '',
 
-            # 24-26: historical (from cache, loaded from DB on startup)
-            'first_seen': get_history(ip).get('first_seen', 0),
-            'last_seen': get_history(ip).get('last_seen', 0),
-            'times_seen': get_history(ip).get('times_seen', 0),
+            # 23: addrman status
+            'in_addrman': is_in_addrman(ip),
 
             # Extra fields for UI
             'location': location,
@@ -822,6 +774,22 @@ async def api_stats(auth: bool = Depends(verify_password)):
         'last_update': datetime.now().strftime('%H:%M:%S'),
         'refresh_interval': REFRESH_INTERVAL,
     }
+
+
+@app.post("/api/shutdown")
+async def api_shutdown(auth: bool = Depends(verify_password)):
+    """Gracefully shutdown the server"""
+    import os
+    import signal
+
+    def shutdown():
+        time.sleep(0.5)  # Give time for response to be sent
+        stop_flag.set()
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    # Start shutdown in background thread
+    threading.Thread(target=shutdown, daemon=True).start()
+    return {"status": "shutting_down"}
 
 
 @app.get("/api/events")
@@ -899,7 +867,6 @@ def main():
 
     # Initialize
     init_database()
-    load_history_cache()  # Load historical data from DB into memory
 
     if not config.load():
         print("Error: Configuration not found. Run ./da.sh first to configure.")
@@ -928,8 +895,8 @@ def main():
     refresh_thread = threading.Thread(target=refresh_worker, daemon=True)
     refresh_thread.start()
 
-    history_thread = threading.Thread(target=history_db_worker, daemon=True)
-    history_thread.start()
+    # Initial addrman cache refresh
+    refresh_addrman_cache()
 
     # Get primary LAN IP (first non-localhost)
     lan_ip = local_ips[0] if local_ips else "127.0.0.1"

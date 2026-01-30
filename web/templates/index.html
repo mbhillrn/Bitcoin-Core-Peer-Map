@@ -13,14 +13,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-title">
-                <pre class="logo">
-███╗   ███╗██████╗  ██████╗ ██████╗ ██████╗ ███████╗
-████╗ ████║██╔══██╗██╔════╝██╔═══██╗██╔══██╗██╔════╝
-██╔████╔██║██████╔╝██║     ██║   ██║██████╔╝█████╗
-██║╚██╔╝██║██╔══██╗██║     ██║   ██║██╔══██╗██╔══╝
-██║ ╚═╝ ██║██████╔╝╚██████╗╚██████╔╝██║  ██║███████╗
-╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝
-                </pre>
+                <h1 class="logo-text">MBCore Dashboard</h1>
                 <span class="subtitle">Peer info, map, and tools for Bitcoin Core</span>
             </div>
             <div class="header-info">
@@ -36,23 +29,23 @@
                 <span class="stat-data" id="stat-connected">-</span>
             </div>
             <div class="stat-block stat-network" id="stat-ipv4-wrap" style="display: none;">
-                <span class="stat-title">IPv4</span>
+                <span class="stat-title">IPv4 (in/out)</span>
                 <span class="stat-data stat-ipv4" id="stat-ipv4">-</span>
             </div>
             <div class="stat-block stat-network" id="stat-ipv6-wrap" style="display: none;">
-                <span class="stat-title">IPv6</span>
+                <span class="stat-title">IPv6 (in/out)</span>
                 <span class="stat-data stat-ipv6" id="stat-ipv6">-</span>
             </div>
             <div class="stat-block stat-network" id="stat-onion-wrap" style="display: none;">
-                <span class="stat-title">Tor</span>
+                <span class="stat-title">Tor (in/out)</span>
                 <span class="stat-data stat-onion" id="stat-onion">-</span>
             </div>
             <div class="stat-block stat-network" id="stat-i2p-wrap" style="display: none;">
-                <span class="stat-title">I2P</span>
+                <span class="stat-title">I2P (in/out)</span>
                 <span class="stat-data stat-i2p" id="stat-i2p">-</span>
             </div>
             <div class="stat-block stat-network" id="stat-cjdns-wrap" style="display: none;">
-                <span class="stat-title">CJDNS</span>
+                <span class="stat-title">CJDNS (in/out)</span>
                 <span class="stat-data stat-cjdns" id="stat-cjdns">-</span>
             </div>
             <div class="stat-block stat-timer">
@@ -74,15 +67,32 @@
                     <span id="map-status-text">Updated!</span>
                 </span>
                 <span class="map-legend">
-                    <span class="legend-item"><span class="dot dot-public"></span> Public</span>
-                    <span class="legend-item"><span class="dot dot-private"></span> Private</span>
-                    <span class="legend-item"><span class="dot dot-unavailable"></span> Unavailable</span>
+                    <span class="legend-group" title="Public networks with geo location">
+                        <span class="legend-label">Public:</span>
+                        <span class="dot dot-ipv4" title="IPv4"></span>
+                        <span class="dot dot-ipv6" title="IPv6"></span>
+                    </span>
+                    <span class="legend-group" title="Private networks (in Antarctica)">
+                        <span class="legend-label">Private:</span>
+                        <span class="dot dot-onion" title="Tor/Onion"></span>
+                        <span class="dot dot-i2p" title="I2P"></span>
+                        <span class="dot dot-cjdns" title="CJDNS"></span>
+                        <span class="dot dot-unavailable" title="Unavailable"></span>
+                    </span>
+                    <span class="legend-note" title="Private and unavailable peers are shown clustered in Antarctica">🐧 Antarctica</span>
                 </span>
+                <button class="shutdown-btn" id="shutdown-btn" title="Stop the dashboard server">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M7.5 1v7h1V1h-1z"/>
+                        <path d="M3 8.812a4.999 4.999 0 0 1 2.578-4.375l-.485-.874A6 6 0 1 0 11 3.616l-.501.865A5 5 0 1 1 3 8.812z"/>
+                    </svg>
+                    Stop
+                </button>
             </div>
             <div class="map-container" id="map"></div>
         </div>
 
-        <!-- Main Peer Table - 25 COLUMNS -->
+        <!-- Main Peer Table - 23 COLUMNS -->
         <div class="panel peer-panel resizable-panel" id="peer-panel">
             <div class="panel-header">
                 <h2>Connected Peers</h2>
@@ -126,15 +136,13 @@
                             <th data-sort="lat" data-col="lat" title="Latitude coordinate">Lat</th>
                             <th data-sort="lon" data-col="lon" title="Longitude coordinate">Lon</th>
                             <th data-sort="isp" data-col="isp" title="Internet Service Provider">ISP</th>
-                            <!-- 23-25: historical (database) -->
-                            <th data-sort="first_seen" data-col="first_seen" title="First time we ever saw this IP">FirstSeen</th>
-                            <th data-sort="last_seen" data-col="last_seen" title="Most recent time we saw this IP">LastSeen</th>
-                            <th data-sort="times_seen" data-col="times_seen" title="Number of sessions we have seen this IP">TimesSeen</th>
+                            <!-- 23: addrman status -->
+                            <th data-sort="in_addrman" data-col="in_addrman" title="Is this peer's address in our address manager?">Addrman</th>
                         </tr>
                     </thead>
                     <tbody id="peer-tbody">
                         <tr class="loading-row">
-                            <td colspan="25">Loading peers...</td>
+                            <td colspan="23">Loading peers...</td>
                         </tr>
                     </tbody>
                 </table>

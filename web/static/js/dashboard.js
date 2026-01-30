@@ -21,13 +21,13 @@ let eventSource = null;
 let map = null;
 let markers = {};
 
-// Column visibility state - all visible by default
+// Column visibility state - all visible by default (23 columns)
 const defaultVisibleColumns = [
     'id', 'network', 'ip', 'port', 'direction', 'subver',
     'city', 'region', 'regionName', 'country', 'countryCode', 'continent', 'continentCode',
     'bytessent', 'bytesrecv', 'ping_ms', 'conntime', 'connection_type', 'services_abbrev',
     'lat', 'lon', 'isp',
-    'first_seen', 'last_seen', 'times_seen'
+    'in_addrman'
 ];
 let visibleColumns = [...defaultVisibleColumns];
 
@@ -55,9 +55,7 @@ const columnLabels = {
     'lat': 'Latitude',
     'lon': 'Longitude',
     'isp': 'ISP',
-    'first_seen': 'First Seen',
-    'last_seen': 'Last Seen',
-    'times_seen': 'Times Seen'
+    'in_addrman': 'In Addrman'
 };
 
 // DOM Elements
@@ -71,8 +69,10 @@ const changesTbody = document.getElementById('changes-tbody');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupTableSorting();
+    setupColumnResize();
     setupColumnConfig();
     setupPanelResize();
+    setupShutdownButton();
     initMap();
     fetchPeers();
     fetchStats();
@@ -81,6 +81,104 @@ document.addEventListener('DOMContentLoaded', () => {
     startCountdown();
     loadColumnPreferences();
 });
+
+// Setup column resizing via drag
+function setupColumnResize() {
+    const table = document.getElementById('peer-table');
+    if (!table) return;
+
+    let isResizing = false;
+    let currentTh = null;
+    let startX = 0;
+    let startWidth = 0;
+
+    // Detect if click is near the right edge of a header
+    table.addEventListener('mousedown', (e) => {
+        const th = e.target.closest('th');
+        if (!th) return;
+
+        const rect = th.getBoundingClientRect();
+        const isNearEdge = e.clientX > rect.right - 8;
+
+        if (isNearEdge) {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizing = true;
+            currentTh = th;
+            startX = e.clientX;
+            startWidth = th.offsetWidth;
+            th.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing || !currentTh) return;
+        const deltaX = e.clientX - startX;
+        const newWidth = Math.max(40, startWidth + deltaX);
+        currentTh.style.width = newWidth + 'px';
+        currentTh.style.minWidth = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing && currentTh) {
+            currentTh.classList.remove('resizing');
+            currentTh = null;
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+
+    // Change cursor when near edge
+    table.addEventListener('mousemove', (e) => {
+        if (isResizing) return;
+        const th = e.target.closest('th');
+        if (!th) return;
+
+        const rect = th.getBoundingClientRect();
+        const isNearEdge = e.clientX > rect.right - 8;
+        th.style.cursor = isNearEdge ? 'col-resize' : 'pointer';
+    });
+}
+
+// Setup shutdown button
+function setupShutdownButton() {
+    const btn = document.getElementById('shutdown-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to stop the dashboard server?')) {
+            return;
+        }
+
+        try {
+            btn.disabled = true;
+            btn.textContent = 'Stopping...';
+
+            const response = await fetch(`${API_BASE}/api/shutdown`, { method: 'POST' });
+            if (response.ok) {
+                document.body.innerHTML = `
+                    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #0d1117; color: #8b949e; font-family: monospace;">
+                        <div style="text-align: center;">
+                            <h1 style="color: #58a6ff;">Dashboard Stopped</h1>
+                            <p>The server has been shut down gracefully.</p>
+                            <p style="color: #6e7681;">You can close this tab.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                throw new Error('Shutdown failed');
+            }
+        } catch (error) {
+            console.error('Shutdown error:', error);
+            btn.disabled = false;
+            btn.textContent = 'Stop';
+            alert('Failed to stop the server. Check the terminal.');
+        }
+    });
+}
 
 // Setup panel resize handles
 function setupPanelResize() {
@@ -160,29 +258,48 @@ function initMap() {
     }
 }
 
-// Update map markers
+// Antarctica cluster positions for private networks
+const ANTARCTICA_CLUSTERS = {
+    'onion': { lat: -80, lon: -120 },   // West Antarctica
+    'i2p':   { lat: -82, lon: -30 },    // Near Weddell Sea
+    'cjdns': { lat: -78, lon: 60 },     // East Antarctica
+    'unavailable': { lat: -85, lon: 150 } // Ross Ice Shelf area
+};
+
+// Network colors (matching CSS)
+const NETWORK_COLORS = {
+    'ipv4':  '#d29922', // yellow
+    'ipv6':  '#e69500', // orange
+    'onion': '#c74e4e', // mild red
+    'i2p':   '#58a6ff', // light blue
+    'cjdns': '#d296c7', // light pink
+    'unavailable': '#6e7681' // gray
+};
+
+// Update map markers with network colors
 function updateMap() {
     // Clear existing markers
     Object.values(markers).forEach(marker => map.removeLayer(marker));
     markers = {};
 
     currentPeers.forEach(peer => {
-        let lat, lon, color;
+        let lat, lon;
+        const network = peer.network || 'ipv4';
+        const color = NETWORK_COLORS[network] || NETWORK_COLORS['ipv4'];
 
         if (peer.location_status === 'private') {
-            // Private locations: Antarctica (left side)
-            lat = ANTARCTICA_LAT + (Math.random() - 0.5) * 5;
-            lon = ANTARCTICA_LON - 60 + (Math.random() - 0.5) * 30;
-            color = '#d29922'; // yellow
+            // Private locations: cluster by network type in Antarctica
+            const cluster = ANTARCTICA_CLUSTERS[network] || ANTARCTICA_CLUSTERS['onion'];
+            lat = cluster.lat + (Math.random() - 0.5) * 4;
+            lon = cluster.lon + (Math.random() - 0.5) * 20;
         } else if (peer.location_status === 'unavailable') {
-            // Unavailable locations: Antarctica (right side)
-            lat = ANTARCTICA_LAT + (Math.random() - 0.5) * 5;
-            lon = ANTARCTICA_LON + 60 + (Math.random() - 0.5) * 30;
-            color = '#6e7681'; // gray
+            // Unavailable locations: separate area in Antarctica
+            const cluster = ANTARCTICA_CLUSTERS['unavailable'];
+            lat = cluster.lat + (Math.random() - 0.5) * 3;
+            lon = cluster.lon + (Math.random() - 0.5) * 15;
         } else if (peer.lat && peer.lon) {
             lat = peer.lat;
             lon = peer.lon;
-            color = '#3fb950'; // green
         } else {
             return; // Skip if no location
         }
@@ -196,9 +313,15 @@ function updateMap() {
             fillOpacity: 0.7
         });
 
+        // Enhanced popup with network info
+        const networkLabel = network.toUpperCase();
+        const statusLabel = peer.location_status === 'private' ? ' (Private)' :
+                           peer.location_status === 'unavailable' ? ' (Unavailable)' : '';
+
         marker.bindPopup(`
             <strong>${peer.ip}</strong><br>
-            ${peer.location}<br>
+            <span style="color: ${color}">${networkLabel}</span>${statusLabel}<br>
+            ${peer.location_status === 'ok' ? `${peer.city}, ${peer.countryCode}` : peer.location}<br>
             ${peer.isp || '-'}<br>
             <span style="color: ${peer.direction === 'IN' ? '#3fb950' : '#58a6ff'}">${peer.direction}</span>
             | ${peer.subver}
@@ -384,7 +507,7 @@ async function fetchStats() {
         // Connected count
         document.getElementById('stat-connected').textContent = stats.connected || 0;
 
-        // Network stats - only show if enabled, with in/out format
+        // Network stats - only show if enabled, with (in/out) format
         const networkNames = ['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns'];
         networkNames.forEach(net => {
             const wrap = document.getElementById(`stat-${net}-wrap`);
@@ -393,7 +516,7 @@ async function fetchStats() {
                 if (enabled.includes(net)) {
                     wrap.style.display = '';
                     const netData = networks[net] || {in: 0, out: 0};
-                    val.textContent = `(in:${netData.in}, out:${netData.out})`;
+                    val.textContent = `(${netData.in}/${netData.out})`;
                 } else {
                     wrap.style.display = 'none';
                 }
@@ -514,12 +637,12 @@ function setupSSE() {
     };
 }
 
-// Render peers to table - 25 COLUMNS with network colors (Version removed)
+// Render peers to table - 23 COLUMNS with network colors
 function renderPeers() {
     if (currentPeers.length === 0) {
         peerTbody.innerHTML = `
             <tr class="loading-row">
-                <td colspan="25">No peers connected</td>
+                <td colspan="23">No peers connected</td>
             </tr>
         `;
         peerCount.textContent = '0 peers';
@@ -555,7 +678,7 @@ function renderPeers() {
     const isVisible = (col) => visibleColumns.includes(col);
     const hiddenClass = (col) => isVisible(col) ? '' : 'col-hidden';
 
-    // Build table HTML - 25 COLUMNS (Version removed)
+    // Build table HTML - 23 COLUMNS
     const rows = sortedPeers.map(peer => {
         // Network type determines row color class
         const networkRowClass = `network-row-${peer.network}`;
@@ -575,43 +698,40 @@ function renderPeers() {
             cityClass = 'location-pending';
         }
 
-        // Format timestamps (historical) - 0 means not loaded yet
-        const firstSeen = peer.first_seen ? new Date(peer.first_seen * 1000).toLocaleDateString() : '-';
-        const lastSeen = peer.last_seen ? new Date(peer.last_seen * 1000).toLocaleDateString() : '-';
-        const timesSeen = peer.times_seen || '-';
+        // In addrman display
+        const inAddrman = peer.in_addrman ? 'Yes' : 'No';
+        const addrmanClass = peer.in_addrman ? 'addrman-yes' : 'addrman-no';
 
         return `
             <tr data-id="${peer.id}" class="${networkRowClass}">
                 <!-- 1-6: getpeerinfo (instant) -->
-                <td data-col="id" class="cell-white ${hiddenClass('id')}">${peer.id}</td>
-                <td data-col="network" class="network-${peer.network} ${hiddenClass('network')}">${peer.network}</td>
+                <td data-col="id" class="cell-white ${hiddenClass('id')}" title="Peer ID: ${peer.id}">${peer.id}</td>
+                <td data-col="network" class="network-${peer.network} ${hiddenClass('network')}" title="Network: ${peer.network}">${peer.network}</td>
                 <td data-col="ip" class="${hiddenClass('ip')}" title="${peer.addr}">${truncate(peer.ip, 20)}</td>
-                <td data-col="port" class="${hiddenClass('port')}">${peer.port || '-'}</td>
-                <td data-col="direction" class="${hiddenClass('direction')}"><span class="direction-badge ${directionClass}">${peer.direction}</span></td>
+                <td data-col="port" class="${hiddenClass('port')}" title="Port: ${peer.port || '-'}">${peer.port || '-'}</td>
+                <td data-col="direction" class="${hiddenClass('direction')}" title="${peer.direction === 'IN' ? 'Inbound: They connected to us' : 'Outbound: We connected to them'}"><span class="direction-badge ${directionClass}">${peer.direction}</span></td>
                 <td data-col="subver" class="${hiddenClass('subver')}" title="${peer.subver}">${truncate(peer.subver, 18)}</td>
                 <!-- 7-13: ip-api geo (loads second) -->
-                <td data-col="city" class="${cityClass} ${hiddenClass('city')}">${truncate(cityDisplay, 15)}</td>
-                <td data-col="region" class="${hiddenClass('region')}">${peer.region || '-'}</td>
-                <td data-col="regionName" class="${hiddenClass('regionName')}">${truncate(peer.regionName || '-', 12)}</td>
-                <td data-col="country" class="${hiddenClass('country')}">${truncate(peer.country || '-', 12)}</td>
-                <td data-col="countryCode" class="${hiddenClass('countryCode')}">${peer.countryCode || '-'}</td>
-                <td data-col="continent" class="${hiddenClass('continent')}">${truncate(peer.continent || '-', 10)}</td>
-                <td data-col="continentCode" class="${hiddenClass('continentCode')}">${peer.continentCode || '-'}</td>
-                <!-- 14-19: more getpeerinfo (Version removed) -->
-                <td data-col="bytessent" class="cell-white ${hiddenClass('bytessent')}">${peer.bytessent_fmt}</td>
-                <td data-col="bytesrecv" class="cell-white ${hiddenClass('bytesrecv')}">${peer.bytesrecv_fmt}</td>
-                <td data-col="ping_ms" class="cell-white ${hiddenClass('ping_ms')}">${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}</td>
-                <td data-col="conntime" class="cell-white ${hiddenClass('conntime')}">${peer.conntime_fmt}</td>
-                <td data-col="connection_type" class="${hiddenClass('connection_type')}">${truncate(peer.connection_type || '-', 12)}</td>
+                <td data-col="city" class="${cityClass} ${hiddenClass('city')}" title="City: ${cityDisplay}">${truncate(cityDisplay, 15)}</td>
+                <td data-col="region" class="${hiddenClass('region')}" title="Region: ${peer.region || '-'}">${peer.region || '-'}</td>
+                <td data-col="regionName" class="${hiddenClass('regionName')}" title="Region Name: ${peer.regionName || '-'}">${truncate(peer.regionName || '-', 12)}</td>
+                <td data-col="country" class="${hiddenClass('country')}" title="Country: ${peer.country || '-'}">${truncate(peer.country || '-', 12)}</td>
+                <td data-col="countryCode" class="${hiddenClass('countryCode')}" title="Country Code: ${peer.countryCode || '-'}">${peer.countryCode || '-'}</td>
+                <td data-col="continent" class="${hiddenClass('continent')}" title="Continent: ${peer.continent || '-'}">${truncate(peer.continent || '-', 10)}</td>
+                <td data-col="continentCode" class="${hiddenClass('continentCode')}" title="Continent Code: ${peer.continentCode || '-'}">${peer.continentCode || '-'}</td>
+                <!-- 14-19: more getpeerinfo -->
+                <td data-col="bytessent" class="cell-white ${hiddenClass('bytessent')}" title="Bytes Sent: ${peer.bytessent_fmt}">${peer.bytessent_fmt}</td>
+                <td data-col="bytesrecv" class="cell-white ${hiddenClass('bytesrecv')}" title="Bytes Received: ${peer.bytesrecv_fmt}">${peer.bytesrecv_fmt}</td>
+                <td data-col="ping_ms" class="cell-white ${hiddenClass('ping_ms')}" title="Ping: ${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}">${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}</td>
+                <td data-col="conntime" class="cell-white ${hiddenClass('conntime')}" title="Connected: ${peer.conntime_fmt}">${peer.conntime_fmt}</td>
+                <td data-col="connection_type" class="${hiddenClass('connection_type')}" title="Connection Type: ${peer.connection_type || '-'}">${truncate(peer.connection_type || '-', 12)}</td>
                 <td data-col="services_abbrev" class="cell-white ${hiddenClass('services_abbrev')}" title="${(peer.services || []).join(', ')}">${peer.services_abbrev || '-'}</td>
                 <!-- 20-22: more ip-api -->
-                <td data-col="lat" class="cell-white ${hiddenClass('lat')}">${peer.lat ? peer.lat.toFixed(2) : '-'}</td>
-                <td data-col="lon" class="cell-white ${hiddenClass('lon')}">${peer.lon ? peer.lon.toFixed(2) : '-'}</td>
-                <td data-col="isp" class="${hiddenClass('isp')}" title="${peer.isp}">${truncate(peer.isp || '-', 15)}</td>
-                <!-- 23-25: historical (database) -->
-                <td data-col="first_seen" class="cell-white ${hiddenClass('first_seen')}">${firstSeen}</td>
-                <td data-col="last_seen" class="cell-white ${hiddenClass('last_seen')}">${lastSeen}</td>
-                <td data-col="times_seen" class="cell-white ${hiddenClass('times_seen')}">${timesSeen}</td>
+                <td data-col="lat" class="cell-white ${hiddenClass('lat')}" title="Latitude: ${peer.lat ? peer.lat.toFixed(4) : '-'}">${peer.lat ? peer.lat.toFixed(2) : '-'}</td>
+                <td data-col="lon" class="cell-white ${hiddenClass('lon')}" title="Longitude: ${peer.lon ? peer.lon.toFixed(4) : '-'}">${peer.lon ? peer.lon.toFixed(2) : '-'}</td>
+                <td data-col="isp" class="${hiddenClass('isp')}" title="ISP: ${peer.isp || '-'}">${truncate(peer.isp || '-', 15)}</td>
+                <!-- 23: addrman status -->
+                <td data-col="in_addrman" class="cell-white ${addrmanClass} ${hiddenClass('in_addrman')}" title="In Address Manager: ${inAddrman}">${inAddrman}</td>
             </tr>
         `;
     }).join('');
