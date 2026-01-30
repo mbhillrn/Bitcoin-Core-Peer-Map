@@ -469,21 +469,60 @@ async function fetchStats() {
         // Connected count
         document.getElementById('stat-connected').textContent = stats.connected || 0;
 
-        // Network stats - only show if enabled, with (in/out) format
+        // Update peer header total count
+        const countTotal = document.getElementById('count-total');
+        if (countTotal) {
+            countTotal.textContent = stats.connected || 0;
+        }
+
+        // Network stats - only show if enabled, with (in/out) format in stats bar
+        // and network counts in peer header
         const networkNames = ['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns'];
+        const networkLabels = { 'ipv4': 'IPV4', 'ipv6': 'IPV6', 'onion': 'TOR', 'i2p': 'I2P', 'cjdns': 'CJDNS' };
+
         networkNames.forEach(net => {
+            // Stats bar elements
             const wrap = document.getElementById(`stat-${net}-wrap`);
             const val = document.getElementById(`stat-${net}`);
+
+            // Peer header count elements
+            const countEl = document.getElementById(`count-${net}`);
+            const sepEl = document.getElementById(`sep-${net}`);
+
             if (wrap && val) {
                 if (enabled.includes(net)) {
                     wrap.style.display = '';
                     const netData = networks[net] || {in: 0, out: 0};
                     val.textContent = `(${netData.in}/${netData.out})`;
+
+                    // Update peer header counts
+                    if (countEl) {
+                        const total = netData.in + netData.out;
+                        countEl.textContent = `${networkLabels[net]} ${total}`;
+                        countEl.style.display = '';
+                    }
+                    if (sepEl) {
+                        sepEl.style.display = '';
+                    }
                 } else {
                     wrap.style.display = 'none';
+                    if (countEl) countEl.style.display = 'none';
+                    if (sepEl) sepEl.style.display = 'none';
                 }
             }
         });
+
+        // Hide last visible separator (for cleaner look)
+        let lastVisibleSep = null;
+        networkNames.forEach(net => {
+            const sepEl = document.getElementById(`sep-${net}`);
+            if (sepEl && sepEl.style.display !== 'none') {
+                lastVisibleSep = sepEl;
+            }
+        });
+        if (lastVisibleSep) {
+            lastVisibleSep.style.display = 'none';
+        }
 
         // Update map status indicator
         updateMapStatus(stats.geo_pending || 0);

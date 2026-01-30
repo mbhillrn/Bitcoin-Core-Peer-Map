@@ -33,7 +33,7 @@ body {
     font-family: 'SF Mono', 'Consolas', 'Monaco', 'Menlo', monospace;
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
     min-height: 100vh;
 }
@@ -208,7 +208,7 @@ body {
 }
 
 .panel-header h2 {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -219,9 +219,49 @@ body {
     gap: 12px;
 }
 
+/* Peer panel header with network counts */
+.peer-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.peer-header-left h2 {
+    margin-right: 8px;
+}
+
+.network-counts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.network-counts .count-sep {
+    color: var(--text-dim);
+}
+
+.network-counts .count-total {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.network-counts .count-ipv4 { color: var(--net-ipv4); }
+.network-counts .count-ipv6 { color: var(--net-ipv6); }
+.network-counts .count-onion { color: var(--net-onion); }
+.network-counts .count-i2p { color: var(--net-i2p); }
+.network-counts .count-cjdns { color: var(--net-cjdns); }
+
+.filter-options-text {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-right: 4px;
+}
+
 .peer-count {
     color: var(--text-secondary);
     font-size: 11px;
+    display: none; /* Hidden - replaced by network-counts */
 }
 
 .config-btn {
@@ -421,9 +461,9 @@ body {
 
 /* Map Panel */
 .map-panel-full {
-    height: 450px;
-    min-height: 200px;
-    max-height: 600px;
+    height: 650px;
+    min-height: 400px;
+    max-height: 900px;
 }
 
 .map-container {
@@ -463,8 +503,8 @@ body {
 /* Map legend */
 .map-legend {
     display: flex;
-    gap: 12px;
-    font-size: 10px;
+    gap: 14px;
+    font-size: 12px;
     align-items: center;
     margin-left: auto;
 }
@@ -506,13 +546,13 @@ body {
 .map-status {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 10px;
-    padding: 4px 8px;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
     background: var(--bg-tertiary);
     border-radius: 4px;
-    margin-right: auto;
-    margin-left: 12px;
+    margin: 0 auto;
 }
 
 .status-dot {
