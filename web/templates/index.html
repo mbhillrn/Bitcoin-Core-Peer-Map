@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MBTC-DASH - Bitcoin Peer Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="container">
@@ -63,56 +65,78 @@
             </div>
         </div>
 
-        <!-- Main Content - Two Panel Layout -->
-        <div class="main-content">
-            <!-- Left Panel: Peer Table -->
-            <div class="panel peer-panel">
-                <div class="panel-header">
-                    <h2>Connected Peers</h2>
-                    <span class="peer-count" id="peer-count">0 peers</span>
-                </div>
-                <div class="table-container">
-                    <table class="peer-table" id="peer-table">
-                        <thead>
-                            <tr>
-                                <th data-sort="id">ID</th>
-                                <th data-sort="ip">Address</th>
-                                <th data-sort="location">Location</th>
-                                <th data-sort="isp">ISP</th>
-                                <th data-sort="direction">Dir</th>
-                                <th data-sort="ping_ms">Ping</th>
-                                <th data-sort="bytesrecv">Recv</th>
-                                <th data-sort="bytessent">Sent</th>
-                                <th data-sort="conntime_fmt">Conn</th>
-                                <th data-sort="subver">Version</th>
-                            </tr>
-                        </thead>
-                        <tbody id="peer-tbody">
-                            <tr class="loading-row">
-                                <td colspan="10">Loading peers...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+        <!-- Map Panel -->
+        <div class="panel map-panel-full">
+            <div class="panel-header">
+                <h2>Peer Map</h2>
+                <span class="map-legend">
+                    <span class="legend-item"><span class="dot dot-public"></span> Public</span>
+                    <span class="legend-item"><span class="dot dot-private"></span> Private</span>
+                    <span class="legend-item"><span class="dot dot-unavailable"></span> Unavailable</span>
+                </span>
             </div>
+            <div class="map-container" id="map"></div>
+        </div>
 
-            <!-- Right Panel: Map (placeholder for now) -->
-            <div class="panel map-panel">
-                <div class="panel-header">
-                    <h2>Peer Map</h2>
-                </div>
-                <div class="map-container" id="map-container">
-                    <div class="map-placeholder">
-                        <p>Map coming soon</p>
-                        <p class="map-hint">Peer locations will be displayed here</p>
-                    </div>
-                </div>
+        <!-- Main Peer Table -->
+        <div class="panel peer-panel">
+            <div class="panel-header">
+                <h2>Connected Peers</h2>
+                <span class="peer-count" id="peer-count">0 peers</span>
+            </div>
+            <div class="table-container">
+                <table class="peer-table" id="peer-table">
+                    <thead>
+                        <tr>
+                            <th data-sort="id">ID</th>
+                            <th data-sort="ip">Address</th>
+                            <th data-sort="location">Location</th>
+                            <th data-sort="isp">ISP</th>
+                            <th data-sort="direction">Dir</th>
+                            <th data-sort="ping_ms">Ping</th>
+                            <th data-sort="bytesrecv">Recv</th>
+                            <th data-sort="bytessent">Sent</th>
+                            <th data-sort="conntime_fmt">Conn</th>
+                            <th data-sort="subver">Version</th>
+                        </tr>
+                    </thead>
+                    <tbody id="peer-tbody">
+                        <tr class="loading-row">
+                            <td colspan="10">Loading peers...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Changes Table -->
+        <div class="panel changes-panel">
+            <div class="panel-header">
+                <h2>Recent Changes</h2>
+                <span class="changes-window">Last 20 seconds</span>
+            </div>
+            <div class="table-container">
+                <table class="peer-table changes-table" id="changes-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>IP</th>
+                            <th>Network</th>
+                        </tr>
+                    </thead>
+                    <tbody id="changes-tbody">
+                        <tr class="loading-row">
+                            <td colspan="4">No recent changes</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBTC-DASH v0.2.1</span>
+            <span>MBTC-DASH v0.2.2</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>

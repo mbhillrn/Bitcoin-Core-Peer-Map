@@ -1,11 +1,19 @@
 /**
  * MBTC-DASH - Dashboard JavaScript
- * Handles peer data fetching, table rendering, and real-time updates
+ * Handles peer data fetching, table rendering, map, and real-time updates
  */
 
 // Configuration
 const REFRESH_INTERVAL = 10000; // 10 seconds
 const API_BASE = '';
+
+// Antarctica coords for private locations
+const ANTARCTICA_LAT = -82.8628;
+const ANTARCTICA_LON = 135.0000;
+
+// North Pole coords for unavailable locations
+const NORTH_POLE_LAT = 90.0;
+const NORTH_POLE_LON = 0.0;
 
 // State
 let currentPeers = [];
@@ -14,6 +22,8 @@ let sortDirection = 'asc';
 let refreshTimer = null;
 let countdown = 10;
 let eventSource = null;
+let map = null;
+let markers = {};
 
 // DOM Elements
 const peerTbody = document.getElementById('peer-tbody');
@@ -21,15 +31,83 @@ const peerCount = document.getElementById('peer-count');
 const statusIndicator = document.getElementById('status-indicator');
 const connectionStatus = document.getElementById('connection-status');
 const refreshTimerEl = document.getElementById('refresh-timer');
+const changesTbody = document.getElementById('changes-tbody');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupTableSorting();
+    initMap();
     fetchPeers();
     fetchStats();
+    fetchChanges();
     setupSSE();
     startCountdown();
 });
+
+// Initialize Leaflet map
+function initMap() {
+    map = L.map('map', {
+        center: [20, 0],
+        zoom: 2,
+        minZoom: 1,
+        maxZoom: 18,
+        worldCopyJump: true
+    });
+
+    // Dark tile layer (CartoDB Dark Matter)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 19
+    }).addTo(map);
+}
+
+// Update map markers
+function updateMap() {
+    // Clear existing markers
+    Object.values(markers).forEach(marker => map.removeLayer(marker));
+    markers = {};
+
+    currentPeers.forEach(peer => {
+        let lat, lon, color;
+
+        if (peer.location_status === 'private') {
+            lat = ANTARCTICA_LAT + (Math.random() - 0.5) * 5;
+            lon = ANTARCTICA_LON + (Math.random() - 0.5) * 30;
+            color = '#d29922'; // yellow
+        } else if (peer.location_status === 'unavailable') {
+            lat = NORTH_POLE_LAT - Math.random() * 5;
+            lon = NORTH_POLE_LON + (Math.random() - 0.5) * 180;
+            color = '#6e7681'; // gray
+        } else if (peer.lat && peer.lon) {
+            lat = peer.lat;
+            lon = peer.lon;
+            color = '#3fb950'; // green
+        } else {
+            return; // Skip if no location
+        }
+
+        const marker = L.circleMarker([lat, lon], {
+            radius: 6,
+            fillColor: color,
+            color: '#ffffff',
+            weight: 1,
+            opacity: 0.8,
+            fillOpacity: 0.7
+        });
+
+        marker.bindPopup(`
+            <strong>${peer.ip}</strong><br>
+            ${peer.location}<br>
+            ${peer.isp || '-'}<br>
+            <span style="color: ${peer.direction === 'IN' ? '#3fb950' : '#58a6ff'}">${peer.direction}</span>
+            | ${peer.subver}
+        `);
+
+        marker.addTo(map);
+        markers[peer.id] = marker;
+    });
+}
 
 // Setup table column sorting
 function setupTableSorting() {
@@ -61,6 +139,7 @@ async function fetchPeers() {
 
         currentPeers = await response.json();
         renderPeers();
+        updateMap();
 
         // Update status
         statusIndicator.classList.add('connected');
@@ -101,6 +180,47 @@ async function fetchStats() {
     }
 }
 
+// Fetch recent changes from API
+async function fetchChanges() {
+    try {
+        const response = await fetch(`${API_BASE}/api/changes`);
+        if (!response.ok) throw new Error('Failed to fetch changes');
+
+        const changes = await response.json();
+        renderChanges(changes);
+    } catch (error) {
+        console.error('Error fetching changes:', error);
+    }
+}
+
+// Render recent changes table
+function renderChanges(changes) {
+    if (!changes || changes.length === 0) {
+        changesTbody.innerHTML = `
+            <tr class="loading-row">
+                <td colspan="4">No recent changes</td>
+            </tr>
+        `;
+        return;
+    }
+
+    const rows = changes.map(change => {
+        const time = new Date(change.time * 1000).toLocaleTimeString();
+        const eventClass = change.type === 'connected' ? 'event-connected' : 'event-disconnected';
+
+        return `
+            <tr>
+                <td>${time}</td>
+                <td class="${eventClass}">${change.type}</td>
+                <td>${change.peer.ip || '-'}</td>
+                <td>${change.peer.network || '-'}</td>
+            </tr>
+        `;
+    }).join('');
+
+    changesTbody.innerHTML = rows;
+}
+
 // Setup Server-Sent Events for real-time updates
 function setupSSE() {
     if (eventSource) {
@@ -119,6 +239,7 @@ function setupSSE() {
             case 'peers_update':
                 fetchPeers();
                 fetchStats();
+                fetchChanges();
                 resetCountdown();
                 break;
             case 'geo_update':
@@ -183,6 +304,8 @@ function renderPeers() {
             locationClass = 'location-private';
         } else if (peer.location === 'LOCATION UNAVAILABLE') {
             locationClass = 'location-unavailable';
+        } else if (peer.location === 'Stalking location...') {
+            locationClass = 'location-pending';
         }
 
         return `

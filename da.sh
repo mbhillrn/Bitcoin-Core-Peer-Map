@@ -150,23 +150,44 @@ run_web_dashboard() {
         return
     fi
 
-    # Check if Flask is installed
-    if ! python3 -c "import flask" 2>/dev/null; then
-        msg_err "Flask is required for the web dashboard."
+    # Check for required packages
+    local missing_pkgs=""
+    if ! python3 -c "import fastapi" 2>/dev/null; then
+        missing_pkgs="fastapi "
+    fi
+    if ! python3 -c "import uvicorn" 2>/dev/null; then
+        missing_pkgs+="uvicorn "
+    fi
+    if ! python3 -c "import jinja2" 2>/dev/null; then
+        missing_pkgs+="jinja2 "
+    fi
+    if ! python3 -c "import sse_starlette" 2>/dev/null; then
+        missing_pkgs+="sse-starlette "
+    fi
+
+    if [[ -n "$missing_pkgs" ]]; then
+        msg_err "Missing Python packages for web dashboard: $missing_pkgs"
         echo ""
-        echo -e "${T_INFO}Install with:${RST} pip3 install flask requests"
+        echo -e "${T_INFO}Install with:${RST} pip3 install $missing_pkgs"
         echo ""
-        echo -en "${T_DIM}Press Enter to continue...${RST}"
-        read -r
-        return
+        if prompt_yn "Attempt to install now?"; then
+            pip3 install --user $missing_pkgs
+            if [[ $? -ne 0 ]]; then
+                msg_err "Failed to install packages"
+                echo -en "${T_DIM}Press Enter to continue...${RST}"
+                read -r
+                return
+            fi
+            msg_ok "Packages installed"
+        else
+            echo -en "${T_DIM}Press Enter to continue...${RST}"
+            read -r
+            return
+        fi
     fi
 
     # Run web server
     clear
-    msg_info "Starting web dashboard..."
-    msg_info "Open http://127.0.0.1:5000 in your browser"
-    msg_warn "Press Ctrl+C to stop"
-    echo ""
     python3 "$MBTC_DIR/web/server.py"
 }
 

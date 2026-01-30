@@ -2,7 +2,7 @@
 CLAUDE LOOK HERE - MBTC-DASH Development Checklist
 ================================================================================
 
-Last Updated: 2026-01-29
+Last Updated: 2026-01-30
 Current Version: 0.2.2
 
 ================================================================================
@@ -135,10 +135,10 @@ DATABASE:
   [ ] Verify all geo cache rules implemented
 
 PREREQS/DEPENDENCIES:
-  [ ] Add FastAPI to prereqs check
-  [ ] Add uvicorn to prereqs check
-  [ ] Add any other web dependencies
-  [ ] Offer to install missing deps
+  [x] Add FastAPI to prereqs check
+  [x] Add uvicorn to prereqs check
+  [x] Add any other web dependencies (jinja2, sse-starlette)
+  [x] Offer to install missing deps (da.sh prompts to install)
   [ ] Track what THIS program installs (for uninstaller)
 
 UNINSTALLER:
@@ -147,16 +147,16 @@ UNINSTALLER:
   [ ] Does not affect pre-existing packages
 
 WEB DASHBOARD:
-  [ ] FastAPI server (not Flask)
-  [ ] Dynamic port selection (49152-65535)
-  [ ] Port conflict detection
-  [ ] Single password auth for remote access
-  [ ] Detect local IPs/interfaces
-  [ ] Show user correct URL to access
-  [ ] Map at top (Leaflet.js)
-  [ ] Main peer table
-  [ ] Recent changes table (20 second window)
-  [ ] Clean shutdown on Ctrl+C
+  [x] FastAPI server (not Flask)
+  [x] Dynamic port selection (49152-65535)
+  [x] Port conflict detection
+  [x] Single password auth for remote access
+  [x] Detect local IPs/interfaces
+  [x] Show user correct URL to access
+  [x] Map at top (Leaflet.js with CartoDB dark tiles)
+  [x] Main peer table
+  [x] Recent changes table (20 second window)
+  [x] Clean shutdown on Ctrl+C
   [ ] DB integrity check on startup
 
 DOCUMENTATION:
@@ -180,5 +180,14 @@ COMPLETED ITEMS
 [x] 'q' properly quits peer list (2026-01-29)
 [x] Ctrl+C handled gracefully (2026-01-29)
 [x] CLAUDE-CHECKLIST.txt created (2026-01-29)
+[x] Addrman (AM) column added to terminal peer list (2026-01-30)
+[x] FastAPI web dashboard created (2026-01-30)
+[x] Web dashboard - Leaflet map with peer locations (2026-01-30)
+[x] Web dashboard - Main peer table with sorting (2026-01-30)
+[x] Web dashboard - Recent changes table (20s window) (2026-01-30)
+[x] Web dashboard - Server-Sent Events for real-time updates (2026-01-30)
+[x] Web dashboard - Dynamic port selection (49152-65535) (2026-01-30)
+[x] Web dashboard - Session password auth (2026-01-30)
+[x] Prerequisites updated with FastAPI/uvicorn/jinja2/sse-starlette (2026-01-30)
 
 ================================================================================

@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 """
-MBTC-DASH - Web Server
+MBTC-DASH - FastAPI Web Server
 Local web dashboard for Bitcoin Core peer monitoring
+
+Features:
+- Dynamic port selection (49152-65535)
+- Single password auth for remote access
+- Real-time updates via WebSocket
+- Map with Leaflet.js
+- All peer columns available
 """
 
 import json
 import os
 import queue
+import random
+import secrets
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -16,70 +26,92 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, jsonify, render_template, Response
-
 import requests
+import uvicorn
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from sse_starlette.sse import EventSourceResponse
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 REFRESH_INTERVAL = 10  # Seconds between peer refreshes
-GEO_API_DELAY = 1.5    # Seconds between API calls (stay under 45/min limit)
+GEO_API_DELAY = 1.5    # Seconds between API calls
 GEO_API_URL = "http://ip-api.com/json"
 GEO_API_FIELDS = "status,country,countryCode,region,regionName,city,district,lat,lon,isp,as,hosting,query"
+RECENT_WINDOW = 20     # Seconds for recent changes
 
-# Paths - use local data folder within the project
+# Port range for dynamic selection
+PORT_RANGE_START = 49152
+PORT_RANGE_END = 65535
+
+# Paths
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / 'data'
 CONFIG_FILE = DATA_DIR / 'config.conf'
 DB_FILE = DATA_DIR / 'peers.db'
-TEMPLATES_DIR = SCRIPT_DIR / 'templates'
 STATIC_DIR = SCRIPT_DIR / 'static'
+TEMPLATES_DIR = SCRIPT_DIR / 'templates'
 
 # Geo status codes
 GEO_OK = 0
 GEO_PRIVATE = 1
 GEO_UNAVAILABLE = 2
 
-# Retry intervals for GEO_UNAVAILABLE (in seconds): 1d, 3d, 7d, 7d...
 RETRY_INTERVALS = [86400, 259200, 604800, 604800]
 
-# Flask app
-app = Flask(__name__,
-            template_folder=str(TEMPLATES_DIR),
-            static_folder=str(STATIC_DIR))
+# ═══════════════════════════════════════════════════════════════════════════════
+# GLOBAL STATE
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# Event queue for SSE updates
-update_queue = queue.Queue()
+# FastAPI app
+app = FastAPI(title="MBTC-DASH", description="Bitcoin Peer Dashboard")
+security = HTTPBasic()
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# Current peer data (shared between threads)
+# Session password (generated on each startup)
+SESSION_PASSWORD = ""
+
+# Thread-safe state
 current_peers = []
-current_peers_lock = threading.Lock()
+peers_lock = threading.Lock()
+
+recent_changes = []
+changes_lock = threading.Lock()
+
+addrman_ips = set()
+addrman_lock = threading.Lock()
+
+geo_queue = queue.Queue()
+pending_lookups = set()
+pending_lock = threading.Lock()
+
+stop_flag = threading.Event()
+
+# SSE clients and update events
+sse_update_event = threading.Event()
+last_update_type = "connected"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIG LOADING
+# CONFIG
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class Config:
-    """Load MBTC configuration from cache file"""
-
     def __init__(self):
         self.cli_path = "bitcoin-cli"
         self.datadir = ""
         self.conf = ""
         self.network = "main"
-        self.rpc_host = "127.0.0.1"
-        self.rpc_port = "8332"
-        self.cookie_path = ""
-        self.rpc_user = ""
 
     def load(self) -> bool:
-        """Load config from cache file"""
         if not CONFIG_FILE.exists():
             return False
-
         try:
             with open(CONFIG_FILE, 'r') as f:
                 for line in f:
@@ -88,7 +120,6 @@ class Config:
                         continue
                     key, value = line.split('=', 1)
                     value = value.strip('"').strip("'")
-
                     if key == 'MBTC_CLI_PATH':
                         self.cli_path = value
                     elif key == 'MBTC_DATADIR':
@@ -97,35 +128,22 @@ class Config:
                         self.conf = value
                     elif key == 'MBTC_NETWORK':
                         self.network = value
-                    elif key == 'MBTC_RPC_HOST':
-                        self.rpc_host = value
-                    elif key == 'MBTC_RPC_PORT':
-                        self.rpc_port = value
-                    elif key == 'MBTC_COOKIE_PATH':
-                        self.cookie_path = value
-                    elif key == 'MBTC_RPC_USER':
-                        self.rpc_user = value
-
             return bool(self.cli_path)
         except Exception:
             return False
 
     def get_cli_command(self) -> list:
-        """Build bitcoin-cli command with all necessary flags"""
         cmd = [self.cli_path]
-
         if self.datadir:
             cmd.append(f"-datadir={self.datadir}")
         if self.conf:
             cmd.append(f"-conf={self.conf}")
-
         if self.network == "test":
             cmd.append("-testnet")
         elif self.network == "signet":
             cmd.append("-signet")
         elif self.network == "regtest":
             cmd.append("-regtest")
-
         return cmd
 
 
@@ -133,13 +151,11 @@ config = Config()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DATABASE FUNCTIONS
+# DATABASE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def init_database():
-    """Initialize SQLite database for peer geo caching"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-
     conn = sqlite3.connect(DB_FILE)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS peers_geo (
@@ -164,15 +180,11 @@ def init_database():
             connection_count INTEGER DEFAULT 1
         )
     ''')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_geo_status ON peers_geo(geo_status)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_last_seen ON peers_geo(last_seen)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_network_type ON peers_geo(network_type)')
     conn.commit()
     conn.close()
 
 
 def get_peer_geo(ip: str) -> Optional[dict]:
-    """Get cached geo data for a peer"""
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     cursor = conn.execute('SELECT * FROM peers_geo WHERE ip = ?', (ip,))
@@ -181,106 +193,53 @@ def get_peer_geo(ip: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def should_retry_geo(ip: str) -> bool:
-    """Check if we should retry geo lookup for an unavailable IP"""
-    geo = get_peer_geo(ip)
-    if not geo:
-        return True
-
-    if geo['geo_status'] in (GEO_OK, GEO_PRIVATE):
-        return False
-
-    # Calculate retry interval
-    retry_count = geo['geo_retry_count'] or 0
-    interval_idx = min(retry_count, len(RETRY_INTERVALS) - 1)
-    interval = RETRY_INTERVALS[interval_idx]
-
-    elapsed = int(time.time()) - (geo['geo_last_lookup'] or 0)
-    return elapsed >= interval
-
-
-def upsert_peer_geo(ip: str, network_type: str, geo_status: int,
-                    country: str = "", country_code: str = "",
-                    region: str = "", region_name: str = "",
-                    city: str = "", district: str = "",
-                    lat: float = 0, lon: float = 0,
-                    isp: str = "", as_info: str = "", hosting: int = 0):
-    """Insert or update peer geo data"""
+def upsert_peer_geo(ip: str, network_type: str, geo_status: int, **kwargs):
     now = int(time.time())
     conn = sqlite3.connect(DB_FILE)
-
     conn.execute('''
-        INSERT INTO peers_geo (
-            ip, network_type, geo_status, geo_last_lookup,
+        INSERT INTO peers_geo (ip, network_type, geo_status, geo_last_lookup,
             country, country_code, region, region_name, city, district,
-            lat, lon, isp, as_info, hosting,
-            first_seen, last_seen, connection_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            lat, lon, isp, as_info, hosting, first_seen, last_seen)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(ip) DO UPDATE SET
             geo_status = excluded.geo_status,
             geo_last_lookup = excluded.geo_last_lookup,
-            geo_retry_count = CASE WHEN excluded.geo_status = ? THEN geo_retry_count + 1 ELSE 0 END,
             country = COALESCE(NULLIF(excluded.country, ''), country),
             country_code = COALESCE(NULLIF(excluded.country_code, ''), country_code),
             region = COALESCE(NULLIF(excluded.region, ''), region),
             region_name = COALESCE(NULLIF(excluded.region_name, ''), region_name),
             city = COALESCE(NULLIF(excluded.city, ''), city),
-            district = COALESCE(NULLIF(excluded.district, ''), district),
             lat = CASE WHEN excluded.lat != 0 THEN excluded.lat ELSE lat END,
             lon = CASE WHEN excluded.lon != 0 THEN excluded.lon ELSE lon END,
             isp = COALESCE(NULLIF(excluded.isp, ''), isp),
             as_info = COALESCE(NULLIF(excluded.as_info, ''), as_info),
             hosting = excluded.hosting,
-            last_seen = excluded.last_seen,
-            connection_count = connection_count + 1
+            last_seen = excluded.last_seen
     ''', (ip, network_type, geo_status, now,
-          country, country_code, region, region_name, city, district,
-          lat, lon, isp, as_info, hosting,
-          now, now, GEO_UNAVAILABLE))
-
+          kwargs.get('country', ''), kwargs.get('country_code', ''),
+          kwargs.get('region', ''), kwargs.get('region_name', ''),
+          kwargs.get('city', ''), kwargs.get('district', ''),
+          kwargs.get('lat', 0), kwargs.get('lon', 0),
+          kwargs.get('isp', ''), kwargs.get('as_info', ''),
+          kwargs.get('hosting', 0), now, now))
     conn.commit()
     conn.close()
 
 
-def update_peer_seen(ip: str):
-    """Update last_seen timestamp"""
-    now = int(time.time())
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute('UPDATE peers_geo SET last_seen = ? WHERE ip = ?', (now, ip))
-    conn.commit()
-    conn.close()
-
-
-def get_peer_stats() -> dict:
-    """Get database statistics"""
+def get_db_stats() -> dict:
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.execute('''
         SELECT
             COUNT(*) as total,
             SUM(CASE WHEN geo_status = 0 THEN 1 ELSE 0 END) as geo_ok,
             SUM(CASE WHEN geo_status = 1 THEN 1 ELSE 0 END) as private,
-            SUM(CASE WHEN geo_status = 2 THEN 1 ELSE 0 END) as unavailable,
-            SUM(CASE WHEN network_type = 'ipv4' THEN 1 ELSE 0 END) as ipv4,
-            SUM(CASE WHEN network_type = 'ipv6' THEN 1 ELSE 0 END) as ipv6,
-            SUM(CASE WHEN network_type = 'onion' THEN 1 ELSE 0 END) as onion,
-            SUM(CASE WHEN network_type = 'i2p' THEN 1 ELSE 0 END) as i2p,
-            SUM(CASE WHEN network_type = 'cjdns' THEN 1 ELSE 0 END) as cjdns
+            SUM(CASE WHEN geo_status = 2 THEN 1 ELSE 0 END) as unavailable
         FROM peers_geo
     ''')
     row = cursor.fetchone()
     conn.close()
-
-    return {
-        'total': row[0] or 0,
-        'geo_ok': row[1] or 0,
-        'private': row[2] or 0,
-        'unavailable': row[3] or 0,
-        'ipv4': row[4] or 0,
-        'ipv6': row[5] or 0,
-        'onion': row[6] or 0,
-        'i2p': row[7] or 0,
-        'cjdns': row[8] or 0,
-    }
+    return {'total': row[0] or 0, 'geo_ok': row[1] or 0,
+            'private': row[2] or 0, 'unavailable': row[3] or 0}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -288,7 +247,6 @@ def get_peer_stats() -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def get_network_type(addr: str) -> str:
-    """Determine network type from address"""
     if '.onion' in addr:
         return 'onion'
     elif '.i2p' in addr:
@@ -297,68 +255,81 @@ def get_network_type(addr: str) -> str:
         return 'cjdns'
     elif ':' in addr and addr.count(':') > 1:
         return 'ipv6'
-    else:
-        return 'ipv4'
+    return 'ipv4'
 
 
-def is_public_address(network_type: str) -> bool:
-    """Check if address can be geolocated"""
-    return network_type in ('ipv4', 'ipv6')
+def is_private_ip(ip: str) -> bool:
+    if ip.startswith('10.') or ip.startswith('192.168.'):
+        return True
+    if ip.startswith('172.'):
+        try:
+            if 16 <= int(ip.split('.')[1]) <= 31:
+                return True
+        except:
+            pass
+    if ip.startswith('127.') or ip == 'localhost':
+        return True
+    if ip.startswith('fe80:') or ip == '::1':
+        return True
+    return False
+
+
+def is_public_address(network_type: str, ip: str) -> bool:
+    return network_type in ('ipv4', 'ipv6') and not is_private_ip(ip)
 
 
 def extract_ip(addr: str) -> str:
-    """Extract IP from address (remove port)"""
-    # IPv6 with port: [2001:db8::1]:8333
     if addr.startswith('['):
         return addr.split(']')[0][1:]
-    # IPv4 with port or other
-    elif ':' in addr and not addr.count(':') > 1:
+    elif ':' in addr and addr.count(':') <= 1:
         return addr.rsplit(':', 1)[0]
-    else:
-        return addr.split(':')[0] if ':' in addr else addr
+    return addr.split(':')[0] if ':' in addr else addr
 
 
-def fetch_geo_api(ip: str) -> Optional[dict]:
-    """Fetch geo data from API"""
+def extract_port(addr: str) -> str:
+    if addr.startswith('[') and ']:' in addr:
+        return addr.split(']:')[1]
+    elif ':' in addr and addr.count(':') <= 1:
+        return addr.rsplit(':', 1)[1]
+    return ""
+
+
+def get_local_ips() -> list:
+    """Get all local IP addresses"""
+    ips = []
     try:
-        url = f"{GEO_API_URL}/{ip}?fields={GEO_API_FIELDS}"
-        response = requests.get(url, timeout=10)
-        data = response.json()
+        # Get hostname IPs
+        hostname = socket.gethostname()
+        ips.append(socket.gethostbyname(hostname))
 
-        if data.get('status') == 'success':
-            return data
-    except Exception:
+        # Try to get all interfaces
+        import subprocess
+        result = subprocess.run(['ip', '-4', 'addr', 'show'], capture_output=True, text=True)
+        for line in result.stdout.split('\n'):
+            if 'inet ' in line:
+                ip = line.strip().split()[1].split('/')[0]
+                if ip not in ips and not ip.startswith('127.'):
+                    ips.append(ip)
+    except:
         pass
-    return None
+
+    if not ips:
+        ips.append('127.0.0.1')
+    return ips
 
 
-def format_bytes(bytes_val: int) -> str:
-    """Format bytes to human readable"""
-    if bytes_val >= 1073741824:
-        return f"{bytes_val / 1073741824:.1f}GB"
-    elif bytes_val >= 1048576:
-        return f"{bytes_val / 1048576:.1f}MB"
-    elif bytes_val >= 1024:
-        return f"{bytes_val / 1024:.1f}KB"
-    else:
-        return f"{bytes_val}B"
-
-
-def format_conntime(conntime: int) -> str:
-    """Format connection time to human readable"""
-    if not conntime:
-        return "-"
-    elapsed = int(time.time()) - conntime
-    if elapsed < 3600:
-        return f"{elapsed // 60}m"
-    elif elapsed < 86400:
-        hours = elapsed // 3600
-        mins = (elapsed % 3600) // 60
-        return f"{hours}h {mins}m"
-    else:
-        days = elapsed // 86400
-        hours = (elapsed % 86400) // 3600
-        return f"{days}d {hours}h"
+def find_available_port() -> int:
+    """Find an available port in the ephemeral range"""
+    for _ in range(100):
+        port = random.randint(PORT_RANGE_START, PORT_RANGE_END)
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(('', port))
+            sock.close()
+            return port
+        except OSError:
+            continue
+    raise RuntimeError("Could not find available port")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -366,109 +337,198 @@ def format_conntime(conntime: int) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def get_peer_info() -> list:
-    """Get peer info from bitcoin-cli"""
     try:
         cmd = config.get_cli_command() + ['getpeerinfo']
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
             return json.loads(result.stdout)
-    except Exception:
+    except:
         pass
     return []
 
 
+def refresh_addrman():
+    global addrman_ips
+    try:
+        cmd = config.get_cli_command() + ['getnodeaddresses', '0']
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            new_ips = {e.get('address', '') for e in data if e.get('address')}
+            with addrman_lock:
+                addrman_ips = new_ips
+    except:
+        pass
+
+
+def is_in_addrman(ip: str) -> bool:
+    with addrman_lock:
+        return ip in addrman_ips
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# BACKGROUND GEO LOOKUP
+# GEO LOOKUP
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def geo_lookup_worker():
-    """Background worker that processes geo lookups one at a time"""
-    while True:
-        time.sleep(1)  # Check every second
+def fetch_geo_api(ip: str) -> Optional[dict]:
+    try:
+        url = f"{GEO_API_URL}/{ip}?fields={GEO_API_FIELDS}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        if data.get('status') == 'success':
+            return data
+    except:
+        pass
+    return None
 
-        with current_peers_lock:
-            peers_snapshot = list(current_peers)
 
-        for peer in peers_snapshot:
+def geo_worker():
+    """Background thread for geo lookups"""
+    while not stop_flag.is_set():
+        try:
+            ip, network_type = geo_queue.get(timeout=0.5)
+        except queue.Empty:
+            continue
+
+        data = fetch_geo_api(ip)
+        if data:
+            upsert_peer_geo(ip, network_type, GEO_OK,
+                           country=data.get('country', ''),
+                           country_code=data.get('countryCode', ''),
+                           region=data.get('region', ''),
+                           region_name=data.get('regionName', ''),
+                           city=data.get('city', ''),
+                           lat=data.get('lat', 0),
+                           lon=data.get('lon', 0),
+                           isp=data.get('isp', ''),
+                           as_info=data.get('as', ''),
+                           hosting=1 if data.get('hosting') else 0)
+        else:
+            upsert_peer_geo(ip, network_type, GEO_UNAVAILABLE)
+
+        with pending_lock:
+            pending_lookups.discard(ip)
+
+        broadcast_update('geo_update', {'ip': ip})
+        time.sleep(GEO_API_DELAY)
+
+
+def queue_geo_lookup(ip: str, network_type: str):
+    with pending_lock:
+        if ip in pending_lookups:
+            return
+        pending_lookups.add(ip)
+    geo_queue.put((ip, network_type))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DATA REFRESH
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def refresh_worker():
+    """Background thread for periodic data refresh"""
+    global current_peers, recent_changes
+    previous_ids = set()
+
+    while not stop_flag.is_set():
+        peers = get_peer_info()
+
+        with peers_lock:
+            current_peers = peers
+
+        # Track changes
+        current_ids = set()
+        now = time.time()
+
+        for peer in peers:
+            peer_id = str(peer.get('id', ''))
+            current_ids.add(peer_id)
             addr = peer.get('addr', '')
             network_type = peer.get('network', get_network_type(addr))
             ip = extract_ip(addr)
 
-            if is_public_address(network_type):
-                if should_retry_geo(ip):
-                    # Do the geo lookup
-                    data = fetch_geo_api(ip)
+            if peer_id not in previous_ids and previous_ids:
+                with changes_lock:
+                    recent_changes.append((now, 'connected', {'ip': ip, 'port': extract_port(addr), 'network': network_type}))
 
-                    if data:
-                        upsert_peer_geo(
-                            ip, network_type, GEO_OK,
-                            data.get('country', ''),
-                            data.get('countryCode', ''),
-                            data.get('region', ''),
-                            data.get('regionName', ''),
-                            data.get('city', ''),
-                            data.get('district', ''),
-                            data.get('lat', 0),
-                            data.get('lon', 0),
-                            data.get('isp', ''),
-                            data.get('as', ''),
-                            1 if data.get('hosting') else 0
-                        )
-                    else:
-                        upsert_peer_geo(ip, network_type, GEO_UNAVAILABLE)
+            if is_public_address(network_type, ip):
+                geo = get_peer_geo(ip)
+                if not geo:
+                    queue_geo_lookup(ip, network_type)
+            else:
+                geo = get_peer_geo(ip)
+                if not geo:
+                    upsert_peer_geo(ip, network_type, GEO_PRIVATE)
 
-                    # Notify clients of update
-                    try:
-                        update_queue.put_nowait({'type': 'geo_update', 'ip': ip})
-                    except queue.Full:
-                        pass
+        for pid in previous_ids - current_ids:
+            with changes_lock:
+                recent_changes.append((now, 'disconnected', {'ip': f'peer#{pid}', 'network': '?'}))
 
-                    # Rate limit
-                    time.sleep(GEO_API_DELAY)
-            elif not get_peer_geo(ip):
-                # Private network, insert with PRIVATE status
-                upsert_peer_geo(ip, network_type, GEO_PRIVATE)
+        # Prune old changes
+        with changes_lock:
+            recent_changes = [(t, c, p) for t, c, p in recent_changes if now - t < RECENT_WINDOW]
 
+        previous_ids = current_ids
 
-def peer_refresh_worker():
-    """Background worker that periodically refreshes peer list"""
-    while True:
-        peers = get_peer_info()
+        # Refresh addrman
+        refresh_addrman()
 
-        with current_peers_lock:
-            global current_peers
-            current_peers = peers
-
-        # Update last_seen for all current peers
-        for peer in peers:
-            addr = peer.get('addr', '')
-            ip = extract_ip(addr)
-            if get_peer_geo(ip):
-                update_peer_seen(ip)
-
-        # Notify clients
-        try:
-            update_queue.put_nowait({'type': 'peers_update'})
-        except queue.Full:
-            pass
+        # Broadcast update
+        broadcast_update('peers_update', {})
 
         time.sleep(REFRESH_INTERVAL)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# API ENDPOINTS
+# WEBSOCKET
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@app.route('/')
-def index():
-    """Serve main dashboard page"""
-    return render_template('index.html')
+def broadcast_update(event_type: str, data: dict):
+    """Signal SSE clients of update"""
+    global last_update_type
+    last_update_type = event_type
+    sse_update_event.set()
 
 
-@app.route('/api/peers')
-def api_peers():
-    """Get current peer list with geo data"""
-    with current_peers_lock:
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTH
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def verify_password(credentials: HTTPBasicCredentials = Depends(security)):
+    """Verify the session password"""
+    if credentials.password != SESSION_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def format_bytes(b: int) -> str:
+    """Format bytes to human readable string"""
+    if b < 1024:
+        return f"{b}B"
+    elif b < 1024 * 1024:
+        return f"{b / 1024:.1f}KB"
+    elif b < 1024 * 1024 * 1024:
+        return f"{b / (1024 * 1024):.1f}MB"
+    else:
+        return f"{b / (1024 * 1024 * 1024):.2f}GB"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API ROUTES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/peers")
+async def api_peers(auth: bool = Depends(verify_password)):
+    """Get all current peers with full data"""
+    with peers_lock:
         peers_snapshot = list(current_peers)
 
     result = []
@@ -476,123 +536,216 @@ def api_peers():
         addr = peer.get('addr', '')
         network_type = peer.get('network', get_network_type(addr))
         ip = extract_ip(addr)
-
+        port = extract_port(addr)
         geo = get_peer_geo(ip)
 
-        # Format location
-        if network_type in ('onion', 'i2p', 'cjdns'):
-            location = "PRIVATE LOCATION"
-            country_code = "PRIV"
+        # Determine location status
+        if network_type in ('onion', 'i2p', 'cjdns') or is_private_ip(ip):
+            location_status = 'private'
+            location = 'PRIVATE LOCATION'
         elif geo and geo['geo_status'] == GEO_OK and geo.get('city'):
+            location_status = 'ok'
             location = f"{geo['city']}, {geo['country_code']}"
-            country_code = geo['country_code']
-        elif geo and geo['geo_status'] == GEO_PRIVATE:
-            location = "PRIVATE LOCATION"
-            country_code = "PRIV"
+        elif geo and geo['geo_status'] == GEO_UNAVAILABLE:
+            location_status = 'unavailable'
+            location = 'LOCATION UNAVAILABLE'
         else:
-            location = "LOCATION UNAVAILABLE"
-            country_code = "N/A"
+            location_status = 'pending'
+            location = 'Stalking location...'
 
-        # Format ping
-        ping = peer.get('pingtime') or peer.get('pingwait') or 0
-        ping_ms = int(ping * 1000) if ping else None
+        # Services abbreviation
+        services = peer.get('servicesnames', [])
+        services_abbrev = ' '.join([s[0] if s else '' for s in services[:5]])
+
+        # Connection time formatted
+        conntime = peer.get('conntime', 0)
+        if conntime:
+            elapsed = int(time.time()) - conntime
+            if elapsed < 3600:
+                conn_fmt = f"{elapsed // 60}m"
+            elif elapsed < 86400:
+                conn_fmt = f"{elapsed // 3600}h {(elapsed % 3600) // 60}m"
+            else:
+                conn_fmt = f"{elapsed // 86400}d {(elapsed % 86400) // 3600}h"
+        else:
+            conn_fmt = "-"
 
         result.append({
-            'id': peer.get('id', ''),
-            'addr': addr,
+            'id': peer.get('id'),
             'ip': ip,
+            'port': port,
+            'addr': addr,
+            'direction': 'IN' if peer.get('inbound') else 'OUT',
             'network': network_type,
+            'in_addrman': is_in_addrman(ip),
             'location': location,
-            'country_code': country_code,
+            'location_status': location_status,
             'country': geo.get('country', '') if geo else '',
+            'country_code': geo.get('country_code', '') if geo else '',
             'region': geo.get('region_name', '') if geo else '',
             'city': geo.get('city', '') if geo else '',
             'lat': geo.get('lat', 0) if geo else 0,
             'lon': geo.get('lon', 0) if geo else 0,
             'isp': geo.get('isp', '') if geo else '',
             'as_info': geo.get('as_info', '') if geo else '',
-            'inbound': peer.get('inbound', False),
-            'direction': 'IN' if peer.get('inbound') else 'OUT',
-            'ping_ms': ping_ms,
+            'hosting': geo.get('hosting', 0) if geo else 0,
+            'geo_status': geo.get('geo_status', -1) if geo else -1,
+            'first_seen': geo.get('first_seen', 0) if geo else 0,
+            'last_seen': geo.get('last_seen', 0) if geo else 0,
+            'version': peer.get('version', 0),
+            'subver': peer.get('subver', '').replace('/', ''),
+            'ping_ms': int((peer.get('pingtime') or 0) * 1000),
+            'minping_ms': int((peer.get('minping') or 0) * 1000),
             'bytessent': peer.get('bytessent', 0),
             'bytesrecv': peer.get('bytesrecv', 0),
             'bytessent_fmt': format_bytes(peer.get('bytessent', 0)),
             'bytesrecv_fmt': format_bytes(peer.get('bytesrecv', 0)),
-            'subver': peer.get('subver', '').replace('/', ''),
-            'version': peer.get('version', ''),
-            'conntime': peer.get('conntime', 0),
-            'conntime_fmt': format_conntime(peer.get('conntime', 0)),
-            'services': peer.get('servicesnames', []),
-            'connection_type': peer.get('connection_type', ''),
             'lastsend': peer.get('lastsend', 0),
             'lastrecv': peer.get('lastrecv', 0),
+            'conntime': conntime,
+            'conntime_fmt': conn_fmt,
+            'services': services,
+            'services_abbrev': services_abbrev,
+            'connection_type': peer.get('connection_type', ''),
+            'addr_relay_enabled': peer.get('addr_relay_enabled', False),
+            'addr_rate_limited': peer.get('addr_rate_limited', 0),
         })
 
-    return jsonify(result)
+    return result
 
 
-@app.route('/api/stats')
-def api_stats():
-    """Get database statistics"""
-    stats = get_peer_stats()
-    with current_peers_lock:
-        stats['connected'] = len(current_peers)
-    stats['last_update'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    return jsonify(stats)
+@app.get("/api/changes")
+async def api_changes(auth: bool = Depends(verify_password)):
+    """Get recent peer changes"""
+    with changes_lock:
+        changes = list(recent_changes)
+    return [{'time': t, 'type': c, 'peer': p} for t, c, p in changes]
 
 
-@app.route('/api/events')
-def api_events():
+@app.get("/api/stats")
+async def api_stats(auth: bool = Depends(verify_password)):
+    """Get dashboard statistics"""
+    with peers_lock:
+        peers_snapshot = list(current_peers)
+
+    peer_count = len(peers_snapshot)
+    with pending_lock:
+        pending = len(pending_lookups)
+
+    # Count by network type
+    network_counts = {'ipv4': 0, 'ipv6': 0, 'onion': 0, 'i2p': 0, 'cjdns': 0}
+    for peer in peers_snapshot:
+        addr = peer.get('addr', '')
+        network = peer.get('network', get_network_type(addr))
+        if network in network_counts:
+            network_counts[network] += 1
+
+    db_stats = get_db_stats()
+
+    return {
+        'connected': peer_count,
+        'pending_geo': pending,
+        **db_stats,
+        **network_counts,
+        'addrman_size': len(addrman_ips),
+        'last_update': datetime.now().strftime('%H:%M:%S'),
+    }
+
+
+@app.get("/api/events")
+async def api_events(request: Request):
     """Server-Sent Events endpoint for real-time updates"""
-    def generate():
-        # Send initial connection event
-        yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+
+    async def event_generator():
+        global last_update_type
+        # Send initial connected message
+        yield {"event": "message", "data": json.dumps({"type": "connected"})}
 
         while True:
-            try:
-                # Wait for update with timeout
-                event = update_queue.get(timeout=30)
-                yield f"data: {json.dumps(event)}\n\n"
-            except queue.Empty:
-                # Send keepalive
-                yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+            # Check if client disconnected
+            if await request.is_disconnected():
+                break
 
-    return Response(generate(), mimetype='text/event-stream')
+            # Wait for update event or timeout for keepalive
+            if sse_update_event.wait(timeout=15):
+                sse_update_event.clear()
+                yield {"event": "message", "data": json.dumps({"type": last_update_type})}
+            else:
+                # Send keepalive
+                yield {"event": "message", "data": json.dumps({"type": "keepalive"})}
+
+    return EventSourceResponse(event_generator())
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the main dashboard page"""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+# Mount static files
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+import asyncio
+
 def main():
+    global SESSION_PASSWORD
+
     # Initialize
     init_database()
 
-    # Load config
     if not config.load():
         print("Error: Configuration not found. Run ./da.sh first to configure.")
         sys.exit(1)
 
-    # Do initial peer fetch
-    global current_peers
-    current_peers = get_peer_info()
-    print(f"Initial fetch: {len(current_peers)} peers found")
+    # Generate session password
+    SESSION_PASSWORD = secrets.token_urlsafe(16)
 
-    # Start background workers
-    geo_thread = threading.Thread(target=geo_lookup_worker, daemon=True)
+    # Find available port
+    port = find_available_port()
+
+    # Get local IPs
+    local_ips = get_local_ips()
+
+    # Start background threads
+    geo_thread = threading.Thread(target=geo_worker, daemon=True)
     geo_thread.start()
 
-    refresh_thread = threading.Thread(target=peer_refresh_worker, daemon=True)
+    refresh_thread = threading.Thread(target=refresh_worker, daemon=True)
     refresh_thread.start()
 
-    # Start Flask server
-    print("\n" + "="*60)
-    print("  MBTC-DASH Web Server")
-    print("="*60)
-    print(f"\n  Open in browser: http://127.0.0.1:5000")
-    print(f"  Press Ctrl+C to stop\n")
+    # Initial data fetch
+    refresh_addrman()
 
-    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
+    # Print access info
+    print("\n" + "=" * 60)
+    print("  MBTC-DASH Web Dashboard")
+    print("=" * 60)
+    print(f"\n  Password for this session: {SESSION_PASSWORD}")
+    print(f"\n  Access URLs:")
+    print(f"    Local:    http://127.0.0.1:{port}")
+    for ip in local_ips:
+        if ip != '127.0.0.1':
+            print(f"    LAN:      http://{ip}:{port}")
+    print(f"\n  Username: (any)")
+    print(f"  Password: {SESSION_PASSWORD}")
+    print("\n  Press Ctrl+C to stop")
+    print("=" * 60 + "\n")
+
+    # Run server
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_flag.set()
+        print("\nShutting down...")
 
 
 if __name__ == "__main__":

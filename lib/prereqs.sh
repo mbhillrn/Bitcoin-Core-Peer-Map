@@ -31,6 +31,10 @@ declare -a BITCOIN_TOOLS=(
 declare -a PYTHON_PACKAGES=(
     "rich|Rich terminal UI library"
     "requests|HTTP library for API calls"
+    "fastapi|FastAPI web framework"
+    "uvicorn|ASGI server for FastAPI"
+    "jinja2|Template engine for FastAPI"
+    "sse_starlette|Server-Sent Events for FastAPI"
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
