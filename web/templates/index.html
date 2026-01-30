@@ -69,6 +69,10 @@
         <div class="panel map-panel-full">
             <div class="panel-header">
                 <h2>Peer Map</h2>
+                <span class="map-status" id="map-status">
+                    <span class="status-dot status-ok" id="map-status-dot"></span>
+                    <span id="map-status-text">Updated!</span>
+                </span>
                 <span class="map-legend">
                     <span class="legend-item"><span class="dot dot-public"></span> Public</span>
                     <span class="legend-item"><span class="dot dot-private"></span> Private</span>
@@ -78,7 +82,7 @@
             <div class="map-container" id="map"></div>
         </div>
 
-        <!-- Main Peer Table -->
+        <!-- Main Peer Table - ALL 26 COLUMNS -->
         <div class="panel peer-panel">
             <div class="panel-header">
                 <h2>Connected Peers</h2>
@@ -88,23 +92,42 @@
                 <table class="peer-table" id="peer-table">
                     <thead>
                         <tr>
-                            <th data-sort="direction">In/Out</th>
-                            <th data-sort="addr">Address</th>
+                            <!-- 1-6: getpeerinfo (instant) -->
+                            <th data-sort="id">ID</th>
+                            <th data-sort="network">Net</th>
+                            <th data-sort="ip">IP</th>
+                            <th data-sort="port">Port</th>
+                            <th data-sort="direction">Dir</th>
+                            <th data-sort="subver">Subver</th>
+                            <!-- 7-13: ip-api geo (loads second) -->
                             <th data-sort="city">City</th>
-                            <th data-sort="country_code">Country</th>
-                            <th data-sort="conntime">Connected</th>
-                            <th data-sort="subver">Version</th>
-                            <th data-sort="connection_type">Type</th>
-                            <th data-sort="ping_ms">Ping</th>
+                            <th data-sort="region">Region</th>
+                            <th data-sort="regionName">RegionName</th>
+                            <th data-sort="country">Country</th>
+                            <th data-sort="countryCode">CC</th>
+                            <th data-sort="continent">Continent</th>
+                            <th data-sort="continentCode">ContC</th>
+                            <!-- 14-20: more getpeerinfo -->
                             <th data-sort="bytessent">Sent</th>
                             <th data-sort="bytesrecv">Recv</th>
+                            <th data-sort="ping_ms">Ping</th>
+                            <th data-sort="conntime">ConnTime</th>
+                            <th data-sort="version">Ver</th>
+                            <th data-sort="connection_type">ConnType</th>
+                            <th data-sort="services_abbrev">Svc</th>
+                            <!-- 21-23: more ip-api -->
+                            <th data-sort="lat">Lat</th>
+                            <th data-sort="lon">Lon</th>
                             <th data-sort="isp">ISP</th>
-                            <th data-sort="id">ID</th>
+                            <!-- 24-26: historical (database) -->
+                            <th data-sort="first_seen">FirstSeen</th>
+                            <th data-sort="last_seen">LastSeen</th>
+                            <th data-sort="times_seen">TimesSeen</th>
                         </tr>
                     </thead>
                     <tbody id="peer-tbody">
                         <tr class="loading-row">
-                            <td colspan="12">Loading peers...</td>
+                            <td colspan="26">Loading peers...</td>
                         </tr>
                     </tbody>
                 </table>

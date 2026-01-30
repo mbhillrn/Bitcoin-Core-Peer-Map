@@ -126,39 +126,36 @@ DISPLAY COLUMNS (Web Dashboard) - ALL SEPARATE, NO COMBINING
 ** USER REQUIREMENT: All columns separate for now. Can combine later. **
 ** Can ADD columns, but do NOT subtract/remove without asking. **
 
-FROM GETPEERINFO (instant, loads first):
-  - Peer ID
-  - Network type (ipv4, ipv6, onion, i2p, cjdns)
-  - IP (separate column)
-  - Port (separate column)
-  - Direction (IN/OUT from inbound field)
-  - Ping (ms)
-  - Connection Time (formatted)
-  - Bytes Sent
-  - Bytes Received
-  - Version
-  - Connection Type
-  - Services (abbreviated)
-  - Subver (user agent)
+COLUMN ORDER (left to right):
+  1.  Peer ID (getpeerinfo)
+  2.  Network type (getpeerinfo) - ipv4, ipv6, onion, i2p, cjdns
+  3.  IP (getpeerinfo)
+  4.  Port (getpeerinfo)
+  5.  Direction (getpeerinfo) - IN/OUT
+  6.  Subver (getpeerinfo) - user agent
+  7.  City (ip-api) - loads second
+  8.  Region (ip-api)
+  9.  RegionName (ip-api)
+  10. Country (ip-api)
+  11. CountryCode (ip-api)
+  12. Continent (ip-api)
+  13. ContinentCode (ip-api)
+  14. Bytes Sent (getpeerinfo)
+  15. Bytes Recv (getpeerinfo)
+  16. Ping (getpeerinfo) - ms
+  17. ConnTime (getpeerinfo) - formatted duration
+  18. Version (getpeerinfo)
+  19. ConnType (getpeerinfo)
+  20. Services (getpeerinfo) - abbreviated
+  21. Lat (ip-api)
+  22. Lon (ip-api)
+  23. ISP (ip-api)
+  24. First Seen (database) - loads last
+  25. Last Seen (database)
+  26. Times Seen (database)
 
-FROM IP-API.COM (loads second, trickles in):
-  API URL: http://ip-api.com/json/{ip}?fields=continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query
-
-  - continent
-  - continentCode
-  - country
-  - countryCode
-  - region
-  - regionName
-  - city
-  - lat
-  - lon
-  - isp
-
-FROM DATABASE (historical stats, loads separately/background):
-  - first_seen (first time we ever saw this IP)
-  - last_seen (most recent time)
-  - times_seen (how many sessions)
+IP-API URL:
+  http://ip-api.com/json/{ip}?fields=continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query
 
 NETWORK TYPE COLORS (in table rows):
   - ipv4: yellow
@@ -167,6 +164,11 @@ NETWORK TYPE COLORS (in table rows):
   - i2p: light blue
   - cjdns: light pink
   ** If colors conflict with other UI elements, use different shades **
+
+MAP STATUS INDICATOR (corner of map):
+  - Orange circle + "Updating..." while geo lookups in progress
+  - Green circle + "Updated!" when all geo lookups complete
+  - Red circle + error message if something fails
 
 Sorting: Default by Peer ID (preserves connection order)
 
@@ -222,6 +224,12 @@ PHASE 3 - NETWORK TYPE COLORS:
   [ ] i2p rows: light blue tint
   [ ] cjdns rows: light pink tint
   [ ] Check colors don't conflict with other UI elements
+
+PHASE 3B - MAP STATUS INDICATOR:
+  [ ] Add status indicator to corner of map
+  [ ] Orange circle + "Updating..." while geo lookups in progress
+  [ ] Green circle + "Updated!" when all geo complete
+  [ ] Red circle + error message if something fails
 
 PHASE 4 - RECENT UPDATES PANEL FIX:
   [ ] Store IP address when peer connects (so we have it when they disconnect)

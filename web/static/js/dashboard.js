@@ -185,8 +185,36 @@ async function fetchStats() {
                 }
             }
         });
+
+        // Update map status indicator
+        updateMapStatus(stats.geo_pending || 0);
     } catch (error) {
         console.error('Error fetching stats:', error);
+        updateMapStatus(-1); // Error state
+    }
+}
+
+// Update map status indicator (orange=updating, green=updated, red=error)
+function updateMapStatus(pending) {
+    const dot = document.getElementById('map-status-dot');
+    const text = document.getElementById('map-status-text');
+    if (!dot || !text) return;
+
+    // Remove all status classes
+    dot.classList.remove('status-ok', 'status-pending', 'status-error');
+
+    if (pending < 0) {
+        // Error
+        dot.classList.add('status-error');
+        text.textContent = 'Error';
+    } else if (pending > 0) {
+        // Still loading
+        dot.classList.add('status-pending');
+        text.textContent = `Updating... (${pending})`;
+    } else {
+        // All done
+        dot.classList.add('status-ok');
+        text.textContent = 'Updated!';
     }
 }
 
@@ -272,12 +300,12 @@ function setupSSE() {
     };
 }
 
-// Render peers to table
+// Render peers to table - ALL 26 COLUMNS with network colors
 function renderPeers() {
     if (currentPeers.length === 0) {
         peerTbody.innerHTML = `
             <tr class="loading-row">
-                <td colspan="10">No peers connected</td>
+                <td colspan="26">No peers connected</td>
             </tr>
         `;
         peerCount.textContent = '0 peers';
@@ -303,15 +331,15 @@ function renderPeers() {
         return sortDirection === 'asc' ? cmp : -cmp;
     });
 
-    // Build table HTML
+    // Build table HTML - ALL 26 COLUMNS
     const rows = sortedPeers.map(peer => {
-        const networkClass = `network-${peer.network}`;
+        // Network type determines row color class
+        const networkRowClass = `network-row-${peer.network}`;
         const directionClass = peer.direction === 'IN' ? 'in' : 'out';
 
-        // City/region display
-        let cityDisplay = '-';
+        // City display with status
+        let cityDisplay = peer.city || '-';
         let cityClass = '';
-        let cityTitle = '';
         if (peer.location_status === 'private') {
             cityDisplay = 'PRIVATE';
             cityClass = 'location-private';
@@ -321,25 +349,46 @@ function renderPeers() {
         } else if (peer.location_status === 'pending') {
             cityDisplay = 'Stalking...';
             cityClass = 'location-pending';
-        } else if (peer.city) {
-            cityDisplay = peer.city + (peer.region ? ', ' + peer.region : '');
-            cityTitle = cityDisplay;
         }
 
+        // Format timestamps (historical) - 0 means not loaded yet
+        const firstSeen = peer.first_seen ? new Date(peer.first_seen * 1000).toLocaleDateString() : '-';
+        const lastSeen = peer.last_seen ? new Date(peer.last_seen * 1000).toLocaleDateString() : '-';
+        const timesSeen = peer.times_seen || '-';
+
         return `
-            <tr data-id="${peer.id}">
+            <tr data-id="${peer.id}" class="${networkRowClass}">
+                <!-- 1-6: getpeerinfo (instant) -->
+                <td>${peer.id}</td>
+                <td class="network-${peer.network}">${peer.network}</td>
+                <td title="${peer.addr}">${truncate(peer.ip, 20)}</td>
+                <td>${peer.port || '-'}</td>
                 <td><span class="direction-badge ${directionClass}">${peer.direction}</span></td>
-                <td class="${networkClass}" title="${peer.addr}">${truncate(peer.addr, 28)}</td>
-                <td class="${cityClass}" title="${cityTitle}">${truncate(cityDisplay, 18)}</td>
-                <td>${peer.country_code || '-'}</td>
-                <td>${peer.conntime_fmt}</td>
-                <td title="${peer.subver}">${truncate(peer.subver, 16)}</td>
-                <td>${peer.connection_type || '-'}</td>
-                <td>${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}</td>
+                <td title="${peer.subver}">${truncate(peer.subver, 18)}</td>
+                <!-- 7-13: ip-api geo (loads second) -->
+                <td class="${cityClass}">${truncate(cityDisplay, 15)}</td>
+                <td>${peer.region || '-'}</td>
+                <td>${truncate(peer.regionName || '-', 12)}</td>
+                <td>${truncate(peer.country || '-', 12)}</td>
+                <td>${peer.countryCode || '-'}</td>
+                <td>${truncate(peer.continent || '-', 10)}</td>
+                <td>${peer.continentCode || '-'}</td>
+                <!-- 14-20: more getpeerinfo -->
                 <td>${peer.bytessent_fmt}</td>
                 <td>${peer.bytesrecv_fmt}</td>
-                <td title="${peer.isp}">${truncate(peer.isp || '-', 14)}</td>
-                <td>${peer.id}</td>
+                <td>${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}</td>
+                <td>${peer.conntime_fmt}</td>
+                <td>${peer.version || '-'}</td>
+                <td>${truncate(peer.connection_type || '-', 12)}</td>
+                <td title="${(peer.services || []).join(', ')}">${peer.services_abbrev || '-'}</td>
+                <!-- 21-23: more ip-api -->
+                <td>${peer.lat ? peer.lat.toFixed(2) : '-'}</td>
+                <td>${peer.lon ? peer.lon.toFixed(2) : '-'}</td>
+                <td title="${peer.isp}">${truncate(peer.isp || '-', 15)}</td>
+                <!-- 24-26: historical (database) -->
+                <td>${firstSeen}</td>
+                <td>${lastSeen}</td>
+                <td>${timesSeen}</td>
             </tr>
         `;
     }).join('');

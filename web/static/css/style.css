@@ -268,12 +268,26 @@ body {
     color: var(--accent-blue);
 }
 
-/* Network type colors */
-.network-ipv4 { color: var(--text-primary); }
-.network-ipv6 { color: var(--accent-purple); }
-.network-onion { color: var(--accent-yellow); }
-.network-i2p { color: var(--accent-green); }
-.network-cjdns { color: var(--accent-cyan); }
+/* Network type colors (cell text) */
+.network-ipv4 { color: #e3b341; }  /* yellow */
+.network-ipv6 { color: #f0883e; }  /* orange */
+.network-onion { color: #f07178; } /* mild red */
+.network-i2p { color: #79c0ff; }   /* light blue */
+.network-cjdns { color: #d2a8ff; } /* light pink/purple */
+
+/* Network type ROW BACKGROUND colors (subtle tint) */
+.network-row-ipv4 { background: rgba(227, 179, 65, 0.08); }  /* yellow tint */
+.network-row-ipv6 { background: rgba(240, 136, 62, 0.08); }  /* orange tint */
+.network-row-onion { background: rgba(240, 113, 120, 0.08); } /* mild red tint */
+.network-row-i2p { background: rgba(121, 192, 255, 0.08); }   /* light blue tint */
+.network-row-cjdns { background: rgba(210, 168, 255, 0.08); } /* light pink tint */
+
+/* Row hover overrides network colors slightly */
+.peer-table tbody tr.network-row-ipv4:hover { background: rgba(227, 179, 65, 0.15); }
+.peer-table tbody tr.network-row-ipv6:hover { background: rgba(240, 136, 62, 0.15); }
+.peer-table tbody tr.network-row-onion:hover { background: rgba(240, 113, 120, 0.15); }
+.peer-table tbody tr.network-row-i2p:hover { background: rgba(121, 192, 255, 0.15); }
+.peer-table tbody tr.network-row-cjdns:hover { background: rgba(210, 168, 255, 0.15); }
 
 /* Location styling */
 .location-private {
@@ -364,6 +378,38 @@ body {
 .dot-public { background: var(--accent-green); }
 .dot-private { background: var(--accent-yellow); }
 .dot-unavailable { background: var(--text-dim); }
+
+/* Map status indicator */
+.map-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    margin-right: auto;
+    margin-left: 16px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-dot.status-ok {
+    background: var(--accent-green);
+}
+
+.status-dot.status-pending {
+    background: var(--accent-yellow);
+    animation: pulse 1s infinite;
+}
+
+.status-dot.status-error {
+    background: var(--accent-red);
+}
 
 /* Changes Panel */
 .changes-panel {
