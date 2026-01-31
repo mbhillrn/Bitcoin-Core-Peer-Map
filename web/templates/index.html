@@ -62,6 +62,10 @@
                 <span class="stat-title">CJDNS (in/out)</span>
                 <span class="stat-data stat-cjdns" id="stat-cjdns">-</span>
             </div>
+            <div class="stat-block stat-freq">
+                <span class="stat-title">Update Freq</span>
+                <span class="stat-data"><input type="text" id="refresh-rate-input" value="10" title="Enter update frequency in seconds">s</span>
+            </div>
             <div class="stat-block stat-timer">
                 <span class="stat-title">Next Update</span>
                 <span class="stat-data" id="stat-countdown">10s</span>
@@ -76,14 +80,6 @@
         <div class="panel map-panel-full resizable-panel" id="map-panel">
             <div class="panel-header">
                 <h2>Peer Map</h2>
-                <span class="refresh-rate-control" id="refresh-rate-control" title="Map update frequency (seconds)">
-                    <span class="refresh-rate-label">Refresh:</span>
-                    <button class="refresh-rate-btn" data-seconds="5">5s</button>
-                    <button class="refresh-rate-btn active" data-seconds="10">10s</button>
-                    <button class="refresh-rate-btn" data-seconds="15">15s</button>
-                    <button class="refresh-rate-btn" data-seconds="30">30s</button>
-                    <button class="refresh-rate-btn" data-seconds="60">60s</button>
-                </span>
                 <span class="map-status" id="map-status">
                     <span class="status-dot status-ok" id="map-status-dot"></span>
                     <span id="map-status-text">Updated!</span>

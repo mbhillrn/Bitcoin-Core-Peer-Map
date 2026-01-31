@@ -5,12 +5,7 @@
 
 // Configuration
 let refreshInterval = 10000; // 10 seconds default (can be changed by user)
-const REFRESH_PRESETS = [5, 10, 15, 30, 60]; // seconds
 const API_BASE = '';
-
-// Antarctica coords for private AND unavailable locations
-const ANTARCTICA_LAT = -82.8628;
-const ANTARCTICA_LON = 135.0000;
 
 // State
 let currentPeers = [];
@@ -212,6 +207,9 @@ function setupRestoreDefaults() {
     }
 }
 
+// Flag to prevent sort when just finished resizing
+let justResized = false;
+
 // Setup column resizing via drag
 function setupColumnResize() {
     const table = document.getElementById('peer-table');
@@ -258,6 +256,9 @@ function setupColumnResize() {
             isResizing = false;
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
+            // Set flag to prevent sort click that follows resize
+            justResized = true;
+            setTimeout(() => { justResized = false; }, 100);
         }
     });
 
@@ -571,12 +572,13 @@ function initMap() {
     }
 }
 
-// Antarctica cluster positions for private networks
-const ANTARCTICA_CLUSTERS = {
-    'onion': { lat: -80, lon: -120 },   // West Antarctica
-    'i2p':   { lat: -82, lon: -30 },    // Near Weddell Sea
-    'cjdns': { lat: -78, lon: 60 },     // East Antarctica
-    'unavailable': { lat: -85, lon: 150 } // Ross Ice Shelf area
+// Antarctica positioning - all private networks scattered across northern coast
+// Northern coast of Antarctica is roughly -65 to -72 latitude
+const ANTARCTICA_BASE = {
+    latMin: -72,   // Southern limit (more inland)
+    latMax: -65,   // Northern limit (near ocean)
+    lonMin: -170,  // Western limit
+    lonMax: 170    // Eastern limit
 };
 
 // Cache for stable Antarctica positions (keyed by peer addr)
@@ -595,6 +597,7 @@ function hashString(str) {
 }
 
 // Get stable Antarctica position for a peer (cached per addr)
+// All private networks are scattered across the northern coast of Antarctica
 function getStableAntarcticaPosition(peerAddr, network, locationType) {
     // Use addr as key to ensure same peer always gets same position
     const cacheKey = peerAddr || `unknown-${Date.now()}`;
@@ -603,27 +606,17 @@ function getStableAntarcticaPosition(peerAddr, network, locationType) {
         return antarcticaPositionCache[cacheKey];
     }
 
-    // Determine which cluster to use
-    const clusterType = locationType === 'unavailable' ? 'unavailable' : network;
-    const cluster = ANTARCTICA_CLUSTERS[clusterType] || ANTARCTICA_CLUSTERS['onion'];
-
-    // Generate stable offsets using hash of addr
+    // Generate stable position using hash of addr
     const hash1 = hashString(cacheKey);
     const hash2 = hashString(cacheKey + '_lon');
 
-    // Convert hash to value between -0.5 and 0.5
-    const latOffset = ((hash1 % 1000) / 1000) - 0.5;
-    const lonOffset = ((hash2 % 1000) / 1000) - 0.5;
+    // Convert hash to value between 0 and 1
+    const latNorm = Math.abs(hash1 % 1000) / 1000;
+    const lonNorm = Math.abs(hash2 % 1000) / 1000;
 
-    // Apply offsets based on location type
-    let lat, lon;
-    if (locationType === 'unavailable') {
-        lat = cluster.lat + latOffset * 3;   // ±1.5 degrees
-        lon = cluster.lon + lonOffset * 15;  // ±7.5 degrees
-    } else {
-        lat = cluster.lat + latOffset * 4;   // ±2 degrees
-        lon = cluster.lon + lonOffset * 20;  // ±10 degrees
-    }
+    // Map to Antarctica northern coast area
+    const lat = ANTARCTICA_BASE.latMin + (ANTARCTICA_BASE.latMax - ANTARCTICA_BASE.latMin) * latNorm;
+    const lon = ANTARCTICA_BASE.lonMin + (ANTARCTICA_BASE.lonMax - ANTARCTICA_BASE.lonMin) * lonNorm;
 
     // Cache the position
     antarcticaPositionCache[cacheKey] = { lat, lon };
@@ -703,6 +696,9 @@ function setupTableSorting() {
     const headers = document.querySelectorAll('.peer-table th[data-sort]');
     headers.forEach(header => {
         header.addEventListener('click', () => {
+            // Skip sort if we just finished resizing a column
+            if (justResized) return;
+
             const column = header.dataset.sort;
 
             // 3-state cycle: null → asc → desc → null
@@ -1470,59 +1466,50 @@ function resetCountdown() {
     updateCountdownDisplay();
 }
 
-// Setup refresh rate control
+// Setup refresh rate control (text input in stats bar)
 function setupRefreshRateControl() {
     // Load saved preference
     try {
         const saved = localStorage.getItem('mbcore_refresh_interval');
         if (saved) {
             const interval = parseInt(saved, 10);
-            if (REFRESH_PRESETS.includes(interval / 1000)) {
+            if (interval >= 1000 && interval <= 300000) { // 1s to 5min
                 refreshInterval = interval;
             }
         }
     } catch (e) {}
 
-    const container = document.getElementById('refresh-rate-control');
-    if (!container) return;
+    const input = document.getElementById('refresh-rate-input');
+    if (!input) return;
 
-    // Update display
-    updateRefreshRateDisplay();
+    // Set initial value from loaded preference
+    input.value = refreshInterval / 1000;
 
-    // Handle clicks on preset buttons
-    container.querySelectorAll('.refresh-rate-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const seconds = parseInt(btn.dataset.seconds, 10);
-            if (!isNaN(seconds) && REFRESH_PRESETS.includes(seconds)) {
-                refreshInterval = seconds * 1000;
+    // Handle input changes (on blur or enter)
+    const applyValue = () => {
+        const seconds = parseInt(input.value, 10);
+        if (!isNaN(seconds) && seconds >= 1 && seconds <= 300) {
+            refreshInterval = seconds * 1000;
 
-                // Update active button
-                container.querySelectorAll('.refresh-rate-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+            // Save preference
+            try {
+                localStorage.setItem('mbcore_refresh_interval', refreshInterval.toString());
+            } catch (e) {}
 
-                // Save preference
-                try {
-                    localStorage.setItem('mbcore_refresh_interval', refreshInterval.toString());
-                } catch (e) {}
-
-                // Reset countdown to new interval
-                resetCountdown();
-            }
-        });
-    });
-}
-
-function updateRefreshRateDisplay() {
-    const container = document.getElementById('refresh-rate-control');
-    if (!container) return;
-
-    const currentSeconds = refreshInterval / 1000;
-    container.querySelectorAll('.refresh-rate-btn').forEach(btn => {
-        const seconds = parseInt(btn.dataset.seconds, 10);
-        if (seconds === currentSeconds) {
-            btn.classList.add('active');
+            // Reset countdown to new interval
+            resetCountdown();
         } else {
-            btn.classList.remove('active');
+            // Invalid input, reset to current value
+            input.value = refreshInterval / 1000;
+        }
+    };
+
+    input.addEventListener('blur', applyValue);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            applyValue();
+            input.blur();
         }
     });
 }

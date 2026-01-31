@@ -219,6 +219,35 @@ body {
     color: var(--accent-yellow);
 }
 
+/* Update frequency input */
+.stat-freq .stat-data {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+#refresh-rate-input {
+    width: 32px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--accent-blue);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 400;
+    text-align: center;
+    padding: 2px 4px;
+}
+
+#refresh-rate-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+#refresh-rate-input:hover {
+    border-color: var(--accent-blue);
+}
+
 .stat-time .stat-data {
     color: var(--text-primary);
 }
