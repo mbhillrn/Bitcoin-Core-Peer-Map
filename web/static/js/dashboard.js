@@ -21,6 +21,12 @@ let eventSource = null;
 let map = null;
 let markers = {};
 let networkFilter = 'all';  // 'all', 'ipv4', 'ipv6', 'onion', 'i2p', 'cjdns'
+let columnWidths = {};
+let hasSavedColumnWidths = false;
+let autoSizedColumns = false;
+
+// Changes table column state
+let changesColumnWidths = {};
 
 // All available columns (for reference)
 const allColumns = [
@@ -82,12 +88,13 @@ const changesTbody = document.getElementById('changes-tbody');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadColumnPreferences();  // Load saved order/visibility first
-    // Load saved column widths, or set defaults if none saved
-    if (!loadColumnWidths()) {
-        setInitialColumnWidths();
-    }
+    // Don't load saved column widths on startup - let fitColumnsToWindow handle it after data loads
+    // This ensures columns always fit the window properly on page load
+    // But DO set initial changes table widths (it's a small fixed table)
+    setInitialChangesColumnWidths();
     setupTableSorting();
     setupColumnResize();
+    setupChangesColumnResize();
     setupColumnDrag();
     setupColumnConfig();
     setupNetworkFilter();
@@ -138,17 +145,32 @@ function setupRestoreDefaults() {
                 localStorage.removeItem('mbcore_visible_columns');
                 localStorage.removeItem('mbcore_column_order');
                 localStorage.removeItem('mbcore_column_widths');
+                localStorage.removeItem('mbcore_changes_column_widths');
             } catch (e) {}
 
-            // Reset column widths - clear inline styles and set defaults
+            // Reset peer table column widths - clear inline styles and set defaults
             const table = document.getElementById('peer-table');
             if (table) {
-                table.querySelectorAll('th[data-col]').forEach(th => {
-                    th.style.width = '';
-                    th.style.maxWidth = '';
+                table.querySelectorAll('th[data-col], td[data-col]').forEach(cell => {
+                    cell.style.width = '';
+                    cell.style.maxWidth = '';
                 });
             }
+            columnWidths = {};
+            hasSavedColumnWidths = false;
+            autoSizedColumns = false;
             setInitialColumnWidths();
+
+            // Reset changes table column widths
+            const changesTable = document.getElementById('changes-table');
+            if (changesTable) {
+                changesTable.querySelectorAll('th[data-col], td[data-col]').forEach(cell => {
+                    cell.style.width = '';
+                    cell.style.maxWidth = '';
+                });
+            }
+            changesColumnWidths = {};
+            setInitialChangesColumnWidths();
 
             // Re-apply and re-render
             applyColumnVisibility();
@@ -193,9 +215,7 @@ function setupColumnResize() {
         if (!isResizing || !currentTh) return;
         const deltaX = e.clientX - startX;
         const newWidth = Math.max(40, startWidth + deltaX);
-        // Set both width and max-width to enforce the size
-        currentTh.style.width = newWidth + 'px';
-        currentTh.style.maxWidth = newWidth + 'px';
+        applyColumnWidth(currentTh.dataset.col, `${newWidth}px`);
     });
 
     document.addEventListener('mouseup', () => {
@@ -218,6 +238,119 @@ function setupColumnResize() {
         const rect = th.getBoundingClientRect();
         const isNearEdge = e.clientX > rect.right - 8;
         th.style.cursor = isNearEdge ? 'col-resize' : 'grab';
+    });
+}
+
+// Setup changes table column resizing
+function setupChangesColumnResize() {
+    const table = document.getElementById('changes-table');
+    if (!table) return;
+
+    let isResizing = false;
+    let currentTh = null;
+    let startX = 0;
+    let startWidth = 0;
+
+    table.addEventListener('mousedown', (e) => {
+        const th = e.target.closest('th');
+        if (!th) return;
+
+        const rect = th.getBoundingClientRect();
+        const isNearEdge = e.clientX > rect.right - 8;
+
+        if (isNearEdge) {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizing = true;
+            currentTh = th;
+            startX = e.clientX;
+            startWidth = th.offsetWidth;
+            th.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing || !currentTh) return;
+        const deltaX = e.clientX - startX;
+        const newWidth = Math.max(40, startWidth + deltaX);
+        applyChangesColumnWidth(currentTh.dataset.col, `${newWidth}px`);
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing && currentTh) {
+            currentTh.classList.remove('resizing');
+            saveChangesColumnWidths();
+            currentTh = null;
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+
+    table.addEventListener('mousemove', (e) => {
+        if (isResizing) return;
+        const th = e.target.closest('th');
+        if (!th) return;
+
+        const rect = th.getBoundingClientRect();
+        const isNearEdge = e.clientX > rect.right - 8;
+        th.style.cursor = isNearEdge ? 'col-resize' : 'default';
+    });
+}
+
+// Apply column width to changes table
+function applyChangesColumnWidth(col, width) {
+    changesColumnWidths[col] = width;
+    const table = document.getElementById('changes-table');
+    if (!table) return;
+
+    table.querySelectorAll(`th[data-col="${col}"], td[data-col="${col}"]`).forEach(cell => {
+        cell.style.width = width;
+        cell.style.maxWidth = width;
+    });
+}
+
+// Get inline style for changes column
+function getChangesColumnWidthStyle(col) {
+    const width = changesColumnWidths[col];
+    return width ? ` style="width: ${width}; max-width: ${width};"` : '';
+}
+
+// Save changes column widths
+function saveChangesColumnWidths() {
+    try {
+        localStorage.setItem('mbcore_changes_column_widths', JSON.stringify(changesColumnWidths));
+    } catch (e) {
+        console.warn('Could not save changes column widths:', e);
+    }
+}
+
+// Load changes column widths
+function loadChangesColumnWidths() {
+    try {
+        const saved = localStorage.getItem('mbcore_changes_column_widths');
+        if (saved) {
+            const widths = JSON.parse(saved) || {};
+            Object.entries(widths).forEach(([col, width]) => {
+                if (width) applyChangesColumnWidth(col, width);
+            });
+            return Object.keys(widths).length > 0;
+        }
+    } catch (e) {
+        console.warn('Could not load changes column widths:', e);
+    }
+    return false;
+}
+
+// Set initial changes column widths
+function setInitialChangesColumnWidths() {
+    // Always set all column widths to ensure none are missing
+    changesColumnWidths = {};  // Clear any old cached values
+    const defaultWidths = { 'time': 80, 'event': 90, 'ip': 140, 'network': 70 };
+    Object.entries(defaultWidths).forEach(([col, width]) => {
+        applyChangesColumnWidth(col, `${width}px`);
     });
 }
 
@@ -578,7 +711,8 @@ function setupColumnConfig() {
 
 // Apply column visibility to table
 function applyColumnVisibility() {
-    const headers = document.querySelectorAll('.peer-table th[data-col]');
+    // Only apply to peer table, not changes table
+    const headers = document.querySelectorAll('#peer-table th[data-col]');
     headers.forEach(th => {
         const col = th.dataset.col;
         if (visibleColumns.includes(col)) {
@@ -605,19 +739,28 @@ function saveColumnPreferences() {
 // Save column widths to localStorage
 function saveColumnWidths() {
     try {
-        const widths = {};
-        const table = document.getElementById('peer-table');
-        if (table) {
-            table.querySelectorAll('th[data-col]').forEach(th => {
-                if (th.style.width) {
-                    widths[th.dataset.col] = th.style.width;
-                }
-            });
-        }
-        localStorage.setItem('mbcore_column_widths', JSON.stringify(widths));
+        localStorage.setItem('mbcore_column_widths', JSON.stringify(columnWidths));
     } catch (e) {
         console.warn('Could not save column widths:', e);
     }
+}
+
+// Apply column width to both th and td cells
+function applyColumnWidth(col, width) {
+    columnWidths[col] = width;
+    const table = document.getElementById('peer-table');
+    if (!table) return;
+
+    table.querySelectorAll(`th[data-col="${col}"], td[data-col="${col}"]`).forEach(cell => {
+        cell.style.width = width;
+        cell.style.maxWidth = width;
+    });
+}
+
+// Get inline style string for column width
+function getColumnWidthStyle(col) {
+    const width = columnWidths[col];
+    return width ? ` style="width: ${width}; max-width: ${width};"` : '';
 }
 
 // Load and apply saved column widths
@@ -625,17 +768,15 @@ function loadColumnWidths() {
     try {
         const saved = localStorage.getItem('mbcore_column_widths');
         if (saved) {
-            const widths = JSON.parse(saved);
-            const table = document.getElementById('peer-table');
-            if (table) {
-                table.querySelectorAll('th[data-col]').forEach(th => {
-                    if (widths[th.dataset.col]) {
-                        th.style.width = widths[th.dataset.col];
-                        th.style.maxWidth = widths[th.dataset.col];
-                    }
-                });
+            const widths = JSON.parse(saved) || {};
+            const entries = Object.entries(widths).filter(([, width]) => width);
+            entries.forEach(([col, width]) => {
+                applyColumnWidth(col, width);
+            });
+            if (entries.length) {
+                hasSavedColumnWidths = true;
+                return true; // Widths were loaded
             }
-            return true; // Widths were loaded
         }
     } catch (e) {
         console.warn('Could not load column widths:', e);
@@ -648,41 +789,101 @@ function setInitialColumnWidths() {
     const table = document.getElementById('peer-table');
     if (!table) return;
 
-    // Default widths for known columns (px)
+    // Default widths for known columns (px) - compact sizes
     const defaultWidths = {
         'id': 45,
         'network': 60,
-        'ip': 140,
-        'port': 55,
-        'direction': 50,
-        'subver': 150,
-        'city': 90,
+        'ip': 120,
+        'port': 50,
+        'direction': 45,
+        'subver': 120,
+        'city': 80,
         'region': 50,
-        'regionName': 100,
-        'country': 100,
+        'regionName': 90,
+        'country': 80,
         'countryCode': 45,
-        'continent': 100,
+        'continent': 80,
         'continentCode': 45,
-        'bytessent': 70,
-        'bytesrecv': 70,
+        'bytessent': 65,
+        'bytesrecv': 65,
         'ping_ms': 50,
-        'conntime': 70,
-        'connection_type': 55,
-        'services_abbrev': 80,
-        'lat': 60,
-        'lon': 60,
-        'isp': 120,
-        'in_addrman': 75
+        'conntime': 65,
+        'connection_type': 50,
+        'services_abbrev': 70,
+        'lat': 55,
+        'lon': 55,
+        'isp': 100,
+        'in_addrman': 65
     };
 
     table.querySelectorAll('th[data-col]').forEach(th => {
         const col = th.dataset.col;
         // Only set if no width already set
-        if (!th.style.width && defaultWidths[col]) {
-            th.style.width = defaultWidths[col] + 'px';
-            th.style.maxWidth = defaultWidths[col] + 'px';
+        if (!columnWidths[col] && defaultWidths[col]) {
+            applyColumnWidth(col, defaultWidths[col] + 'px');
         }
     });
+}
+
+// Auto-size columns based on content (first 30 rows)
+function autoSizeColumns() {
+    // Replaced with fitColumnsToWindow - this is now just an alias
+    fitColumnsToWindow();
+}
+
+// Fit columns proportionally to window width
+function fitColumnsToWindow() {
+    const table = document.getElementById('peer-table');
+    const container = document.querySelector('.table-container');
+    if (!table || !container) return;
+
+    // Default widths for known columns (px) - used as proportional weights
+    const defaultWidths = {
+        'id': 45,
+        'network': 60,
+        'ip': 120,
+        'port': 50,
+        'direction': 45,
+        'subver': 120,
+        'city': 80,
+        'region': 50,
+        'regionName': 90,
+        'country': 80,
+        'countryCode': 45,
+        'continent': 80,
+        'continentCode': 45,
+        'bytessent': 65,
+        'bytesrecv': 65,
+        'ping_ms': 50,
+        'conntime': 65,
+        'connection_type': 50,
+        'services_abbrev': 70,
+        'lat': 55,
+        'lon': 55,
+        'isp': 100,
+        'in_addrman': 65
+    };
+
+    // Get available width (container width minus some padding for scrollbar)
+    const availableWidth = container.clientWidth - 20;
+
+    // Calculate total default width for visible columns
+    let totalDefaultWidth = 0;
+    visibleColumns.forEach(col => {
+        totalDefaultWidth += defaultWidths[col] || 60;
+    });
+
+    // Calculate scale factor (but don't go below 0.5 or above 1.5)
+    const scale = Math.min(1.5, Math.max(0.5, availableWidth / totalDefaultWidth));
+
+    // Apply scaled widths to visible columns
+    visibleColumns.forEach(col => {
+        const baseWidth = defaultWidths[col] || 60;
+        const scaledWidth = Math.max(40, Math.round(baseWidth * scale));
+        applyColumnWidth(col, `${scaledWidth}px`);
+    });
+
+    saveColumnWidths();
 }
 
 // Load column preferences from localStorage
@@ -944,10 +1145,10 @@ function renderChanges(changes) {
 
         return `
             <tr>
-                <td>${time}</td>
-                <td class="${eventClass}">${change.type}</td>
-                <td>${change.peer.ip || '-'}</td>
-                <td>${change.peer.network || '-'}</td>
+                <td data-col="time"${getChangesColumnWidthStyle('time')}>${time}</td>
+                <td data-col="event" class="${eventClass}"${getChangesColumnWidthStyle('event')}>${change.type}</td>
+                <td data-col="ip"${getChangesColumnWidthStyle('ip')}>${change.peer.ip || '-'}</td>
+                <td data-col="network"${getChangesColumnWidthStyle('network')}>${change.peer.network || '-'}</td>
             </tr>
         `;
     }).join('');
@@ -1134,13 +1335,18 @@ function renderPeers() {
         const cells = columnOrder.map(col => {
             const def = cellDefs[col];
             if (!def) return '';
-            return `<td data-col="${col}" class="${def.class} ${hiddenClass(col)}" title="${def.title}">${def.content}</td>`;
+            return `<td data-col="${col}" class="${def.class} ${hiddenClass(col)}" title="${def.title}"${getColumnWidthStyle(col)}>${def.content}</td>`;
         }).join('');
 
         return `<tr data-id="${peer.id}" class="${networkRowClass}">${cells}</tr>`;
     }).join('');
 
     peerTbody.innerHTML = rows;
+    // Fit columns to window on first data load
+    if (!autoSizedColumns && currentPeers.length) {
+        fitColumnsToWindow();
+        autoSizedColumns = true;
+    }
     // Show count with filter info
     if (networkFilter === 'all') {
         peerCount.textContent = `${filteredPeers.length} peers`;
