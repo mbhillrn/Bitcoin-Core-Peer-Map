@@ -711,7 +711,8 @@ function setupColumnConfig() {
 
 // Apply column visibility to table
 function applyColumnVisibility() {
-    const headers = document.querySelectorAll('.peer-table th[data-col]');
+    // Only apply to peer table, not changes table
+    const headers = document.querySelectorAll('#peer-table th[data-col]');
     headers.forEach(th => {
         const col = th.dataset.col;
         if (visibleColumns.includes(col)) {
