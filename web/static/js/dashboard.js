@@ -5,6 +5,7 @@
 
 // Configuration
 let refreshInterval = 10000; // 10 seconds default (can be changed by user)
+let changesWindowSeconds = 20; // seconds to show in Recent Changes (default 20)
 const API_BASE = '';
 
 // State
@@ -85,6 +86,7 @@ const changesTbody = document.getElementById('changes-tbody');
 document.addEventListener('DOMContentLoaded', () => {
     loadColumnPreferences();  // Load saved order/visibility first
     setupRefreshRateControl(); // Load refresh rate preference early
+    setupChangesWindowControl(); // Load changes window preference
     // Don't load saved column widths on startup - let fitColumnsToWindow handle it after data loads
     // This ensures columns always fit the window properly on page load
     // But DO set initial changes table widths (it's a small fixed table)
@@ -572,14 +574,27 @@ function initMap() {
     }
 }
 
-// Antarctica positioning - all private networks scattered across northern coast
-// Northern coast of Antarctica is roughly -65 to -72 latitude
-const ANTARCTICA_BASE = {
-    latMin: -72,   // Southern limit (more inland)
-    latMax: -65,   // Northern limit (near ocean)
-    lonMin: -170,  // Western limit
-    lonMax: 170    // Eastern limit
-};
+// Antarctica research station coordinates (all on land, near coast)
+// These are real research stations with clearly visible land on maps
+const ANTARCTICA_STATIONS = [
+    // Antarctic Peninsula (western)
+    { lat: -64.7740, lon: -64.0530 },  // Palmer Station
+    { lat: -64.8250, lon: -63.4960 },  // Port Lockroy
+    { lat: -67.5670, lon: -68.1250 },  // Rothera Research Station
+    { lat: -65.2470, lon: -64.2570 },  // Vernadsky Research Station
+    { lat: -63.3980, lon: -56.9990 },  // Esperanza Base
+    { lat: -62.0000, lon: -58.0000 },  // King George Island
+    { lat: -62.9800, lon: -60.6500 },  // Deception Island
+    // Ross Sea region
+    { lat: -77.8460, lon: 166.6670 },  // McMurdo Station
+    { lat: -77.8480, lon: 166.7600 },  // Scott Base
+    { lat: -77.8000, lon: 166.6000 },  // Hut Point Peninsula
+    // East Antarctica coastal
+    { lat: -67.6020, lon: 62.8730 },   // Mawson Station
+    { lat: -68.5760, lon: 77.9670 },   // Davis Station
+    { lat: -66.2810, lon: 110.5280 },  // Casey Station
+    { lat: -66.6630, lon: 140.0010 }   // Dumont d'Urville Station
+];
 
 // Cache for stable Antarctica positions (keyed by peer addr)
 // This ensures dots don't move around during a connection
@@ -597,7 +612,7 @@ function hashString(str) {
 }
 
 // Get stable Antarctica position for a peer (cached per addr)
-// All private networks are scattered across the northern coast of Antarctica
+// Peers are placed near research stations with small random offset
 function getStableAntarcticaPosition(peerAddr, network, locationType) {
     // Use addr as key to ensure same peer always gets same position
     const cacheKey = peerAddr || `unknown-${Date.now()}`;
@@ -606,17 +621,20 @@ function getStableAntarcticaPosition(peerAddr, network, locationType) {
         return antarcticaPositionCache[cacheKey];
     }
 
-    // Generate stable position using hash of addr
+    // Use hash to pick a station and generate small offset
     const hash1 = hashString(cacheKey);
-    const hash2 = hashString(cacheKey + '_lon');
+    const hash2 = hashString(cacheKey + '_offset');
 
-    // Convert hash to value between 0 and 1
-    const latNorm = Math.abs(hash1 % 1000) / 1000;
-    const lonNorm = Math.abs(hash2 % 1000) / 1000;
+    // Pick a station based on hash
+    const stationIndex = Math.abs(hash1) % ANTARCTICA_STATIONS.length;
+    const station = ANTARCTICA_STATIONS[stationIndex];
 
-    // Map to Antarctica northern coast area
-    const lat = ANTARCTICA_BASE.latMin + (ANTARCTICA_BASE.latMax - ANTARCTICA_BASE.latMin) * latNorm;
-    const lon = ANTARCTICA_BASE.lonMin + (ANTARCTICA_BASE.lonMax - ANTARCTICA_BASE.lonMin) * lonNorm;
+    // Generate small offset (±0.5 degrees) to avoid exact overlap
+    const latOffset = ((Math.abs(hash2) % 100) / 100 - 0.5) * 1.0;
+    const lonOffset = ((Math.abs(hash2 >> 8) % 100) / 100 - 0.5) * 1.0;
+
+    const lat = station.lat + latOffset;
+    const lon = station.lon + lonOffset;
 
     // Cache the position
     antarcticaPositionCache[cacheKey] = { lat, lon };
@@ -1211,7 +1229,13 @@ async function fetchChanges() {
 
 // Render recent changes table
 function renderChanges(changes) {
-    if (!changes || changes.length === 0) {
+    // Filter changes based on user-configured window
+    const now = Date.now() / 1000;
+    const filteredChanges = (changes || []).filter(change => {
+        return (now - change.time) < changesWindowSeconds;
+    });
+
+    if (filteredChanges.length === 0) {
         changesTbody.innerHTML = `
             <tr class="loading-row">
                 <td colspan="4">No recent changes</td>
@@ -1220,7 +1244,7 @@ function renderChanges(changes) {
         return;
     }
 
-    const rows = changes.map(change => {
+    const rows = filteredChanges.map(change => {
         const time = new Date(change.time * 1000).toLocaleTimeString();
         const eventClass = change.type === 'connected' ? 'event-connected' : 'event-disconnected';
 
@@ -1380,7 +1404,7 @@ function renderPeers() {
         const inAddrman = peer.in_addrman ? 'Yes' : 'No';
         const addrmanClass = peer.in_addrman ? 'addrman-yes' : 'addrman-no';
 
-        // Network text color class for most columns (except IP and Port)
+        // Network text color class for ALL columns except direction and in_addrman
         const netTextClass = `network-${peer.network}`;
 
         // Cell definitions for dynamic column ordering
@@ -1388,9 +1412,9 @@ function renderPeers() {
         // When column is resized wider, full text shows automatically
         const cellDefs = {
             'id': { class: netTextClass, title: `Peer ID: ${peer.id}`, content: peer.id },
-            'network': { class: `network-${peer.network}`, title: `Network: ${peer.network}`, content: peer.network },
-            'ip': { class: '', title: peer.addr, content: peer.ip || '-' },
-            'port': { class: '', title: `Port: ${peer.port || '-'}`, content: peer.port || '-' },
+            'network': { class: netTextClass, title: `Network: ${peer.network}`, content: peer.network },
+            'ip': { class: netTextClass, title: peer.addr, content: peer.ip || '-' },
+            'port': { class: netTextClass, title: `Port: ${peer.port || '-'}`, content: peer.port || '-' },
             'direction': { class: '', title: peer.direction === 'IN' ? 'Inbound: They connected to us' : 'Outbound: We connected to them', content: `<span class="direction-badge ${directionClass}">${peer.direction}</span>` },
             'subver': { class: netTextClass, title: peer.subver, content: peer.subver || '-' },
             'city': { class: `${geoClass} ${netTextClass}`, title: `City: ${geoDisplay.city}`, content: geoDisplay.city },
@@ -1409,7 +1433,7 @@ function renderPeers() {
             'lat': { class: `${geoClass} ${netTextClass}`, title: `Latitude: ${geoDisplay.lat}`, content: geoDisplay.lat },
             'lon': { class: `${geoClass} ${netTextClass}`, title: `Longitude: ${geoDisplay.lon}`, content: geoDisplay.lon },
             'isp': { class: `${geoClass} ${netTextClass}`, title: `ISP: ${geoDisplay.isp}`, content: geoDisplay.isp },
-            'in_addrman': { class: `${addrmanClass} ${netTextClass}`, title: `In Address Manager: ${inAddrman}`, content: inAddrman }
+            'in_addrman': { class: addrmanClass, title: `In Address Manager: ${inAddrman}`, content: inAddrman }
         };
 
         // Build cells in column order
@@ -1512,6 +1536,92 @@ function setupRefreshRateControl() {
             input.blur();
         }
     });
+}
+
+// Setup changes window control (dropdown in Recent Changes header)
+function setupChangesWindowControl() {
+    // Load saved preference
+    try {
+        const saved = localStorage.getItem('mbcore_changes_window');
+        if (saved) {
+            const seconds = parseInt(saved, 10);
+            if (seconds >= 10 && seconds <= 300) {
+                changesWindowSeconds = seconds;
+            }
+        }
+    } catch (e) {}
+
+    const btn = document.getElementById('changes-config-btn');
+    const dropdown = document.getElementById('changes-config-dropdown');
+    const valueSpan = document.getElementById('changes-window-value');
+    if (!btn || !dropdown) return;
+
+    // Update display
+    updateChangesWindowDisplay();
+
+    // Toggle dropdown on button click
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('active');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+        dropdown.classList.remove('active');
+    });
+
+    // Handle option clicks
+    dropdown.querySelectorAll('.dropdown-option').forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const seconds = parseInt(option.dataset.seconds, 10);
+            if (!isNaN(seconds)) {
+                changesWindowSeconds = seconds;
+
+                // Save preference
+                try {
+                    localStorage.setItem('mbcore_changes_window', seconds.toString());
+                } catch (e) {}
+
+                // Update display
+                updateChangesWindowDisplay();
+
+                // Close dropdown
+                dropdown.classList.remove('active');
+
+                // Refresh changes to apply filter
+                fetchChanges();
+            }
+        });
+    });
+}
+
+function updateChangesWindowDisplay() {
+    const valueSpan = document.getElementById('changes-window-value');
+    const dropdown = document.getElementById('changes-config-dropdown');
+
+    if (valueSpan) {
+        // Display in seconds or minutes
+        if (changesWindowSeconds >= 60) {
+            valueSpan.textContent = (changesWindowSeconds / 60);
+            valueSpan.nextSibling.textContent = ' minute' + (changesWindowSeconds > 60 ? 's' : '');
+        } else {
+            valueSpan.textContent = changesWindowSeconds;
+            valueSpan.nextSibling.textContent = ' seconds';
+        }
+    }
+
+    // Update active state on buttons
+    if (dropdown) {
+        dropdown.querySelectorAll('.dropdown-option').forEach(option => {
+            const seconds = parseInt(option.dataset.seconds, 10);
+            if (seconds === changesWindowSeconds) {
+                option.classList.add('active');
+            } else {
+                option.classList.remove('active');
+            }
+        });
+    }
 }
 
 function updateCountdownDisplay() {
