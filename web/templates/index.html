@@ -135,29 +135,29 @@
                             <th data-sort="network" data-col="network" title="Network type (ipv4, ipv6, onion, i2p, cjdns)">Net</th>
                             <th data-sort="ip" data-col="ip" title="IP address of the peer">IP</th>
                             <th data-sort="port" data-col="port" title="Port number">Port</th>
-                            <th data-sort="direction" data-col="direction" title="Connection direction: IN=they connected to us, OUT=we connected to them">Dir</th>
-                            <th data-sort="subver" data-col="subver" title="User agent / software version">Subver</th>
+                            <th data-sort="direction" data-col="direction" title="Connection direction: IN=they connected to us, OUT=we connected to them">Direction</th>
+                            <th data-sort="subver" data-col="subver" title="User agent / software version">Node ver/name</th>
                             <!-- 7-13: ip-api geo (loads second) -->
                             <th data-sort="city" data-col="city" title="City from geolocation">City</th>
-                            <th data-sort="region" data-col="region" title="Region/state code">Region</th>
-                            <th data-sort="regionName" data-col="regionName" title="Full region/state name">RegionName</th>
-                            <th data-sort="country" data-col="country" title="Country name">Country</th>
-                            <th data-sort="countryCode" data-col="countryCode" title="2-letter country code">CC</th>
-                            <th data-sort="continent" data-col="continent" title="Continent name">Continent</th>
+                            <th data-sort="region" data-col="region" title="Region/state code">State/reg</th>
+                            <th data-sort="regionName" data-col="regionName" title="Full region/state name">State/reg (full)</th>
+                            <th data-sort="country" data-col="country" title="Country name">Ctry</th>
+                            <th data-sort="countryCode" data-col="countryCode" title="2-letter country code">Ctry Code</th>
+                            <th data-sort="continent" data-col="continent" title="Continent name">Cont</th>
                             <th data-sort="continentCode" data-col="continentCode" title="2-letter continent code">ContC</th>
                             <!-- 14-19: more getpeerinfo -->
-                            <th data-sort="bytessent" data-col="bytessent" title="Total bytes sent to this peer">Sent</th>
-                            <th data-sort="bytesrecv" data-col="bytesrecv" title="Total bytes received from this peer">Recv</th>
+                            <th data-sort="bytessent" data-col="bytessent" title="Total bytes sent to this peer">Sent data</th>
+                            <th data-sort="bytesrecv" data-col="bytesrecv" title="Total bytes received from this peer">Recv data</th>
                             <th data-sort="ping_ms" data-col="ping_ms" title="Current ping latency in milliseconds">Ping</th>
-                            <th data-sort="conntime" data-col="conntime" title="How long connected">ConnTime</th>
-                            <th data-sort="connection_type" data-col="connection_type" title="Connection type (outbound-full-relay, inbound, etc)">ConnType</th>
-                            <th data-sort="services_abbrev" data-col="services_abbrev" title="Service flags: N=NETWORK, W=WITNESS, NL=NETWORK_LIMITED, P=P2P_V2, etc">Svc</th>
+                            <th data-sort="conntime" data-col="conntime" title="How long connected">Since</th>
+                            <th data-sort="connection_type" data-col="connection_type" title="Connection type (outbound-full-relay, inbound, etc)">Type</th>
+                            <th data-sort="services_abbrev" data-col="services_abbrev" title="Service flags: N=NETWORK, W=WITNESS, NL=NETWORK_LIMITED, P=P2P_V2, etc">Service</th>
                             <!-- 20-22: more ip-api -->
                             <th data-sort="lat" data-col="lat" title="Latitude coordinate">Lat</th>
                             <th data-sort="lon" data-col="lon" title="Longitude coordinate">Lon</th>
                             <th data-sort="isp" data-col="isp" title="Internet Service Provider">ISP</th>
                             <!-- 23: addrman status -->
-                            <th data-sort="in_addrman" data-col="in_addrman" title="Is this peer's address in our address manager?">Addrman</th>
+                            <th data-sort="in_addrman" data-col="in_addrman" title="Is this peer's address in our address manager?">In Addrman?</th>
                         </tr>
                     </thead>
                     <tbody id="peer-tbody">
@@ -211,7 +211,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBCore Dashboard v1.0.0</span>
+            <span>MBCore Dashboard v1.0.0 | created by mbhillrn | Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>

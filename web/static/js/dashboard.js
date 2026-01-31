@@ -31,31 +31,34 @@ const defaultVisibleColumns = [
 ];
 let visibleColumns = [...defaultVisibleColumns];
 
-// Column labels for the config modal
+// Column order (for drag-and-drop reordering)
+let columnOrder = [...defaultVisibleColumns];
+
+// Column labels for the config modal (must match column headers!)
 const columnLabels = {
-    'id': 'Peer ID',
-    'network': 'Network',
-    'ip': 'IP Address',
+    'id': 'ID',
+    'network': 'Net',
+    'ip': 'IP',
     'port': 'Port',
     'direction': 'Direction',
-    'subver': 'User Agent',
+    'subver': 'Node ver/name',
     'city': 'City',
-    'region': 'Region',
-    'regionName': 'Region Name',
-    'country': 'Country',
-    'countryCode': 'Country Code',
-    'continent': 'Continent',
-    'continentCode': 'Continent Code',
-    'bytessent': 'Bytes Sent',
-    'bytesrecv': 'Bytes Recv',
+    'region': 'State/reg',
+    'regionName': 'State/reg (full)',
+    'country': 'Ctry',
+    'countryCode': 'Ctry Code',
+    'continent': 'Cont',
+    'continentCode': 'ContC',
+    'bytessent': 'Sent data',
+    'bytesrecv': 'Recv data',
     'ping_ms': 'Ping',
-    'conntime': 'Conn Time',
-    'connection_type': 'Conn Type',
-    'services_abbrev': 'Services',
-    'lat': 'Latitude',
-    'lon': 'Longitude',
+    'conntime': 'Since',
+    'connection_type': 'Type',
+    'services_abbrev': 'Service',
+    'lat': 'Lat',
+    'lon': 'Lon',
     'isp': 'ISP',
-    'in_addrman': 'In Addrman'
+    'in_addrman': 'In Addrman?'
 };
 
 // DOM Elements
@@ -68,8 +71,10 @@ const changesTbody = document.getElementById('changes-tbody');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadColumnPreferences();  // Load saved order/visibility first
     setupTableSorting();
     setupColumnResize();
+    setupColumnDrag();
     setupColumnConfig();
     setupPanelResize();
     initMap();
@@ -78,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchChanges();
     setupSSE();
     startCountdown();
-    loadColumnPreferences();
 });
 
 // Setup column resizing via drag
@@ -138,8 +142,115 @@ function setupColumnResize() {
 
         const rect = th.getBoundingClientRect();
         const isNearEdge = e.clientX > rect.right - 8;
-        th.style.cursor = isNearEdge ? 'col-resize' : 'pointer';
+        th.style.cursor = isNearEdge ? 'col-resize' : 'grab';
     });
+}
+
+// Setup column drag-and-drop reordering
+function setupColumnDrag() {
+    const table = document.getElementById('peer-table');
+    if (!table) return;
+
+    const thead = table.querySelector('thead tr');
+    if (!thead) return;
+
+    let draggedTh = null;
+    let draggedCol = null;
+
+    // Make headers draggable
+    thead.querySelectorAll('th[data-col]').forEach(th => {
+        th.setAttribute('draggable', 'true');
+
+        th.addEventListener('dragstart', (e) => {
+            // Don't drag if near resize edge
+            const rect = th.getBoundingClientRect();
+            if (e.clientX > rect.right - 10) {
+                e.preventDefault();
+                return;
+            }
+
+            draggedTh = th;
+            draggedCol = th.dataset.col;
+            th.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedCol);
+        });
+
+        th.addEventListener('dragend', () => {
+            if (draggedTh) {
+                draggedTh.classList.remove('dragging');
+            }
+            draggedTh = null;
+            draggedCol = null;
+            // Remove all drag-over styles
+            thead.querySelectorAll('th').forEach(h => h.classList.remove('drag-over'));
+        });
+
+        th.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (th !== draggedTh) {
+                th.classList.add('drag-over');
+            }
+        });
+
+        th.addEventListener('dragleave', () => {
+            th.classList.remove('drag-over');
+        });
+
+        th.addEventListener('drop', (e) => {
+            e.preventDefault();
+            th.classList.remove('drag-over');
+
+            if (!draggedCol || th.dataset.col === draggedCol) return;
+
+            const targetCol = th.dataset.col;
+
+            // Reorder the columnOrder array
+            const fromIndex = columnOrder.indexOf(draggedCol);
+            const toIndex = columnOrder.indexOf(targetCol);
+
+            if (fromIndex !== -1 && toIndex !== -1) {
+                // Remove from old position
+                columnOrder.splice(fromIndex, 1);
+                // Insert at new position
+                columnOrder.splice(toIndex, 0, draggedCol);
+
+                // Reorder the actual table columns
+                reorderTableColumns();
+                saveColumnPreferences();
+            }
+        });
+    });
+}
+
+// Reorder table columns based on columnOrder
+function reorderTableColumns() {
+    const table = document.getElementById('peer-table');
+    if (!table) return;
+
+    const thead = table.querySelector('thead tr');
+    const tbody = table.querySelector('tbody');
+    if (!thead) return;
+
+    // Get all header cells as a map
+    const headerCells = {};
+    thead.querySelectorAll('th[data-col]').forEach(th => {
+        headerCells[th.dataset.col] = th;
+    });
+
+    // Clear and rebuild header row in new order
+    const existingHeaders = Array.from(thead.querySelectorAll('th[data-col]'));
+    existingHeaders.forEach(th => th.remove());
+
+    columnOrder.forEach(col => {
+        if (headerCells[col]) {
+            thead.appendChild(headerCells[col]);
+        }
+    });
+
+    // Re-render the table body with new column order
+    renderPeers();
 }
 
 // Setup panel resize handles
@@ -410,6 +521,7 @@ function applyColumnVisibility() {
 function saveColumnPreferences() {
     try {
         localStorage.setItem('mbcore_visible_columns', JSON.stringify(visibleColumns));
+        localStorage.setItem('mbcore_column_order', JSON.stringify(columnOrder));
     } catch (e) {
         console.warn('Could not save column preferences:', e);
     }
@@ -418,11 +530,23 @@ function saveColumnPreferences() {
 // Load column preferences from localStorage
 function loadColumnPreferences() {
     try {
-        const saved = localStorage.getItem('mbcore_visible_columns');
-        if (saved) {
-            visibleColumns = JSON.parse(saved);
-            applyColumnVisibility();
+        const savedVisible = localStorage.getItem('mbcore_visible_columns');
+        if (savedVisible) {
+            visibleColumns = JSON.parse(savedVisible);
         }
+
+        const savedOrder = localStorage.getItem('mbcore_column_order');
+        if (savedOrder) {
+            columnOrder = JSON.parse(savedOrder);
+            // Ensure all default columns are in the order (in case new columns were added)
+            defaultVisibleColumns.forEach(col => {
+                if (!columnOrder.includes(col)) {
+                    columnOrder.push(col);
+                }
+            });
+        }
+
+        applyColumnVisibility();
     } catch (e) {
         console.warn('Could not load column preferences:', e);
     }
@@ -730,56 +854,89 @@ function renderPeers() {
         const networkRowClass = `network-row-${peer.network}`;
         const directionClass = peer.direction === 'IN' ? 'in' : 'out';
 
-        // City display with status
-        let cityDisplay = peer.city || '-';
-        let cityClass = '';
+        // Geo field displays based on status
+        // For private networks: all geo fields show "Private"
+        // For pending lookups: all geo fields show "Stalking..."
+        // For unavailable: all geo fields show "N/A"
+        let geoClass = '';
+        let geoDisplay = {};
+
         if (peer.location_status === 'private') {
-            cityDisplay = 'PRIVATE';
-            cityClass = 'location-private';
+            geoClass = 'location-private';
+            geoDisplay = {
+                city: 'Private', region: 'Private', regionName: 'Private',
+                country: 'Private', countryCode: 'Priv', continent: 'Private',
+                continentCode: 'Priv', lat: '-', lon: '-', isp: 'Private'
+            };
         } else if (peer.location_status === 'unavailable') {
-            cityDisplay = 'UNAVAILABLE';
-            cityClass = 'location-unavailable';
+            geoClass = 'location-unavailable';
+            geoDisplay = {
+                city: 'N/A', region: 'N/A', regionName: 'N/A',
+                country: 'N/A', countryCode: 'N/A', continent: 'N/A',
+                continentCode: 'N/A', lat: '-', lon: '-', isp: 'N/A'
+            };
         } else if (peer.location_status === 'pending') {
-            cityDisplay = 'Stalking...';
-            cityClass = 'location-pending';
+            geoClass = 'location-pending';
+            geoDisplay = {
+                city: 'Stalking...', region: 'Stalking...', regionName: 'Stalking...',
+                country: 'Stalking...', countryCode: '...', continent: 'Stalking...',
+                continentCode: '...', lat: '-', lon: '-', isp: 'Stalking...'
+            };
+        } else {
+            // Normal display - use actual values
+            geoDisplay = {
+                city: peer.city || '-',
+                region: peer.region || '-',
+                regionName: peer.regionName || '-',
+                country: peer.country || '-',
+                countryCode: peer.countryCode || '-',
+                continent: peer.continent || '-',
+                continentCode: peer.continentCode || '-',
+                lat: peer.lat ? peer.lat.toFixed(2) : '-',
+                lon: peer.lon ? peer.lon.toFixed(2) : '-',
+                isp: peer.isp || '-'
+            };
         }
 
         // In addrman display
         const inAddrman = peer.in_addrman ? 'Yes' : 'No';
         const addrmanClass = peer.in_addrman ? 'addrman-yes' : 'addrman-no';
 
-        return `
-            <tr data-id="${peer.id}" class="${networkRowClass}">
-                <!-- 1-6: getpeerinfo (instant) -->
-                <td data-col="id" class="cell-white ${hiddenClass('id')}" title="Peer ID: ${peer.id}">${peer.id}</td>
-                <td data-col="network" class="network-${peer.network} ${hiddenClass('network')}" title="Network: ${peer.network}">${peer.network}</td>
-                <td data-col="ip" class="${hiddenClass('ip')}" title="${peer.addr}">${truncate(peer.ip, 20)}</td>
-                <td data-col="port" class="${hiddenClass('port')}" title="Port: ${peer.port || '-'}">${peer.port || '-'}</td>
-                <td data-col="direction" class="${hiddenClass('direction')}" title="${peer.direction === 'IN' ? 'Inbound: They connected to us' : 'Outbound: We connected to them'}"><span class="direction-badge ${directionClass}">${peer.direction}</span></td>
-                <td data-col="subver" class="${hiddenClass('subver')}" title="${peer.subver}">${truncate(peer.subver, 18)}</td>
-                <!-- 7-13: ip-api geo (loads second) -->
-                <td data-col="city" class="${cityClass} ${hiddenClass('city')}" title="City: ${cityDisplay}">${truncate(cityDisplay, 15)}</td>
-                <td data-col="region" class="${hiddenClass('region')}" title="Region: ${peer.region || '-'}">${peer.region || '-'}</td>
-                <td data-col="regionName" class="${hiddenClass('regionName')}" title="Region Name: ${peer.regionName || '-'}">${truncate(peer.regionName || '-', 12)}</td>
-                <td data-col="country" class="${hiddenClass('country')}" title="Country: ${peer.country || '-'}">${truncate(peer.country || '-', 12)}</td>
-                <td data-col="countryCode" class="${hiddenClass('countryCode')}" title="Country Code: ${peer.countryCode || '-'}">${peer.countryCode || '-'}</td>
-                <td data-col="continent" class="${hiddenClass('continent')}" title="Continent: ${peer.continent || '-'}">${truncate(peer.continent || '-', 10)}</td>
-                <td data-col="continentCode" class="${hiddenClass('continentCode')}" title="Continent Code: ${peer.continentCode || '-'}">${peer.continentCode || '-'}</td>
-                <!-- 14-19: more getpeerinfo -->
-                <td data-col="bytessent" class="cell-white ${hiddenClass('bytessent')}" title="Bytes Sent: ${peer.bytessent_fmt}">${peer.bytessent_fmt}</td>
-                <td data-col="bytesrecv" class="cell-white ${hiddenClass('bytesrecv')}" title="Bytes Received: ${peer.bytesrecv_fmt}">${peer.bytesrecv_fmt}</td>
-                <td data-col="ping_ms" class="cell-white ${hiddenClass('ping_ms')}" title="Ping: ${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}">${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}</td>
-                <td data-col="conntime" class="cell-white ${hiddenClass('conntime')}" title="Connected: ${peer.conntime_fmt}">${peer.conntime_fmt}</td>
-                <td data-col="connection_type" class="${hiddenClass('connection_type')}" title="Connection Type: ${peer.connection_type || '-'}">${truncate(peer.connection_type || '-', 12)}</td>
-                <td data-col="services_abbrev" class="cell-white ${hiddenClass('services_abbrev')}" title="${(peer.services || []).join(', ')}">${peer.services_abbrev || '-'}</td>
-                <!-- 20-22: more ip-api -->
-                <td data-col="lat" class="cell-white ${hiddenClass('lat')}" title="Latitude: ${peer.lat ? peer.lat.toFixed(4) : '-'}">${peer.lat ? peer.lat.toFixed(2) : '-'}</td>
-                <td data-col="lon" class="cell-white ${hiddenClass('lon')}" title="Longitude: ${peer.lon ? peer.lon.toFixed(4) : '-'}">${peer.lon ? peer.lon.toFixed(2) : '-'}</td>
-                <td data-col="isp" class="${hiddenClass('isp')}" title="ISP: ${peer.isp || '-'}">${truncate(peer.isp || '-', 15)}</td>
-                <!-- 23: addrman status -->
-                <td data-col="in_addrman" class="cell-white ${addrmanClass} ${hiddenClass('in_addrman')}" title="In Address Manager: ${inAddrman}">${inAddrman}</td>
-            </tr>
-        `;
+        // Cell definitions for dynamic column ordering
+        const cellDefs = {
+            'id': { class: 'cell-white', title: `Peer ID: ${peer.id}`, content: peer.id },
+            'network': { class: `network-${peer.network}`, title: `Network: ${peer.network}`, content: peer.network },
+            'ip': { class: '', title: peer.addr, content: truncate(peer.ip, 20) },
+            'port': { class: '', title: `Port: ${peer.port || '-'}`, content: peer.port || '-' },
+            'direction': { class: '', title: peer.direction === 'IN' ? 'Inbound: They connected to us' : 'Outbound: We connected to them', content: `<span class="direction-badge ${directionClass}">${peer.direction}</span>` },
+            'subver': { class: '', title: peer.subver, content: truncate(peer.subver, 18) },
+            'city': { class: geoClass, title: `City: ${geoDisplay.city}`, content: truncate(geoDisplay.city, 15) },
+            'region': { class: geoClass, title: `State/Region: ${geoDisplay.region}`, content: geoDisplay.region },
+            'regionName': { class: geoClass, title: `State/Region Name: ${geoDisplay.regionName}`, content: truncate(geoDisplay.regionName, 12) },
+            'country': { class: geoClass, title: `Country: ${geoDisplay.country}`, content: truncate(geoDisplay.country, 12) },
+            'countryCode': { class: geoClass, title: `Country Code: ${geoDisplay.countryCode}`, content: geoDisplay.countryCode },
+            'continent': { class: geoClass, title: `Continent: ${geoDisplay.continent}`, content: truncate(geoDisplay.continent, 10) },
+            'continentCode': { class: geoClass, title: `Continent Code: ${geoDisplay.continentCode}`, content: geoDisplay.continentCode },
+            'bytessent': { class: 'cell-white', title: `Bytes Sent: ${peer.bytessent_fmt}`, content: peer.bytessent_fmt },
+            'bytesrecv': { class: 'cell-white', title: `Bytes Received: ${peer.bytesrecv_fmt}`, content: peer.bytesrecv_fmt },
+            'ping_ms': { class: 'cell-white', title: `Ping: ${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}`, content: peer.ping_ms != null ? peer.ping_ms + 'ms' : '-' },
+            'conntime': { class: 'cell-white', title: `Connected: ${peer.conntime_fmt}`, content: peer.conntime_fmt },
+            'connection_type': { class: '', title: `Connection Type: ${peer.connection_type || '-'}`, content: truncate(peer.connection_type || '-', 12) },
+            'services_abbrev': { class: 'cell-white', title: (peer.services || []).join(', '), content: peer.services_abbrev || '-' },
+            'lat': { class: `cell-white ${geoClass}`, title: `Latitude: ${geoDisplay.lat}`, content: geoDisplay.lat },
+            'lon': { class: `cell-white ${geoClass}`, title: `Longitude: ${geoDisplay.lon}`, content: geoDisplay.lon },
+            'isp': { class: geoClass, title: `ISP: ${geoDisplay.isp}`, content: truncate(geoDisplay.isp, 15) },
+            'in_addrman': { class: `cell-white ${addrmanClass}`, title: `In Address Manager: ${inAddrman}`, content: inAddrman }
+        };
+
+        // Build cells in column order
+        const cells = columnOrder.map(col => {
+            const def = cellDefs[col];
+            if (!def) return '';
+            return `<td data-col="${col}" class="${def.class} ${hiddenClass(col)}" title="${def.title}">${def.content}</td>`;
+        }).join('');
+
+        return `<tr data-id="${peer.id}" class="${networkRowClass}">${cells}</tr>`;
     }).join('');
 
     peerTbody.innerHTML = rows;

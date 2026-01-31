@@ -228,13 +228,13 @@ body {
 }
 
 .resizable-panel {
-    resize: vertical;
-    overflow: hidden;
+    /* Custom resize handles in JS - no CSS resize needed */
+    overflow: visible;
 }
 
 .peer-panel {
     min-height: 200px;
-    max-height: 600px;
+    height: 500px;  /* Default height, can be resized via drag handle */
 }
 
 .panel-header {
@@ -344,12 +344,11 @@ body {
     min-height: 0;
 }
 
-#peer-table-container {
-    max-height: calc(20 * 32px + 40px); /* 20 rows * row height + header */
-}
-
+/* Table containers fill available panel space, scroll as needed */
+#peer-table-container,
 #changes-table-container {
-    max-height: calc(5 * 32px + 40px); /* 5 rows * row height + header */
+    flex: 1;
+    overflow: auto;
 }
 
 .peer-table {
@@ -616,7 +615,7 @@ body {
 /* Changes Panel */
 .changes-panel {
     min-height: 100px;
-    max-height: 250px;
+    height: 180px;  /* Default height, can be resized via drag handle */
 }
 
 .changes-window {
@@ -797,6 +796,21 @@ body {
 /* Column visibility */
 .col-hidden {
     display: none !important;
+}
+
+/* Column drag-and-drop reordering */
+.peer-table th[draggable="true"] {
+    cursor: grab;
+}
+
+.peer-table th.dragging {
+    opacity: 0.5;
+    background: var(--accent-blue);
+}
+
+.peer-table th.drag-over {
+    border-left: 3px solid var(--accent-blue);
+    background: rgba(88, 166, 255, 0.2);
 }
 
 /* Tooltips already handled by title attribute, but add custom styling if needed */
