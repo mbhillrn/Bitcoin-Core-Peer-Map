@@ -462,16 +462,41 @@ find_cookie() {
 
 manual_enter_conf() {
     echo ""
-    echo -e "${T_SECONDARY}Enter path to bitcoin.conf${RST}"
-    echo -e "${T_DIM}(or 'b' to go back)${RST}"
+    echo -e "${T_DIM}Enter the path to your bitcoin.conf file.${RST}"
+    echo -e "${T_DIM}(You may enter * to go back, or just press Enter to use the example path)${RST}"
     echo ""
 
+    # Try to detect a default conf path
+    local default_conf=""
+    if [[ -f "/srv/bitcoin/bitcoin.conf" ]]; then
+        default_conf="/srv/bitcoin/bitcoin.conf"
+    elif [[ -f "$HOME/.bitcoin/bitcoin.conf" ]]; then
+        default_conf="$HOME/.bitcoin/bitcoin.conf"
+    elif [[ -f "/etc/bitcoin/bitcoin.conf" ]]; then
+        default_conf="/etc/bitcoin/bitcoin.conf"
+    fi
+
     local input
-    echo -en "${T_INFO}Path:${RST} "
+    if [[ -n "$default_conf" ]]; then
+        echo -en "${T_INFO}Location of bitcoin.conf${RST} ${T_DIM}(ex: ${default_conf}):${RST} "
+    else
+        echo -en "${T_INFO}Location of bitcoin.conf:${RST} "
+    fi
     read -r input
 
-    if [[ "$input" == "b" || "$input" == "B" ]]; then
+    # Handle * to go back
+    if [[ "$input" == "*" ]]; then
         return 2
+    fi
+
+    # Use default if just Enter pressed
+    if [[ -z "$input" && -n "$default_conf" ]]; then
+        input="$default_conf"
+    fi
+
+    if [[ -z "$input" ]]; then
+        msg_err "Please enter a path"
+        return 1
     fi
 
     input="${input/#\~/$HOME}"
@@ -495,16 +520,41 @@ manual_enter_conf() {
 
 manual_enter_datadir() {
     echo ""
-    echo -e "${T_SECONDARY}Enter path to Bitcoin data directory${RST}"
-    echo -e "${T_DIM}(or 'b' to go back)${RST}"
+    echo -e "${T_DIM}Enter the path to your Bitcoin Core data directory.${RST}"
+    echo -e "${T_DIM}(You may enter * to go back, or just press Enter to use the example path)${RST}"
     echo ""
 
+    # Try to detect a default datadir
+    local default_datadir=""
+    if [[ -n "$MBTC_CONF" ]]; then
+        default_datadir=$(dirname "$MBTC_CONF")
+    elif [[ -d "/srv/bitcoin" ]]; then
+        default_datadir="/srv/bitcoin"
+    elif [[ -d "$HOME/.bitcoin" ]]; then
+        default_datadir="$HOME/.bitcoin"
+    fi
+
     local input
-    echo -en "${T_INFO}Path:${RST} "
+    if [[ -n "$default_datadir" ]]; then
+        echo -en "${T_INFO}Location of data directory${RST} ${T_DIM}(ex: ${default_datadir}):${RST} "
+    else
+        echo -en "${T_INFO}Location of data directory:${RST} "
+    fi
     read -r input
 
-    if [[ "$input" == "b" || "$input" == "B" ]]; then
+    # Handle * to go back
+    if [[ "$input" == "*" ]]; then
         return 2
+    fi
+
+    # Use default if just Enter pressed
+    if [[ -z "$input" && -n "$default_datadir" ]]; then
+        input="$default_datadir"
+    fi
+
+    if [[ -z "$input" ]]; then
+        msg_err "Please enter a path"
+        return 1
     fi
 
     input="${input/#\~/$HOME}"
@@ -591,7 +641,6 @@ confirm_detection_results() {
                 # Run manual configuration
                 echo ""
                 echo -e "${T_SECONDARY}${BOLD}Manual Configuration${RST}"
-                echo ""
 
                 while true; do
                     manual_enter_conf
@@ -610,11 +659,19 @@ confirm_detection_results() {
                 fi
 
                 # Re-detect remaining settings
+                echo ""
+                echo -e "${T_SECONDARY}${BOLD}Auto-detecting remaining settings...${RST}"
                 detect_bitcoin_cli
                 if [[ -n "$MBTC_CONF" ]]; then
                     parse_conf_file "$MBTC_CONF"
                 fi
                 find_cookie
+                if [[ -n "$MBTC_CLI_PATH" ]]; then
+                    msg_ok "Found bitcoin-cli: $MBTC_CLI_PATH"
+                fi
+                if [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]]; then
+                    msg_ok "Found cookie auth: $MBTC_COOKIE_PATH"
+                fi
 
                 # Test RPC
                 echo ""
