@@ -577,25 +577,22 @@ function initMap() {
 }
 
 // Antarctica research station coordinates (all on land, near coast)
-// These are real research stations with clearly visible land on maps
+// These are real research stations - Peninsula excluded (too close to S. America)
 const ANTARCTICA_STATIONS = [
-    // Antarctic Peninsula (western)
-    { lat: -64.7740, lon: -64.0530 },  // Palmer Station
-    { lat: -64.8250, lon: -63.4960 },  // Port Lockroy
-    { lat: -67.5670, lon: -68.1250 },  // Rothera Research Station
-    { lat: -65.2470, lon: -64.2570 },  // Vernadsky Research Station
-    { lat: -63.3980, lon: -56.9990 },  // Esperanza Base
-    { lat: -62.0000, lon: -58.0000 },  // King George Island
-    { lat: -62.9800, lon: -60.6500 },  // Deception Island
-    // Ross Sea region
+    // Ross Sea region (Pacific side)
     { lat: -77.8460, lon: 166.6670 },  // McMurdo Station
     { lat: -77.8480, lon: 166.7600 },  // Scott Base
     { lat: -77.8000, lon: 166.6000 },  // Hut Point Peninsula
-    // East Antarctica coastal
+    // East Antarctica coastal (Indian Ocean side)
     { lat: -67.6020, lon: 62.8730 },   // Mawson Station
     { lat: -68.5760, lon: 77.9670 },   // Davis Station
     { lat: -66.2810, lon: 110.5280 },  // Casey Station
-    { lat: -66.6630, lon: 140.0010 }   // Dumont d'Urville Station
+    { lat: -66.6630, lon: 140.0010 },  // Dumont d'Urville Station
+    // Additional coastal stations (Atlantic side, excluding peninsula)
+    { lat: -69.0050, lon: 39.5800 },   // Syowa Station
+    { lat: -70.6670, lon: 11.6330 },   // Novolazarevskaya
+    { lat: -70.7500, lon: -8.2500 },   // Neumayer Station
+    { lat: -70.4500, lon: -2.8420 }    // SANAE IV Station
 ];
 
 // Cache for stable Antarctica positions (keyed by peer addr)
