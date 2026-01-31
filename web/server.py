@@ -886,38 +886,49 @@ def main():
             print(f"{C_DIM}  Tip: Check with 'lsof -i :{port}' or 'ss -tlnp | grep {port}'{C_RESET}")
             print()
             print(f"{C_BOLD}Choose an option:{C_RESET}")
-            print(f"  {C_GREEN}r{C_RESET}) Use random port {C_CYAN}{random_port}{C_RESET}")
-            print(f"  {C_GREEN}49152-65535{C_RESET}) Enter a custom port number")
+            print(f"  {C_GREEN}1{C_RESET}) Use random port {C_CYAN}{random_port}{C_RESET}")
+            print(f"  {C_GREEN}2{C_RESET}) Choose your own port")
             print(f"  {C_GREEN}q{C_RESET}) Quit")
             print()
 
             while True:
                 try:
-                    choice = input(f"{C_YELLOW}Enter choice: {C_RESET}").strip().lower()
+                    choice = input(f"{C_YELLOW}Enter choice (1/2/q): {C_RESET}").strip().lower()
                 except (KeyboardInterrupt, EOFError):
                     print()
                     sys.exit(0)
 
                 if choice == 'q':
                     sys.exit(0)
-                elif choice == 'r':
+                elif choice == '1':
                     port = random_port
                     print(f"{C_GREEN}✓ Using port {port}{C_RESET}\n")
                     break
-                else:
-                    try:
-                        custom_port = int(choice)
-                        if 49152 <= custom_port <= 65535:
-                            if check_port_available(custom_port):
-                                port = custom_port
-                                print(f"{C_GREEN}✓ Using port {port}{C_RESET}\n")
-                                break
+                elif choice == '2':
+                    # Prompt for custom port
+                    while True:
+                        try:
+                            port_input = input(f"{C_YELLOW}Enter desired port (49152-65535): {C_RESET}").strip()
+                        except (KeyboardInterrupt, EOFError):
+                            print()
+                            sys.exit(0)
+
+                        try:
+                            custom_port = int(port_input)
+                            if 49152 <= custom_port <= 65535:
+                                if check_port_available(custom_port):
+                                    port = custom_port
+                                    print(f"{C_GREEN}✓ Using port {port}{C_RESET}\n")
+                                    break
+                                else:
+                                    print(f"{C_RED}Port {custom_port} is also in use. Try another.{C_RESET}")
                             else:
-                                print(f"{C_RED}Port {custom_port} is also in use. Try another.{C_RESET}")
-                        else:
-                            print(f"{C_RED}Port must be between 49152 and 65535{C_RESET}")
-                    except ValueError:
-                        print(f"{C_RED}Invalid choice. Enter 'r', 'q', or a port number (49152-65535){C_RESET}")
+                                print(f"{C_RED}Port must be between 49152 and 65535{C_RESET}")
+                        except ValueError:
+                            print(f"{C_RED}Invalid port number{C_RESET}")
+                    break
+                else:
+                    print(f"{C_RED}Invalid choice. Enter 1, 2, or q{C_RESET}")
 
     # Get local IPs and subnets
     local_ips, subnets = get_local_ips()
