@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="1.1.0"
+VERSION="2.0.0"
 
 # Venv paths
 VENV_DIR="$MBTC_DIR/venv"
@@ -83,7 +83,8 @@ EOF
 
 show_status() {
     echo ""
-    print_section "Current Configuration"
+    echo -e "${T_SECONDARY}${BOLD}Current Configuration${RST}"
+    echo ""
 
     if [[ "$MBTC_CONFIGURED" -eq 1 ]]; then
         print_kv "Bitcoin CLI" "${MBTC_CLI_PATH:-not set}" 16
@@ -111,8 +112,7 @@ show_status() {
     else
         msg_warn "Not configured - run detection first"
     fi
-
-    print_section_end
+    echo ""
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -123,13 +123,16 @@ show_menu() {
     echo ""
     echo -e "${T_SECONDARY}${BOLD}Main Menu${RST}"
     echo ""
-    echo -e "  ${T_INFO}1)${RST} Peer List          ${T_DIM}- View connected peers with geo-location (terminal)${RST}"
-    echo -e "  ${T_INFO}2)${RST} Web Dashboard      ${T_DIM}- Launch local web dashboard${RST}"
-    echo -e "  ${T_INFO}3)${RST} Blockchain Info    ${T_DIM}- View chain status (coming soon)${RST}"
-    echo -e "  ${T_INFO}4)${RST} Mempool Stats      ${T_DIM}- View mempool data (coming soon)${RST}"
+    echo -e "  ${T_INFO}1)${RST} Enter MBCore Web Dashboard"
+    echo -e "     ${T_DIM}Bitcoin Core peer info/map/tools${RST}"
+    echo -e "     ${T_DIM}Instructions on access viewable on the next page!${RST}"
     echo ""
-    echo -e "  ${T_WARN}d)${RST} Run Detection      ${T_DIM}- Detect/configure Bitcoin Core${RST}"
-    echo -e "  ${T_WARN}r)${RST} Reset Config       ${T_DIM}- Clear saved configuration${RST}"
+    echo -e "  ${T_WARN}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
+    echo -e "  ${T_WARN}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
+    echo -e "  ${T_WARN}2)${RST} Reset Config       ${T_DIM}- Clear saved configuration${RST}"
+    echo -e "  ${T_WARN}3)${RST} Reset Database     ${T_DIM}- Clear peer geo-location cache${RST}"
+    echo ""
+    echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
     echo ""
     echo -e "  ${T_ERROR}q)${RST} Quit"
     echo ""
@@ -191,10 +194,11 @@ run_detection() {
 run_manual_config() {
     clear
     show_banner
-    print_header "Manual Configuration"
 
     echo ""
-    echo -e "${T_SECONDARY}Enter the paths to your Bitcoin Core configuration.${RST}"
+    echo -e "${T_SECONDARY}${BOLD}Manual Configuration${RST}"
+    echo ""
+    echo -e "${T_DIM}Enter the paths to your Bitcoin Core configuration.${RST}"
     echo -e "${T_DIM}(After entering these, the rest will be auto-detected)${RST}"
     echo ""
 
@@ -309,6 +313,24 @@ reset_config() {
     read -r
 }
 
+reset_database() {
+    echo ""
+    local db_path="$MBTC_DIR/data/peers.db"
+    if [[ -f "$db_path" ]]; then
+        if prompt_yn "Are you sure you want to clear the peer geo-location cache?"; then
+            rm -f "$db_path"
+            msg_ok "Database cleared"
+        else
+            msg_info "Cancelled"
+        fi
+    else
+        msg_info "No database found to clear"
+    fi
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -379,28 +401,22 @@ main() {
 
         case "$choice" in
             1)
-                run_peer_list
-                ;;
-            2)
                 run_web_dashboard
-                ;;
-            3)
-                msg_info "Blockchain info coming soon..."
-                echo ""
-                echo -en "${T_DIM}Press Enter to continue...${RST}"
-                read -r
-                ;;
-            4)
-                msg_info "Mempool stats coming soon..."
-                echo ""
-                echo -en "${T_DIM}Press Enter to continue...${RST}"
-                read -r
                 ;;
             d|D)
                 run_detection
                 ;;
-            r|R)
+            m|M)
+                run_manual_config
+                ;;
+            2)
                 reset_config
+                ;;
+            3)
+                reset_database
+                ;;
+            t|T)
+                run_peer_list
                 ;;
             q|Q)
                 echo ""

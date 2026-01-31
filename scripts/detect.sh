@@ -537,7 +537,7 @@ manual_enter_datadir() {
 
 display_detection_results() {
     echo ""
-    echo -e "${T_SECONDARY}${BOLD}These are the settings I found:${RST}"
+    echo -e "${T_SECONDARY}${BOLD}Found Settings:${RST}"
     echo ""
 
     print_kv "Bitcoin CLI" "${MBTC_CLI_PATH:-not found}" 18
@@ -570,36 +570,78 @@ display_detection_results() {
 
 confirm_detection_results() {
     echo ""
-    echo -e "${T_WARN}?${RST} Does this look correct?"
+    echo -e "${T_WARN}?${RST} Choose an option:"
     echo ""
-    echo -e "  ${T_INFO}y)${RST} Yes, save these settings"
-    echo -e "  ${T_INFO}n)${RST} No, enter settings manually"
+    echo -e "  ${T_INFO}y)${RST} Use the detected settings, and continue to the main menu"
+    echo -e "  ${T_INFO}n)${RST} I would like to manually enter my Bitcoin Core settings"
     echo -e "  ${T_ERROR}q)${RST} Quit"
     echo ""
 
-    echo -en "${T_DIM}Choice [y/n/q]:${RST} "
-    read -r confirm_choice
+    while true; do
+        echo -en "${T_DIM}Choice [y/n/q]:${RST} "
+        read -r confirm_choice
 
-    case "$confirm_choice" in
-        y|Y|yes|Yes|"")
-            save_config
-            msg_ok "Configuration saved!"
-            return 0
-            ;;
-        n|N|no|No)
-            msg_info "You can manually configure settings from the main menu."
-            return 1
-            ;;
-        q|Q)
-            msg_info "Goodbye!"
-            exit 0
-            ;;
-        *)
-            save_config
-            msg_ok "Configuration saved!"
-            return 0
-            ;;
-    esac
+        case "$confirm_choice" in
+            y|Y|yes|Yes)
+                save_config
+                msg_ok "Configuration saved!"
+                return 0
+                ;;
+            n|N|no|No)
+                # Run manual configuration
+                echo ""
+                echo -e "${T_SECONDARY}${BOLD}Manual Configuration${RST}"
+                echo ""
+
+                while true; do
+                    manual_enter_conf
+                    local result=$?
+                    [[ $result -eq 0 ]] && break
+                    [[ $result -eq 2 ]] && return 1
+                done
+
+                if [[ -z "$MBTC_DATADIR" ]]; then
+                    while true; do
+                        manual_enter_datadir
+                        local result=$?
+                        [[ $result -eq 0 ]] && break
+                        [[ $result -eq 2 ]] && break
+                    done
+                fi
+
+                # Re-detect remaining settings
+                detect_bitcoin_cli
+                if [[ -n "$MBTC_CONF" ]]; then
+                    parse_conf_file "$MBTC_CONF"
+                fi
+                find_cookie
+
+                # Test RPC
+                echo ""
+                start_spinner "Testing RPC connection"
+                if test_rpc; then
+                    stop_spinner 0 "RPC connection successful!"
+                else
+                    stop_spinner 1 "RPC connection failed"
+                    msg_warn "bitcoind may not be running"
+                fi
+
+                save_config
+                msg_ok "Configuration saved!"
+                return 0
+                ;;
+            q|Q|quit|Quit)
+                msg_info "Goodbye!"
+                exit 0
+                ;;
+            "")
+                msg_warn "Please enter y, n, or q"
+                ;;
+            *)
+                msg_warn "Invalid option. Please enter y, n, or q"
+                ;;
+        esac
+    done
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -607,7 +649,9 @@ confirm_detection_results() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 run_detection() {
-    print_header "Bitcoin Core Detection"
+    echo ""
+    echo -e "${T_SECONDARY}${BOLD}Bitcoin Core Detection${RST}"
+    echo ""
 
     local goto_rpc_test=0
     local goto_manual=0
@@ -615,9 +659,10 @@ run_detection() {
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 1: Check cache
     # ─────────────────────────────────────────────────────────────────────────
-    print_section "Step 1: Checking Cached Configuration"
+    echo -e "${T_DIM}Step 1: Checking cached configuration...${RST}"
 
     if load_config; then
+        msg_ok "Found cached configuration"
         display_cached_config
 
         echo -e "${T_WARN}?${RST} Is this configuration correct?"
@@ -639,37 +684,34 @@ run_detection() {
                 if [[ -n "$MBTC_CONF" ]]; then
                     parse_conf_file "$MBTC_CONF"
                 fi
-                print_section_end
                 goto_rpc_test=1
                 ;;
             2)
                 msg_info "Running auto-detection..."
                 clear_config
-                print_section_end
                 ;;
             3)
                 msg_info "Manual configuration..."
                 clear_config
-                print_section_end
                 goto_manual=1
                 ;;
             *)
                 msg_info "Running auto-detection..."
                 clear_config
-                print_section_end
                 ;;
         esac
     else
         msg_info "No cached configuration found"
-        print_section_end
     fi
+    echo ""
 
     # Skip detection if using cache
     if [[ "${goto_rpc_test}" -eq 1 ]]; then
         :
     elif [[ "${goto_manual}" -eq 1 ]]; then
         # Manual configuration flow
-        print_section "Manual Configuration"
+        echo -e "${T_SECONDARY}${BOLD}Manual Configuration${RST}"
+        echo ""
 
         while true; do
             manual_enter_conf
@@ -688,12 +730,12 @@ run_detection() {
         fi
 
         detect_bitcoin_cli
-        print_section_end
+        echo ""
     else
         # ─────────────────────────────────────────────────────────────────────
         # STEP 2: Check running process
         # ─────────────────────────────────────────────────────────────────────
-        print_section "Step 2: Checking Running Processes"
+        echo -e "${T_DIM}Step 2: Checking running processes...${RST}"
 
         start_spinner "Scanning for bitcoind process"
         if detect_running_process; then
@@ -703,21 +745,21 @@ run_detection() {
         else
             stop_spinner 0 "bitcoind not running"
 
-            msg_info "Checking systemd services..."
+            start_spinner "Checking systemd services"
             if detect_systemd_service; then
-                msg_ok "Found configuration from systemd service"
+                stop_spinner 0 "Found configuration from systemd service"
                 [[ -n "$MBTC_DATADIR" ]] && msg_ok "Datadir: $MBTC_DATADIR"
                 [[ -n "$MBTC_CONF" ]] && msg_ok "Conf: $MBTC_CONF"
             else
-                msg_info "No systemd bitcoin service found"
+                stop_spinner 0 "No systemd bitcoin service found"
             fi
         fi
-        print_section_end
+        echo ""
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 3: Find config file
         # ─────────────────────────────────────────────────────────────────────
-        print_section "Step 3: Locating Config File"
+        echo -e "${T_DIM}Step 3: Locating config file...${RST}"
 
         start_spinner "Searching common locations"
         if find_conf_file; then
@@ -756,12 +798,12 @@ run_detection() {
             parse_conf_file "$MBTC_CONF"
             [[ -n "$MBTC_DATADIR" ]] && msg_ok "Found datadir in config: $MBTC_DATADIR"
         fi
-        print_section_end
+        echo ""
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 4: Find data directory
         # ─────────────────────────────────────────────────────────────────────
-        print_section "Step 4: Locating Data Directory"
+        echo -e "${T_DIM}Step 4: Locating data directory...${RST}"
 
         if [[ -n "$MBTC_DATADIR" ]] && validate_datadir "$MBTC_DATADIR"; then
             msg_ok "Already found: $MBTC_DATADIR"
@@ -798,12 +840,12 @@ run_detection() {
                 esac
             fi
         fi
-        print_section_end
+        echo ""
 
         # ─────────────────────────────────────────────────────────────────────
         # STEP 5: Find bitcoin-cli
         # ─────────────────────────────────────────────────────────────────────
-        print_section "Step 5: Testing bitcoin-cli"
+        echo -e "${T_DIM}Step 5: Testing bitcoin-cli...${RST}"
 
         start_spinner "Checking bitcoin-cli"
         if detect_bitcoin_cli; then
@@ -811,16 +853,15 @@ run_detection() {
         else
             stop_spinner 1 "bitcoin-cli not found"
             msg_err "Bitcoin Core does not appear to be installed"
-            print_section_end
             return 1
         fi
-        print_section_end
+        echo ""
     fi
 
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 6: Find cookie auth
     # ─────────────────────────────────────────────────────────────────────────
-    print_section "Step 6: Checking Authentication"
+    echo -e "${T_DIM}Step 6: Checking authentication...${RST}"
 
     find_cookie
     if [[ -n "$MBTC_COOKIE_PATH" && -f "$MBTC_COOKIE_PATH" ]]; then
@@ -830,31 +871,22 @@ run_detection() {
     else
         msg_info "Using default authentication"
     fi
-    print_section_end
+    echo ""
 
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 7: Test RPC connection
     # ─────────────────────────────────────────────────────────────────────────
-    print_section "Step 7: Testing RPC Connection"
-
-    echo ""
-    echo -e "${T_DIM}Testing command: $(get_cli_command) getblockchaininfo${RST}"
-    echo ""
+    echo -e "${T_DIM}Step 7: Testing RPC connection...${RST}"
 
     start_spinner "Connecting to Bitcoin Core"
     if test_rpc; then
-        stop_spinner 0 ""
-        echo ""
-        echo -e "  ${T_SUCCESS}${BOLD}╔════════════════════════════════════════╗${RST}"
-        echo -e "  ${T_SUCCESS}${BOLD}║   bitcoin-cli TEST SUCCESSFUL!         ║${RST}"
-        echo -e "  ${T_SUCCESS}${BOLD}╚════════════════════════════════════════╝${RST}"
-        echo ""
+        stop_spinner 0 "RPC connection successful!"
     else
         stop_spinner 1 "RPC connection failed"
         msg_warn "Could not connect to Bitcoin Core RPC"
         msg_info "bitcoind may not be running, or auth settings may be incorrect"
     fi
-    print_section_end
+    echo ""
 
     # ─────────────────────────────────────────────────────────────────────────
     # Display results and ask for confirmation
