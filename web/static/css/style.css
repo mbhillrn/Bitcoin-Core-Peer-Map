@@ -240,6 +240,8 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    /* Add padding at bottom so content/scrollbar is above resize handle */
+    padding-bottom: 12px;
 }
 
 .peer-panel {
@@ -395,8 +397,6 @@ body {
     flex: 1;
     overflow: auto;
     max-width: 100%;
-    /* Add padding at bottom so horizontal scrollbar is above resize handle */
-    padding-bottom: 12px;
 }
 
 /* Custom scrollbar styling */

@@ -82,6 +82,10 @@ const changesTbody = document.getElementById('changes-tbody');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadColumnPreferences();  // Load saved order/visibility first
+    // Load saved column widths, or set defaults if none saved
+    if (!loadColumnWidths()) {
+        setInitialColumnWidths();
+    }
     setupTableSorting();
     setupColumnResize();
     setupColumnDrag();
@@ -133,7 +137,17 @@ function setupRestoreDefaults() {
             try {
                 localStorage.removeItem('mbcore_visible_columns');
                 localStorage.removeItem('mbcore_column_order');
+                localStorage.removeItem('mbcore_column_widths');
             } catch (e) {}
+
+            // Reset column widths - clear inline styles and set defaults
+            const table = document.getElementById('peer-table');
+            if (table) {
+                table.querySelectorAll('th[data-col]').forEach(th => {
+                    th.style.width = '';
+                });
+            }
+            setInitialColumnWidths();
 
             // Re-apply and re-render
             applyColumnVisibility();
@@ -185,6 +199,7 @@ function setupColumnResize() {
     document.addEventListener('mouseup', () => {
         if (isResizing && currentTh) {
             currentTh.classList.remove('resizing');
+            saveColumnWidths(); // Save widths after resize
             currentTh = null;
             isResizing = false;
             document.body.style.cursor = '';
@@ -583,6 +598,87 @@ function saveColumnPreferences() {
     } catch (e) {
         console.warn('Could not save column preferences:', e);
     }
+}
+
+// Save column widths to localStorage
+function saveColumnWidths() {
+    try {
+        const widths = {};
+        const table = document.getElementById('peer-table');
+        if (table) {
+            table.querySelectorAll('th[data-col]').forEach(th => {
+                if (th.style.width) {
+                    widths[th.dataset.col] = th.style.width;
+                }
+            });
+        }
+        localStorage.setItem('mbcore_column_widths', JSON.stringify(widths));
+    } catch (e) {
+        console.warn('Could not save column widths:', e);
+    }
+}
+
+// Load and apply saved column widths
+function loadColumnWidths() {
+    try {
+        const saved = localStorage.getItem('mbcore_column_widths');
+        if (saved) {
+            const widths = JSON.parse(saved);
+            const table = document.getElementById('peer-table');
+            if (table) {
+                table.querySelectorAll('th[data-col]').forEach(th => {
+                    if (widths[th.dataset.col]) {
+                        th.style.width = widths[th.dataset.col];
+                    }
+                });
+            }
+            return true; // Widths were loaded
+        }
+    } catch (e) {
+        console.warn('Could not load column widths:', e);
+    }
+    return false; // No saved widths
+}
+
+// Set initial column widths based on content (if no saved widths)
+function setInitialColumnWidths() {
+    const table = document.getElementById('peer-table');
+    if (!table) return;
+
+    // Default widths for known columns (px)
+    const defaultWidths = {
+        'id': 45,
+        'network': 60,
+        'ip': 140,
+        'port': 55,
+        'direction': 50,
+        'subver': 150,
+        'city': 90,
+        'region': 50,
+        'regionName': 100,
+        'country': 100,
+        'countryCode': 45,
+        'continent': 100,
+        'continentCode': 45,
+        'bytessent': 70,
+        'bytesrecv': 70,
+        'ping_ms': 50,
+        'conntime': 70,
+        'connection_type': 55,
+        'services_abbrev': 80,
+        'lat': 60,
+        'lon': 60,
+        'isp': 120,
+        'in_addrman': 75
+    };
+
+    table.querySelectorAll('th[data-col]').forEach(th => {
+        const col = th.dataset.col;
+        // Only set if no width already set
+        if (!th.style.width && defaultWidths[col]) {
+            th.style.width = defaultWidths[col] + 'px';
+        }
+    });
 }
 
 // Load column preferences from localStorage
