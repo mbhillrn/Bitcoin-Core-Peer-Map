@@ -998,6 +998,230 @@ async def api_events(request: Request):
     return EventSourceResponse(event_generator())
 
 
+@app.get("/api/mempool")
+async def api_mempool(currency: str = "USD"):
+    """Get mempool info for the mempool info overlay"""
+    result = {
+        'mempool': None,
+        'btc_price': None,
+        'error': None
+    }
+
+    try:
+        cmd = config.get_cli_command() + ['getmempoolinfo']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if r.returncode == 0:
+            result['mempool'] = json.loads(r.stdout)
+        else:
+            result['error'] = r.stderr.strip() or 'Failed to get mempool info'
+    except Exception as e:
+        result['error'] = str(e)
+
+    # Also fetch BTC price for total fees display
+    try:
+        response = requests.get(f"https://api.coinbase.com/v2/prices/BTC-{currency}/spot", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            price = data.get('data', {}).get('amount')
+            if price:
+                result['btc_price'] = float(price)
+    except Exception:
+        pass
+
+    return result
+
+
+@app.post("/api/peer/disconnect")
+async def api_peer_disconnect(request: Request):
+    """Disconnect a peer by ID"""
+    try:
+        data = await request.json()
+        peer_id = data.get('peer_id')
+
+        if peer_id is None:
+            return {'success': False, 'error': 'peer_id is required'}
+
+        # Use disconnectnode with empty address and nodeid
+        cmd = config.get_cli_command() + ['disconnectnode', '', str(peer_id)]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode == 0:
+            return {'success': True}
+        else:
+            return {'success': False, 'error': r.stderr.strip() or 'Failed to disconnect peer'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/peer/ban")
+async def api_peer_ban(request: Request):
+    """Ban a peer by ID (24 hours). Only works for IPv4/IPv6."""
+    try:
+        data = await request.json()
+        peer_id = data.get('peer_id')
+
+        if peer_id is None:
+            return {'success': False, 'error': 'peer_id is required'}
+
+        # First, get peer info to find the address and network type
+        cmd = config.get_cli_command() + ['getpeerinfo']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode != 0:
+            return {'success': False, 'error': 'Failed to get peer info'}
+
+        peers = json.loads(r.stdout)
+        peer = None
+        for p in peers:
+            if p.get('id') == int(peer_id):
+                peer = p
+                break
+
+        if not peer:
+            return {'success': False, 'error': f'Peer ID {peer_id} not found'}
+
+        network = peer.get('network', 'ipv4')
+        addr = peer.get('addr', '')
+
+        # Only IPv4 and IPv6 can be banned
+        if network not in ('ipv4', 'ipv6'):
+            return {
+                'success': False,
+                'error': f'Cannot ban {network.upper()} peers. Ban works for IPv4/IPv6 IPs only. Tor/I2P/CJDNS don\'t have bannable IP identities in Core.'
+            }
+
+        # Extract IP from address (remove port and brackets)
+        if addr.startswith('['):
+            # IPv6: [2001:db8::1]:8333 -> 2001:db8::1
+            ip = addr.split(']')[0][1:]
+        elif ':' in addr and addr.count(':') <= 1:
+            # IPv4: 192.168.1.1:8333 -> 192.168.1.1
+            ip = addr.rsplit(':', 1)[0]
+        else:
+            ip = addr
+
+        # Ban for 24 hours (86400 seconds)
+        cmd = config.get_cli_command() + ['setban', ip, 'add', '86400']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode == 0:
+            return {'success': True, 'banned_ip': ip, 'network': network}
+        else:
+            return {'success': False, 'error': r.stderr.strip() or 'Failed to ban peer'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/peer/unban")
+async def api_peer_unban(request: Request):
+    """Unban a specific IP/subnet"""
+    try:
+        data = await request.json()
+        address = data.get('address')
+
+        if not address:
+            return {'success': False, 'error': 'address is required'}
+
+        cmd = config.get_cli_command() + ['setban', address, 'remove']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode == 0:
+            return {'success': True}
+        else:
+            return {'success': False, 'error': r.stderr.strip() or 'Failed to unban address'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/bans")
+async def api_bans():
+    """List all banned IPs"""
+    try:
+        cmd = config.get_cli_command() + ['listbanned']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode == 0:
+            bans = json.loads(r.stdout)
+            return {'success': True, 'bans': bans}
+        else:
+            return {'success': False, 'error': r.stderr.strip() or 'Failed to list bans', 'bans': []}
+    except Exception as e:
+        return {'success': False, 'error': str(e), 'bans': []}
+
+
+@app.post("/api/bans/clear")
+async def api_bans_clear():
+    """Clear all bans"""
+    try:
+        cmd = config.get_cli_command() + ['clearbanned']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode == 0:
+            return {'success': True}
+        else:
+            return {'success': False, 'error': r.stderr.strip() or 'Failed to clear bans'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@app.post("/api/peer/connect")
+async def api_peer_connect(request: Request):
+    """Connect to a peer using addnode onetry"""
+    try:
+        data = await request.json()
+        address = data.get('address', '').strip()
+
+        if not address:
+            return {'success': False, 'error': 'address is required'}
+
+        # Normalize the address based on type
+        normalized = address
+
+        # Detect address type and normalize
+        if '.b32.i2p' in address.lower():
+            # I2P - must have :0 port
+            if ':' not in address or not address.endswith(':0'):
+                return {'success': False, 'error': 'I2P addresses must end with :0 (e.g., abc...xyz.b32.i2p:0)'}
+        elif '.onion' in address.lower():
+            # Tor - add :8333 if no port
+            if ':' not in address:
+                normalized = address + ':8333'
+        elif address.startswith('[') and address.startswith('[fc'):
+            # CJDNS - pass as-is (Core handles it)
+            pass
+        elif address.startswith('['):
+            # IPv6 - add :8333 if no port
+            if ']:' not in address:
+                normalized = address + ':8333'
+        else:
+            # IPv4 - add :8333 if no port
+            if ':' not in address:
+                normalized = address + ':8333'
+
+        cmd = config.get_cli_command() + ['addnode', normalized, 'onetry']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if r.returncode == 0:
+            return {'success': True, 'address': normalized}
+        else:
+            return {'success': False, 'error': r.stderr.strip() or 'Failed to connect to peer'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@app.get("/api/cli-info")
+async def api_cli_info():
+    """Get the CLI command info for display to user"""
+    cmd_parts = config.get_cli_command()
+    return {
+        'cli_path': config.cli_path,
+        'datadir': config.datadir,
+        'conf': config.conf,
+        'network': config.network,
+        'base_command': ' '.join(cmd_parts)
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serve the main dashboard page"""

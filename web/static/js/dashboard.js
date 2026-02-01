@@ -2021,3 +2021,550 @@ function updateInfoPanel(data) {
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MEMPOOL INFO FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Format bytes to human readable
+function formatBytes(bytes, decimals = 1) {
+    if (bytes === 0) return '0 B';
+    const k = 1000;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+}
+
+// Convert BTC/kvB to sat/vB
+function btcKvbToSatVb(btcKvb) {
+    // 1 BTC = 100,000,000 sats, 1 kvB = 1000 vB
+    // So: sat/vB = BTC/kvB * 100,000,000 / 1000 = BTC/kvB * 100,000
+    return (btcKvb * 100000).toFixed(1);
+}
+
+// Format mempool info for display
+function formatMempoolInfo(data, btcPrice) {
+    const m = data;
+    const currency = localStorage.getItem('mbcore_info_currency') || 'USD';
+
+    // Calculate total fees in selected currency
+    let feesUsd = '';
+    if (btcPrice && m.total_fee) {
+        const feeUsd = m.total_fee * btcPrice;
+        feesUsd = ` (~${currency === 'USD' ? '$' : ''}${feeUsd.toLocaleString(undefined, {maximumFractionDigits: 2})} ${currency})`;
+    }
+
+    let html = '<div class="mempool-stats">';
+
+    // Pending transactions (highlighted)
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Pending Transactions</span>
+        <span class="mempool-stat-value highlight">${m.size.toLocaleString()}</span>
+    </div>`;
+
+    // Data size
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Data Size</span>
+        <span class="mempool-stat-value">${formatBytes(m.bytes)}</span>
+    </div>`;
+
+    // Memory usage
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Memory Usage</span>
+        <span class="mempool-stat-value">${formatBytes(m.usage)}</span>
+    </div>`;
+
+    // Total fees
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Total Fees</span>
+        <div>
+            <span class="mempool-stat-value">${m.total_fee.toFixed(8)} BTC</span>
+            <div class="mempool-stat-sub">${feesUsd}</div>
+        </div>
+    </div>`;
+
+    // Max mempool size
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Max Mempool Size</span>
+        <span class="mempool-stat-value">${formatBytes(m.maxmempool)}</span>
+    </div>`;
+
+    // Min fee accepted (show both formats)
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Min Accepted Fee</span>
+        <div>
+            <span class="mempool-stat-value">${btcKvbToSatVb(m.mempoolminfee)} sat/vB</span>
+            <div class="mempool-stat-sub">${m.mempoolminfee.toFixed(8)} BTC/kvB</div>
+        </div>
+    </div>`;
+
+    // Min relay fee
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Min Relay Fee (Policy)</span>
+        <div>
+            <span class="mempool-stat-value">${btcKvbToSatVb(m.minrelaytxfee)} sat/vB</span>
+            <div class="mempool-stat-sub">${m.minrelaytxfee.toFixed(8)} BTC/kvB</div>
+        </div>
+    </div>`;
+
+    // RBF increment
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">RBF Increment</span>
+        <div>
+            <span class="mempool-stat-value">${btcKvbToSatVb(m.incrementalrelayfee)} sat/vB</span>
+            <div class="mempool-stat-sub">${m.incrementalrelayfee.toFixed(8)} BTC/kvB</div>
+        </div>
+    </div>`;
+
+    // Unbroadcast count (color coded)
+    const unbroadcastClass = m.unbroadcastcount === 0 ? 'green' : 'highlight';
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Unbroadcast Txs</span>
+        <span class="mempool-stat-value ${unbroadcastClass}">${m.unbroadcastcount}</span>
+    </div>`;
+
+    // Full RBF
+    const fullRbfText = m.fullrbf ? 'Enabled' : 'Disabled';
+    const fullRbfClass = m.fullrbf ? 'green' : '';
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label">Full RBF</span>
+        <span class="mempool-stat-value ${fullRbfClass}">${fullRbfText}</span>
+    </div>`;
+
+    // Bare multisig relay (if present)
+    if (m.permitbaremultisig !== undefined) {
+        const bareMultisigText = m.permitbaremultisig ? 'Allowed' : 'Not Allowed';
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label">Bare Multisig Relay</span>
+            <span class="mempool-stat-value">${bareMultisigText}</span>
+        </div>`;
+    }
+
+    // Max data carrier (OP_RETURN)
+    if (m.maxdatacarriersize !== undefined) {
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label">Max Data Carrier</span>
+            <span class="mempool-stat-value">${formatBytes(m.maxdatacarriersize)}</span>
+        </div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Fetch and display mempool info
+async function fetchMempoolInfo() {
+    const modalBody = document.getElementById('mempool-modal-body');
+    const currency = localStorage.getItem('mbcore_info_currency') || 'USD';
+
+    modalBody.innerHTML = '<div class="mempool-loading">Loading mempool info...</div>';
+
+    try {
+        const response = await fetch(`${API_BASE}/api/mempool?currency=${currency}`);
+        const data = await response.json();
+
+        if (data.error) {
+            modalBody.innerHTML = `<div class="mempool-error">Error: ${data.error}</div>`;
+            return;
+        }
+
+        if (data.mempool) {
+            modalBody.innerHTML = formatMempoolInfo(data.mempool, data.btc_price);
+        } else {
+            modalBody.innerHTML = '<div class="mempool-error">No mempool data available</div>';
+        }
+    } catch (error) {
+        modalBody.innerHTML = `<div class="mempool-error">Error: ${error.message}</div>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DISCONNECT/BAN PEER FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Disconnect or ban a peer
+async function disconnectPeer(peerId, shouldBan) {
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'disconnect-result';
+
+    // Remove any existing result
+    const existingResult = document.querySelector('#disconnect-dropdown .disconnect-result');
+    if (existingResult) existingResult.remove();
+
+    try {
+        if (shouldBan) {
+            // First ban, then disconnect
+            const banResponse = await fetch(`${API_BASE}/api/peer/ban`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ peer_id: parseInt(peerId) })
+            });
+            const banData = await banResponse.json();
+
+            if (!banData.success) {
+                resultDiv.className = 'disconnect-result error';
+                resultDiv.textContent = banData.error || 'Failed to ban peer';
+                document.querySelector('#disconnect-dropdown .disconnect-actions').before(resultDiv);
+                return;
+            }
+
+            // Then disconnect
+            const disconnectResponse = await fetch(`${API_BASE}/api/peer/disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ peer_id: parseInt(peerId) })
+            });
+            const disconnectData = await disconnectResponse.json();
+
+            resultDiv.className = 'disconnect-result success';
+            resultDiv.textContent = `Banned ${banData.banned_ip} and disconnected peer ${peerId}`;
+        } else {
+            // Just disconnect
+            const response = await fetch(`${API_BASE}/api/peer/disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ peer_id: parseInt(peerId) })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                resultDiv.className = 'disconnect-result success';
+                resultDiv.textContent = `Disconnected peer ${peerId}`;
+            } else {
+                resultDiv.className = 'disconnect-result error';
+                resultDiv.textContent = data.error || 'Failed to disconnect peer';
+            }
+        }
+    } catch (error) {
+        resultDiv.className = 'disconnect-result error';
+        resultDiv.textContent = `Error: ${error.message}`;
+    }
+
+    document.querySelector('#disconnect-dropdown .disconnect-actions').before(resultDiv);
+
+    // Clear input
+    document.getElementById('disconnect-peer-id').value = '';
+    document.getElementById('disconnect-ban-checkbox').checked = false;
+}
+
+// Clear all bans
+async function clearAllBans() {
+    if (!confirm('Are you sure you want to clear ALL banned IPs?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/bans/clear`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('All bans cleared successfully');
+        } else {
+            alert('Error clearing bans: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BANNED IPS LIST FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Format remaining time
+function formatRemainingTime(seconds) {
+    if (seconds <= 0) return 'Expired';
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) {
+        return `${days}d ${hours}h`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else {
+        return `${minutes}m`;
+    }
+}
+
+// Format timestamp to local time
+function formatBanExpiry(timestamp) {
+    const date = new Date(timestamp * 1000);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+
+    return `${month}/${day} ${hours}:${minutes}${ampm}`;
+}
+
+// Unban a specific IP
+async function unbanIP(address) {
+    try {
+        const response = await fetch(`${API_BASE}/api/peer/unban`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: address })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // Refresh the bans list
+            fetchBannedIPs();
+        } else {
+            alert('Error unbanning: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Fetch and display banned IPs
+async function fetchBannedIPs() {
+    const modalBody = document.getElementById('bans-modal-body');
+    modalBody.innerHTML = '<div class="bans-loading">Loading banned IPs...</div>';
+
+    try {
+        const response = await fetch(`${API_BASE}/api/bans`);
+        const data = await response.json();
+
+        if (!data.success && data.error) {
+            modalBody.innerHTML = `<div class="bans-error">Error: ${data.error}</div>`;
+            return;
+        }
+
+        const bans = data.bans || [];
+
+        if (bans.length === 0) {
+            modalBody.innerHTML = '<div class="bans-empty">No banned IPs</div>';
+            return;
+        }
+
+        let html = '<div class="bans-list">';
+        html += `<div class="bans-header">
+            <span class="bans-header-ip">IP/Subnet</span>
+            <span class="bans-header-expires">Expires</span>
+            <span class="bans-header-remaining">Remaining</span>
+            <span class="bans-header-action">Action</span>
+        </div>`;
+
+        for (const ban of bans) {
+            const expiryStr = formatBanExpiry(ban.banned_until);
+            const remainingStr = formatRemainingTime(ban.time_remaining);
+
+            html += `<div class="ban-row">
+                <span class="ban-ip">${ban.address}</span>
+                <span class="ban-expires">${expiryStr}</span>
+                <span class="ban-remaining">${remainingStr}</span>
+                <span class="ban-action">
+                    <button class="unban-btn" onclick="unbanIP('${ban.address}')">Unban</button>
+                </span>
+            </div>`;
+        }
+
+        html += '</div>';
+        modalBody.innerHTML = html;
+    } catch (error) {
+        modalBody.innerHTML = `<div class="bans-error">Error: ${error.message}</div>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONNECT PEER FUNCTIONALITY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Store CLI info globally
+let cliInfo = null;
+
+// Fetch CLI info for displaying permanent add command
+async function fetchCliInfo() {
+    try {
+        const response = await fetch(`${API_BASE}/api/cli-info`);
+        cliInfo = await response.json();
+        updatePermanentAddCommand();
+    } catch (error) {
+        console.error('Failed to fetch CLI info:', error);
+    }
+}
+
+// Update the permanent add command display
+function updatePermanentAddCommand() {
+    const cmdEl = document.getElementById('connect-permanent-cmd');
+    if (!cmdEl || !cliInfo) return;
+
+    const baseCmd = cliInfo.base_command || 'bitcoin-cli';
+    cmdEl.textContent = `${baseCmd} addnode "<address>" add`;
+}
+
+// Connect to a peer
+async function connectPeer(address) {
+    const resultDiv = document.getElementById('connect-result');
+    resultDiv.className = 'connect-result';
+    resultDiv.style.display = 'none';
+
+    if (!address.trim()) {
+        resultDiv.className = 'connect-result error';
+        resultDiv.textContent = 'Please enter an address';
+        resultDiv.style.display = 'block';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/api/peer/connect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: address.trim() })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            resultDiv.className = 'connect-result success';
+            resultDiv.textContent = `Connection attempt sent to ${data.address}`;
+            document.getElementById('connect-peer-address').value = '';
+        } else {
+            resultDiv.className = 'connect-result error';
+            resultDiv.textContent = data.error || 'Failed to connect';
+        }
+        resultDiv.style.display = 'block';
+    } catch (error) {
+        resultDiv.className = 'connect-result error';
+        resultDiv.textContent = `Error: ${error.message}`;
+        resultDiv.style.display = 'block';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INITIALIZE NEW FEATURES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Mempool Info Button
+    const mempoolBtn = document.getElementById('mempool-info-btn');
+    const mempoolModal = document.getElementById('mempool-modal');
+    const mempoolModalClose = document.getElementById('mempool-modal-close');
+
+    if (mempoolBtn && mempoolModal) {
+        mempoolBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            mempoolModal.classList.add('active');
+            fetchMempoolInfo();
+        });
+
+        mempoolModalClose.addEventListener('click', () => {
+            mempoolModal.classList.remove('active');
+        });
+
+        mempoolModal.addEventListener('click', (e) => {
+            if (e.target === mempoolModal) {
+                mempoolModal.classList.remove('active');
+            }
+        });
+    }
+
+    // Disconnect Peer Button & Dropdown
+    const disconnectBtn = document.getElementById('disconnect-peer-btn');
+    const disconnectDropdown = document.getElementById('disconnect-dropdown');
+
+    if (disconnectBtn && disconnectDropdown) {
+        disconnectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btnRect = disconnectBtn.getBoundingClientRect();
+            disconnectDropdown.style.top = (btnRect.bottom + 4) + 'px';
+            disconnectDropdown.style.right = (window.innerWidth - btnRect.right) + 'px';
+            disconnectDropdown.style.left = 'auto';
+            disconnectDropdown.classList.toggle('active');
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!disconnectDropdown.contains(e.target) && e.target !== disconnectBtn) {
+                disconnectDropdown.classList.remove('active');
+            }
+        });
+
+        // Disconnect confirm button
+        const disconnectConfirmBtn = document.getElementById('disconnect-confirm-btn');
+        disconnectConfirmBtn.addEventListener('click', () => {
+            const peerId = document.getElementById('disconnect-peer-id').value.trim();
+            const shouldBan = document.getElementById('disconnect-ban-checkbox').checked;
+
+            if (!peerId) {
+                alert('Please enter a peer ID');
+                return;
+            }
+
+            disconnectPeer(peerId, shouldBan);
+        });
+
+        // List Bans button
+        const listBansBtn = document.getElementById('list-bans-btn');
+        const bansModal = document.getElementById('bans-modal');
+        const bansModalClose = document.getElementById('bans-modal-close');
+
+        listBansBtn.addEventListener('click', () => {
+            disconnectDropdown.classList.remove('active');
+            bansModal.classList.add('active');
+            fetchBannedIPs();
+        });
+
+        bansModalClose.addEventListener('click', () => {
+            bansModal.classList.remove('active');
+        });
+
+        bansModal.addEventListener('click', (e) => {
+            if (e.target === bansModal) {
+                bansModal.classList.remove('active');
+            }
+        });
+
+        // Clear Bans button
+        const clearBansBtn = document.getElementById('clear-bans-btn');
+        clearBansBtn.addEventListener('click', () => {
+            clearAllBans();
+        });
+    }
+
+    // Connect Peer Button & Modal
+    const connectBtn = document.getElementById('connect-peer-btn');
+    const connectModal = document.getElementById('connect-peer-modal');
+    const connectModalClose = document.getElementById('connect-modal-close');
+
+    if (connectBtn && connectModal) {
+        connectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            connectModal.classList.add('active');
+            fetchCliInfo();
+        });
+
+        connectModalClose.addEventListener('click', () => {
+            connectModal.classList.remove('active');
+        });
+
+        connectModal.addEventListener('click', (e) => {
+            if (e.target === connectModal) {
+                connectModal.classList.remove('active');
+            }
+        });
+
+        // Connect confirm button
+        const connectConfirmBtn = document.getElementById('connect-confirm-btn');
+        connectConfirmBtn.addEventListener('click', () => {
+            const address = document.getElementById('connect-peer-address').value;
+            connectPeer(address);
+        });
+
+        // Enter key on address input
+        const addressInput = document.getElementById('connect-peer-address');
+        addressInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                connectPeer(addressInput.value);
+            }
+        });
+    }
+});

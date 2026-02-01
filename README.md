@@ -36,6 +36,8 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 - **Network Scores** - Display local address scores for IPv4 and IPv6 from Bitcoin Core
 - **System Monitor** - Live CPU and memory usage percentages
 - **Collapsible Info Panel** - Configurable panel with show/hide options for each metric
+- **Mempool Info** - View detailed mempool statistics including pending transactions, fees, memory usage, and policy settings
+- **Peer Management** - Connect to new peers, disconnect existing peers, and manage IP bans directly from the dashboard
 
 ## Quick Start
 
@@ -340,6 +342,56 @@ Click the gear icon on the right to configure:
 - **Update Interval** - Set how often the panel refreshes (30s, 1m, 2m, or 5m)
 - **Show/Hide** - Toggle visibility of individual metrics
 - **Collapse Panel** - Minimize the panel to just the gear icon
+
+### Mempool Info
+
+Click the **MemPool Info** button in the Node Status panel header to view detailed mempool statistics:
+
+- **Pending Transactions** - Number of unconfirmed transactions
+- **Data Size** - Total size of transaction data in the mempool
+- **Memory Usage** - RAM used by the mempool
+- **Total Fees** - Sum of all fees waiting (shown in BTC and your selected currency)
+- **Max Mempool Size** - Configured maximum mempool size
+- **Min Accepted Fee** - Minimum fee rate for mempool acceptance (shown in both sat/vB and BTC/kvB)
+- **Min Relay Fee** - Policy minimum for transaction relay
+- **RBF Increment** - Minimum fee bump for Replace-By-Fee
+- **Unbroadcast Txs** - Transactions not yet announced to peers
+- **Full RBF** - Whether full Replace-By-Fee is enabled
+- **Bare Multisig Relay** - Policy for bare multisig transactions
+- **Max Data Carrier** - Maximum OP_RETURN data size
+
+### Peer Management
+
+The dashboard provides tools to manage peer connections directly:
+
+#### Connect to Peer
+
+Click **Connect Peer** in the Connected Peers panel to manually connect to a peer. Enter the peer's listening address in one of these formats:
+
+- **IPv4:** `192.168.1.10` (port 8333 used if omitted)
+- **IPv6:** `[2001:db8::1]` (port 8333 used if omitted)
+- **Tor:** `abc...xyz.onion` (port 8333 used if omitted)
+- **CJDNS:** `[fc00::1]` (passed as-is)
+- **I2P:** `abc...xyz.b32.i2p:0` (port :0 is required)
+
+The modal also shows the full CLI command for permanently adding a peer.
+
+#### Disconnect Peer
+
+Click **Disconnect Peer** to open the peer management dropdown:
+
+1. Enter the **Peer ID** (shown in the ID column of the peer table)
+2. Optionally check **Ban IP for 24 hours** to also ban the peer's IP
+3. Click **Disconnect** to execute
+
+**Note:** Banning only works for IPv4 and IPv6 peers. Tor, I2P, and CJDNS peers don't have bannable IP identities in Bitcoin Core.
+
+#### Manage Bans
+
+From the Disconnect Peer dropdown:
+
+- **List Banned IPs** - View all currently banned IPs with expiry times and individual unban buttons
+- **Clear All Bans** - Remove all IP bans at once
 
 ### Dashboard Column Reference
 

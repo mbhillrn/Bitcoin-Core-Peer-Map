@@ -41,6 +41,9 @@
             <div class="panel-header">
                 <h2>Node Status</h2>
                 <div class="panel-header-right">
+                    <button class="mempool-info-btn" id="mempool-info-btn" title="View Mempool Info">
+                        MemPool Info
+                    </button>
                     <span class="status-time">
                         <span class="time-item">Next: <span id="stat-countdown">10s</span></span>
                         <span class="time-sep">|</span>
@@ -251,6 +254,34 @@
                 </div>
                 <div class="panel-controls">
                     <span class="peer-count" id="peer-count">0 peers</span>
+                    <button class="peer-action-btn" id="connect-peer-btn" title="Connect to a peer">Connect Peer</button>
+                    <button class="peer-action-btn peer-action-btn-warning" id="disconnect-peer-btn" title="Disconnect or ban a peer">Disconnect Peer</button>
+                    <!-- Disconnect Peer Dropdown -->
+                    <div class="disconnect-dropdown" id="disconnect-dropdown">
+                        <div class="disconnect-warning">
+                            <span class="warning-icon">&#9888;</span>
+                            <span class="warning-text">ADVANCED - USE WITH CAUTION</span>
+                        </div>
+                        <div class="disconnect-subtext">Disconnecting/banning peers is not recommended for normal operation.</div>
+                        <div class="disconnect-divider"></div>
+                        <div class="disconnect-row">
+                            <label class="disconnect-label">Peer ID:</label>
+                            <input type="text" id="disconnect-peer-id" class="disconnect-input" placeholder="Enter ID">
+                            <button class="disconnect-confirm-btn" id="disconnect-confirm-btn">Disconnect</button>
+                        </div>
+                        <div class="disconnect-checkbox-row">
+                            <label class="disconnect-checkbox">
+                                <input type="checkbox" id="disconnect-ban-checkbox">
+                                <span>Ban IP for 24 hours</span>
+                            </label>
+                        </div>
+                        <div class="disconnect-ban-note">Ban works for IPv4/IPv6 IPs only.<br>Tor/I2P/CJDNS don't have bannable IP identities in Core.</div>
+                        <div class="disconnect-divider"></div>
+                        <div class="disconnect-actions">
+                            <button class="disconnect-action-btn" id="list-bans-btn">List Banned IPs</button>
+                            <button class="disconnect-action-btn disconnect-action-btn-danger" id="clear-bans-btn">Clear All Bans</button>
+                        </div>
+                    </div>
                     <button class="restore-defaults-btn" id="restore-defaults-btn" title="Restore default columns and order">Restore Defaults</button>
                     <button class="config-btn" id="column-config-btn" title="Configure visible columns">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -313,6 +344,73 @@
                 </div>
                 <div class="modal-body" id="column-checkboxes">
                     <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Mempool Info Modal -->
+        <div class="modal" id="mempool-modal">
+            <div class="modal-content modal-content-wide">
+                <div class="modal-header">
+                    <h3>Mempool Information</h3>
+                    <button class="modal-close" id="mempool-modal-close">&times;</button>
+                </div>
+                <div class="modal-body modal-body-single" id="mempool-modal-body">
+                    <div class="mempool-loading">Loading mempool info...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connect Peer Modal -->
+        <div class="modal" id="connect-peer-modal">
+            <div class="modal-content modal-content-wide">
+                <div class="modal-header">
+                    <h3>Connect to Peer</h3>
+                    <button class="modal-close" id="connect-modal-close">&times;</button>
+                </div>
+                <div class="modal-body modal-body-single">
+                    <div class="connect-instructions">
+                        <p>Enter the peer's listening address. If you omit the port, we'll use <strong>8333</strong> for IPv4/IPv6/Tor.</p>
+                        <p class="connect-note">Note: This may differ from what appears in the Connected Peers table.</p>
+                    </div>
+                    <div class="connect-examples">
+                        <div class="connect-examples-title">Examples (port optional for most):</div>
+                        <div class="connect-example"><span class="example-type">IPv4:</span> 192.168.1.10</div>
+                        <div class="connect-example"><span class="example-type">IPv6:</span> [2001:db8::1]</div>
+                        <div class="connect-example"><span class="example-type">Tor:</span> abc...xyz.onion</div>
+                        <div class="connect-example"><span class="example-type">CJDNS:</span> [fc00::1]</div>
+                    </div>
+                    <div class="connect-i2p-note">
+                        <strong>I2P:</strong> You must specify the port (<code>:0</code>)<br>
+                        Example: <code>abc...xyz.b32.i2p:0</code>
+                    </div>
+                    <div class="connect-input-row">
+                        <label class="connect-label">Address:</label>
+                        <input type="text" id="connect-peer-address" class="connect-input" placeholder="Enter address">
+                    </div>
+                    <div class="connect-actions">
+                        <button class="connect-btn" id="connect-confirm-btn">Connect</button>
+                    </div>
+                    <div class="connect-result" id="connect-result"></div>
+                    <div class="connect-divider"></div>
+                    <div class="connect-permanent">
+                        <div class="connect-permanent-title">To add permanently:</div>
+                        <div class="connect-permanent-cmd" id="connect-permanent-cmd">Loading CLI info...</div>
+                        <div class="connect-permanent-note">Or add <code>addnode=&lt;address&gt;</code> to your bitcoin.conf</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- List Bans Modal -->
+        <div class="modal" id="bans-modal">
+            <div class="modal-content modal-content-wide">
+                <div class="modal-header">
+                    <h3>Banned IPs</h3>
+                    <button class="modal-close" id="bans-modal-close">&times;</button>
+                </div>
+                <div class="modal-body modal-body-single" id="bans-modal-body">
+                    <div class="bans-loading">Loading banned IPs...</div>
                 </div>
             </div>
         </div>
