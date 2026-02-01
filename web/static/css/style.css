@@ -172,93 +172,328 @@ body {
     50% { opacity: 0.5; }
 }
 
-/* Stats Bar - Redesigned */
-.stats-bar {
-    display: flex;
-    gap: 2px;
-    padding: 0;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    overflow: hidden;
+/* Node Status Panel */
+.node-status-panel {
+    overflow: visible;
+    position: relative;
+    z-index: 10;
 }
 
-.stat-block {
+.node-status-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.node-status-panel .panel-header h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: relative;
+}
+
+.status-time {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.time-item {
+    color: var(--text-dim);
+}
+
+.time-item #stat-countdown {
+    color: var(--accent-yellow);
+    font-weight: 600;
+}
+
+.time-sep {
+    color: var(--border-color);
+}
+
+.panel-config-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 5px 7px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.panel-config-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Node config dropdown */
+.node-config-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    z-index: 1000;
+    min-width: 180px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.node-config-dropdown.active {
+    display: block;
+}
+
+.dropdown-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.refresh-input {
+    width: 50px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12px;
+    text-align: center;
+    padding: 4px 6px;
+}
+
+.refresh-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.dropdown-unit {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* Node Status Content - Card Grid */
+.node-status-content {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    align-items: stretch;
+}
+
+.status-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.status-card.hidden {
+    display: none;
+}
+
+.card-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+/* Connected Card */
+.card-connected {
+    min-width: 90px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.card-value-large {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--accent-green);
+    line-height: 1;
+}
+
+/* Networks Card */
+.card-networks {
+    flex: 1;
+    min-width: 200px;
+}
+
+.networks-grid {
+    display: flex;
+    gap: 16px;
+    justify-content: space-around;
+}
+
+.network-col {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 10px 16px;
-    min-width: 80px;
-    border-right: 1px solid var(--border-color);
+    gap: 2px;
+    min-width: 55px;
 }
 
-.stat-block:last-child {
-    border-right: none;
+.network-col.hidden {
+    display: none;
 }
 
-.stat-title {
-    color: var(--text-secondary);
+.net-name {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 2px;
 }
 
-.stat-data {
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    font-size: 14px;
-    font-weight: 400;
+.net-name.net-ipv4 { color: var(--net-ipv4); }
+.net-name.net-ipv6 { color: var(--net-ipv6); }
+.net-name.net-onion { color: var(--net-onion); }
+.net-name.net-i2p { color: var(--net-i2p); }
+.net-name.net-cjdns { color: var(--net-cjdns); }
+
+.net-inout {
+    font-size: 13px;
+    font-weight: 500;
     color: var(--text-primary);
 }
 
-/* Network-colored stat data */
-.stat-data.stat-ipv4 { color: var(--net-ipv4); }
-.stat-data.stat-ipv6 { color: var(--net-ipv6); }
-.stat-data.stat-onion { color: var(--net-onion); }
-.stat-data.stat-i2p { color: var(--net-i2p); }
-.stat-data.stat-cjdns { color: var(--net-cjdns); }
-
-/* Update frequency - right-aligned before Next Update */
-.stat-freq {
-    margin-left: auto;
+.net-score-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-top: 4px;
 }
 
-.stat-freq .stat-data {
+.net-score {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.net-overlay {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 10px;
+}
+
+/* Node Info Card */
+.card-node {
+    min-width: 100px;
+}
+
+.node-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.node-info-row {
     display: flex;
     align-items: center;
-    gap: 0;
 }
 
-#refresh-rate-input {
-    width: 28px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
+.node-info-value {
+    font-size: 12px;
     color: var(--text-secondary);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 400;
-    text-align: center;
-    padding: 1px 2px;
 }
 
-#refresh-rate-input:focus {
-    outline: none;
-    border-color: var(--accent-blue);
-    color: var(--accent-blue);
+.node-info-value.status-ok {
+    color: var(--accent-green);
 }
 
-#refresh-rate-input:hover {
-    border-color: var(--text-dim);
-}
-
-.stat-timer .stat-data {
+.node-info-value.status-syncing {
     color: var(--accent-yellow);
 }
 
-.stat-time .stat-data {
+/* System Card */
+.card-system {
+    min-width: 80px;
+}
+
+.system-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.system-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.system-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 500;
+    width: 30px;
+}
+
+.system-value {
+    font-size: 16px;
+    font-weight: 600;
     color: var(--text-primary);
+}
+
+.system-unit {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* BTC Card */
+.card-btc {
+    min-width: 100px;
+    text-align: center;
+    align-items: center;
+}
+
+.btc-price {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+.btc-currency {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
+.btc-block {
+    font-size: 10px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border-color);
+    padding-top: 6px;
+    margin-top: auto;
+    width: 100%;
+}
+
+.btc-block-label {
+    color: var(--text-dim);
+}
+
+.btc-block-value {
+    color: var(--text-secondary);
 }
 
 /* Panels */
@@ -976,143 +1211,7 @@ th[data-col="direction"] {
     font-size: 10px;
 }
 
-/* Info Panel */
-.info-panel {
-    padding: 0;
-    min-height: 40px;
-    overflow: visible;
-    position: relative;
-    z-index: 10;
-}
-
-.info-panel.collapsed {
-    min-height: 32px;
-}
-
-.info-panel.collapsed .info-panel-content {
-    display: none;
-}
-
-.info-panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    min-height: 40px;
-}
-
-.info-panel-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    flex: 1;
-}
-
-.info-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-}
-
-.info-item.hidden {
-    display: none;
-}
-
-.info-label {
-    color: var(--text-dim);
-    font-weight: 500;
-}
-
-.info-value {
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-.info-currency {
-    color: var(--text-dim);
-    font-size: 11px;
-}
-
-.info-status {
-    color: var(--text-secondary);
-    font-size: 11px;
-}
-
-.info-sep {
-    color: var(--border-color);
-    font-size: 12px;
-}
-
-.info-sep.hidden {
-    display: none;
-}
-
-/* Network score colors */
-.score-label {
-    font-weight: 500;
-}
-
-.score-label.score-ipv4 {
-    color: var(--net-ipv4);
-}
-
-.score-label.score-ipv6 {
-    color: var(--net-ipv6);
-}
-
-.info-score-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-left: 4px;
-}
-
-/* Info panel config button */
-.info-panel-config {
-    position: relative;
-    margin-left: 12px;
-}
-
-.info-config-btn {
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 5px 7px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.info-config-btn:hover {
-    background: var(--border-color);
-    color: var(--text-primary);
-}
-
-/* Info config dropdown */
-.info-config-dropdown {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 6px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 10px;
-    z-index: 1000;
-    min-width: 160px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.info-config-dropdown.active {
-    display: block;
-}
-
+/* Dropdown Common Styles */
 .dropdown-section {
     margin-bottom: 8px;
 }
@@ -1127,8 +1226,7 @@ th[data-col="direction"] {
     margin-bottom: 6px;
 }
 
-.info-currency-select,
-.info-update-select {
+.info-currency-select {
     width: 100%;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
@@ -1140,8 +1238,7 @@ th[data-col="direction"] {
     cursor: pointer;
 }
 
-.info-currency-select:focus,
-.info-update-select:focus {
+.info-currency-select:focus {
     outline: none;
     border-color: var(--accent-blue);
 }
@@ -1171,40 +1268,15 @@ th[data-col="direction"] {
     cursor: pointer;
 }
 
-.dropdown-collapse {
-    color: var(--accent-yellow);
-    font-weight: 500;
-}
-
-/* BTC price highlight */
-.info-btc .info-value {
-    color: var(--accent-yellow);
-    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-}
-
-/* System stats coloring */
-.info-system .info-value {
-    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-}
-
-/* Up to date indicator */
-.info-uptodate {
-    color: var(--accent-green);
-}
-
-.info-syncing {
-    color: var(--accent-yellow);
-}
-
 /* Responsive */
 @media (max-width: 1200px) {
-    .stats-bar {
+    .node-status-content {
         flex-wrap: wrap;
     }
 
-    .stat-block {
+    .status-card {
         flex: 1;
-        min-width: 70px;
+        min-width: 120px;
     }
 }
 

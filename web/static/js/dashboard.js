@@ -1079,23 +1079,23 @@ async function fetchStats() {
             countTotal.textContent = `all ${stats.connected || 0}`;
         }
 
-        // Network stats - only show if enabled, with (in/out) format in stats bar
+        // Network stats - only show if enabled, with (in/out) format in Node Status panel
         // and network counts in peer header
         const networkNames = ['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns'];
         const networkLabels = { 'ipv4': 'IPV4', 'ipv6': 'IPV6', 'onion': 'TOR', 'i2p': 'I2P', 'cjdns': 'CJDNS' };
 
         networkNames.forEach(net => {
-            // Stats bar elements
-            const wrap = document.getElementById(`stat-${net}-wrap`);
+            // Node Status panel network column elements
+            const wrap = document.getElementById(`net-${net}-wrap`);
             const val = document.getElementById(`stat-${net}`);
 
             // Peer header count elements
             const countEl = document.getElementById(`count-${net}`);
             const sepEl = document.getElementById(`sep-${net}`);
 
-            if (wrap && val) {
+            if (val) {
                 if (enabled.includes(net)) {
-                    wrap.style.display = '';
+                    if (wrap) wrap.classList.remove('hidden');
                     const netData = networks[net] || {in: 0, out: 0};
                     val.textContent = `(${netData.in}/${netData.out})`;
 
@@ -1109,7 +1109,7 @@ async function fetchStats() {
                         sepEl.style.display = '';
                     }
                 } else {
-                    wrap.style.display = 'none';
+                    if (wrap) wrap.classList.add('hidden');
                     if (countEl) countEl.style.display = 'none';
                     if (sepEl) sepEl.style.display = 'none';
                 }
@@ -1680,31 +1680,28 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INFO PANEL
+// NODE STATUS PANEL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-let infoUpdateInterval = 60000; // 60 seconds default
 let infoCurrency = 'USD';
 let infoTimer = null;
-let infoPanelCollapsed = false;
 let infoVisibility = {
-    btc: true,
-    block: true,
+    networks: true,
     chain: true,
-    scores: true,
-    system: true
+    system: true,
+    btc: true
 };
 
-// Initialize info panel on DOM load
+// Initialize node status panel on DOM load
 document.addEventListener('DOMContentLoaded', () => {
-    loadInfoPanelPreferences();
-    setupInfoPanelControls();
+    loadNodeStatusPreferences();
+    setupNodeStatusControls();
     fetchInfoPanel();
     startInfoPanelTimer();
 });
 
-// Load info panel preferences from localStorage
-function loadInfoPanelPreferences() {
+// Load node status panel preferences from localStorage
+function loadNodeStatusPreferences() {
     try {
         // Currency
         const savedCurrency = localStorage.getItem('mbcore_info_currency');
@@ -1714,39 +1711,21 @@ function loadInfoPanelPreferences() {
             if (select) select.value = infoCurrency;
         }
 
-        // Update interval
-        const savedInterval = localStorage.getItem('mbcore_info_interval');
-        if (savedInterval) {
-            infoUpdateInterval = parseInt(savedInterval, 10) * 1000;
-            const select = document.getElementById('info-update-select');
-            if (select) select.value = (infoUpdateInterval / 1000).toString();
-        }
-
         // Visibility settings
-        const savedVisibility = localStorage.getItem('mbcore_info_visibility');
+        const savedVisibility = localStorage.getItem('mbcore_card_visibility');
         if (savedVisibility) {
             infoVisibility = JSON.parse(savedVisibility);
         }
-        applyInfoVisibility();
-
-        // Collapsed state
-        const savedCollapsed = localStorage.getItem('mbcore_info_collapsed');
-        if (savedCollapsed === 'true') {
-            infoPanelCollapsed = true;
-            const panel = document.getElementById('info-panel');
-            if (panel) panel.classList.add('collapsed');
-            const checkbox = document.getElementById('info-panel-collapse');
-            if (checkbox) checkbox.checked = true;
-        }
+        applyCardVisibility();
     } catch (e) {
-        console.warn('Could not load info panel preferences:', e);
+        console.warn('Could not load node status preferences:', e);
     }
 }
 
-// Setup info panel controls
-function setupInfoPanelControls() {
-    const configBtn = document.getElementById('info-config-btn');
-    const dropdown = document.getElementById('info-config-dropdown');
+// Setup node status panel controls
+function setupNodeStatusControls() {
+    const configBtn = document.getElementById('node-config-btn');
+    const dropdown = document.getElementById('node-config-dropdown');
 
     // Toggle dropdown
     if (configBtn && dropdown) {
@@ -1775,25 +1754,12 @@ function setupInfoPanelControls() {
         });
     }
 
-    // Update interval select
-    const updateSelect = document.getElementById('info-update-select');
-    if (updateSelect) {
-        updateSelect.addEventListener('change', () => {
-            infoUpdateInterval = parseInt(updateSelect.value, 10) * 1000;
-            localStorage.setItem('mbcore_info_interval', updateSelect.value);
-            // Restart timer with new interval
-            if (infoTimer) clearInterval(infoTimer);
-            startInfoPanelTimer();
-        });
-    }
-
-    // Visibility checkboxes
+    // Visibility checkboxes for cards
     const visibilityMap = {
-        'info-show-btc': 'btc',
-        'info-show-block': 'block',
+        'info-show-networks': 'networks',
         'info-show-chain': 'chain',
-        'info-show-scores': 'scores',
-        'info-show-system': 'system'
+        'info-show-system': 'system',
+        'info-show-btc': 'btc'
     };
 
     Object.entries(visibilityMap).forEach(([id, key]) => {
@@ -1802,44 +1768,23 @@ function setupInfoPanelControls() {
             checkbox.checked = infoVisibility[key];
             checkbox.addEventListener('change', () => {
                 infoVisibility[key] = checkbox.checked;
-                localStorage.setItem('mbcore_info_visibility', JSON.stringify(infoVisibility));
-                applyInfoVisibility();
+                localStorage.setItem('mbcore_card_visibility', JSON.stringify(infoVisibility));
+                applyCardVisibility();
             });
         }
     });
-
-    // Collapse checkbox
-    const collapseCheckbox = document.getElementById('info-panel-collapse');
-    if (collapseCheckbox) {
-        collapseCheckbox.addEventListener('change', () => {
-            infoPanelCollapsed = collapseCheckbox.checked;
-            localStorage.setItem('mbcore_info_collapsed', infoPanelCollapsed.toString());
-            const panel = document.getElementById('info-panel');
-            if (panel) {
-                if (infoPanelCollapsed) {
-                    panel.classList.add('collapsed');
-                } else {
-                    panel.classList.remove('collapsed');
-                }
-            }
-        });
-    }
 }
 
-// Apply visibility settings to info items
-function applyInfoVisibility() {
-    const items = {
-        'btc': 'info-btc-wrap',
-        'block': 'info-block-wrap',
-        'chain': 'info-chain-wrap',
-        'scores': 'info-scores-wrap',
-        'system': 'info-system-wrap'
+// Apply visibility settings to cards
+function applyCardVisibility() {
+    const cards = {
+        'networks': 'card-networks',
+        'chain': 'card-node',
+        'system': 'card-system',
+        'btc': 'card-btc'
     };
 
-    // Get all separators
-    const seps = document.querySelectorAll('.info-panel-content .info-sep');
-
-    Object.entries(items).forEach(([key, id]) => {
+    Object.entries(cards).forEach(([key, id]) => {
         const el = document.getElementById(id);
         if (el) {
             if (infoVisibility[key]) {
@@ -1849,48 +1794,14 @@ function applyInfoVisibility() {
             }
         }
     });
-
-    // Update separators - hide them between hidden items
-    updateInfoSeparators();
 }
 
-// Update separator visibility
-function updateInfoSeparators() {
-    const content = document.getElementById('info-panel-content');
-    if (!content) return;
-
-    const items = content.querySelectorAll('.info-item');
-    const seps = content.querySelectorAll('.info-sep');
-
-    let lastVisibleIndex = -1;
-    items.forEach((item, index) => {
-        if (!item.classList.contains('hidden')) {
-            lastVisibleIndex = index;
-        }
-    });
-
-    // Show separator after each visible item except the last one
-    let visibleCount = 0;
-    items.forEach((item, index) => {
-        if (!item.classList.contains('hidden')) {
-            visibleCount++;
-        }
-        // Each separator follows an item
-        if (seps[index]) {
-            if (item.classList.contains('hidden') || index === lastVisibleIndex) {
-                seps[index].classList.add('hidden');
-            } else {
-                seps[index].classList.remove('hidden');
-            }
-        }
-    });
-}
-
-// Start info panel update timer
+// Start info panel update timer (uses the main refresh interval)
 function startInfoPanelTimer() {
+    // Info panel updates every 60 seconds by default
     infoTimer = setInterval(() => {
         fetchInfoPanel();
-    }, infoUpdateInterval);
+    }, 60000);
 }
 
 // Fetch info panel data from API
@@ -1954,13 +1865,13 @@ function formatBlockTime(timestamp) {
     return `${month}/${day} ${hours}:${minutes}${ampm}`;
 }
 
-// Update info panel with data
+// Update node status panel with data
 function updateInfoPanel(data) {
     // BTC Price
     const priceEl = document.getElementById('info-btc-price');
     const currencyEl = document.getElementById('info-btc-currency');
     if (priceEl) {
-        priceEl.textContent = formatPrice(data.btc_price, data.btc_currency);
+        priceEl.textContent = '$' + formatPrice(data.btc_price, data.btc_currency);
     }
     if (currencyEl) {
         currencyEl.textContent = data.btc_currency || 'USD';
@@ -1973,25 +1884,30 @@ function updateInfoPanel(data) {
         blockEl.textContent = `${timeStr} (${data.last_block.height.toLocaleString()})`;
     }
 
-    // Blockchain Stats
+    // Node Info Card
     const sizeEl = document.getElementById('info-chain-size');
-    const statusEl = document.getElementById('info-chain-status');
-    if (sizeEl && data.blockchain) {
-        sizeEl.textContent = `${data.blockchain.size_gb}GB`;
+    const typeEl = document.getElementById('info-node-type');
+    const indexedEl = document.getElementById('info-node-indexed');
+    const syncEl = document.getElementById('info-sync-status');
+
+    if (data.blockchain) {
+        if (sizeEl) {
+            sizeEl.textContent = `${data.blockchain.size_gb} GB`;
+        }
+        if (typeEl) {
+            typeEl.textContent = data.blockchain.pruned ? 'Pruned' : 'Full Node';
+        }
+        if (indexedEl) {
+            indexedEl.textContent = data.blockchain.indexed ? 'Indexed' : 'Not Indexed';
+        }
+        if (syncEl) {
+            const upToDate = !data.blockchain.ibd;
+            syncEl.textContent = upToDate ? 'Up to date' : 'Syncing...';
+            syncEl.className = 'node-info-value ' + (upToDate ? 'status-ok' : 'status-syncing');
+        }
     }
-    if (statusEl && data.blockchain) {
-        const parts = [];
-        parts.push(data.blockchain.pruned ? 'Pruned' : 'Full Node');
-        if (data.blockchain.indexed) parts.push('Indexed');
 
-        const upToDate = !data.blockchain.ibd;
-        const statusClass = upToDate ? 'info-uptodate' : 'info-syncing';
-        const statusText = upToDate ? 'Up to date' : 'Syncing...';
-
-        statusEl.innerHTML = `(${parts.join(', ')}) <span class="${statusClass}">${statusText}</span>`;
-    }
-
-    // Network Scores
+    // Network Scores (IPv4 and IPv6 only)
     const ipv4El = document.getElementById('info-score-ipv4');
     const ipv6El = document.getElementById('info-score-ipv6');
     if (data.network_scores) {
