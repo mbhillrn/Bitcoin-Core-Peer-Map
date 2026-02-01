@@ -4,7 +4,7 @@ MBTC-DASH - FastAPI Web Server
 Local web dashboard for Bitcoin Core peer monitoring
 
 Features:
-- Dynamic port selection (49152-65535)
+- Fixed port 58333 (or manual selection if blocked)
 - Real-time updates via Server-Sent Events
 - Map with Leaflet.js
 - All peer columns available
@@ -13,7 +13,6 @@ Features:
 import json
 import os
 import queue
-import random
 import socket
 import sqlite3
 import subprocess
@@ -43,7 +42,7 @@ GEO_API_URL = "http://ip-api.com/json"
 GEO_API_FIELDS = "status,continent,continentCode,country,countryCode,region,regionName,city,lat,lon,isp,query"
 RECENT_WINDOW = 20     # Seconds for recent changes
 
-# Fixed port for web dashboard (fallback to random if taken)
+# Fixed port for web dashboard (manual selection if blocked)
 WEB_PORT = 58333
 
 # Paths
@@ -847,14 +846,33 @@ C_PINK = "\033[35m"
 C_CYAN = "\033[36m"
 C_WHITE = "\033[37m"
 
-def find_fallback_port() -> int:
-    """Find a random available port in high range"""
-    import random
-    for _ in range(100):
-        port = random.randint(49152, 65535)
-        if check_port_available(port):
-            return port
-    return 0
+def get_manual_port() -> int:
+    """Prompt user for a manual port number"""
+    print(f"\n{C_BOLD}Enter a port number:{C_RESET}")
+    print(f"{C_DIM}  Suggested alternatives: 58334, 58335, 8080, 8888{C_RESET}")
+    print()
+
+    while True:
+        try:
+            port_input = input(f"{C_YELLOW}Port (or 'q' to quit): {C_RESET}").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            sys.exit(0)
+
+        if port_input == 'q':
+            sys.exit(0)
+
+        try:
+            custom_port = int(port_input)
+            if 1024 <= custom_port <= 65535:
+                if check_port_available(custom_port):
+                    return custom_port
+                else:
+                    print(f"{C_RED}Port {custom_port} is also in use. Try another.{C_RESET}")
+            else:
+                print(f"{C_RED}Port must be between 1024 and 65535{C_RESET}")
+        except ValueError:
+            print(f"{C_RED}Invalid port number{C_RESET}")
 
 
 def main():
@@ -880,20 +898,18 @@ def main():
                 break
         else:
             # Still not available - ask user what to do
-            random_port = find_fallback_port()
             print(f"\n{C_RED}✗ Port {port} is still in use{C_RESET}")
             print(f"{C_YELLOW}  Another application may be using this port.{C_RESET}")
             print(f"{C_DIM}  Tip: Check with 'lsof -i :{port}' or 'ss -tlnp | grep {port}'{C_RESET}")
             print()
             print(f"{C_BOLD}Choose an option:{C_RESET}")
-            print(f"  {C_GREEN}1{C_RESET}) Use random port {C_CYAN}{random_port}{C_RESET}")
-            print(f"  {C_GREEN}2{C_RESET}) Choose your own port")
+            print(f"  {C_GREEN}1{C_RESET}) Enter a different port manually")
             print(f"  {C_GREEN}q{C_RESET}) Quit")
             print()
 
             while True:
                 try:
-                    choice = input(f"{C_YELLOW}Enter choice (1/2/q): {C_RESET}").strip().lower()
+                    choice = input(f"{C_YELLOW}Enter choice (1/q): {C_RESET}").strip().lower()
                 except (KeyboardInterrupt, EOFError):
                     print()
                     sys.exit(0)
@@ -901,34 +917,11 @@ def main():
                 if choice == 'q':
                     sys.exit(0)
                 elif choice == '1':
-                    port = random_port
+                    port = get_manual_port()
                     print(f"{C_GREEN}✓ Using port {port}{C_RESET}\n")
                     break
-                elif choice == '2':
-                    # Prompt for custom port
-                    while True:
-                        try:
-                            port_input = input(f"{C_YELLOW}Enter desired port (49152-65535): {C_RESET}").strip()
-                        except (KeyboardInterrupt, EOFError):
-                            print()
-                            sys.exit(0)
-
-                        try:
-                            custom_port = int(port_input)
-                            if 49152 <= custom_port <= 65535:
-                                if check_port_available(custom_port):
-                                    port = custom_port
-                                    print(f"{C_GREEN}✓ Using port {port}{C_RESET}\n")
-                                    break
-                                else:
-                                    print(f"{C_RED}Port {custom_port} is also in use. Try another.{C_RESET}")
-                            else:
-                                print(f"{C_RED}Port must be between 49152 and 65535{C_RESET}")
-                        except ValueError:
-                            print(f"{C_RED}Invalid port number{C_RESET}")
-                    break
                 else:
-                    print(f"{C_RED}Invalid choice. Enter 1, 2, or q{C_RESET}")
+                    print(f"{C_RED}Invalid choice. Enter 1 or q{C_RESET}")
 
     # Get local IPs and subnets
     local_ips, subnets = get_local_ips()
@@ -958,7 +951,7 @@ def main():
     print(f"  {C_BOLD}{C_BLUE}██║╚██╔╝██║██╔══██╗██║     ██║   ██║██╔══██╗██╔══╝  {C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}██║ ╚═╝ ██║██████╔╝╚██████╗╚██████╔╝██║  ██║███████╗{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}╚═╝     ╚═╝╚═════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝{C_RESET}")
-    print(f"  {C_BOLD}{C_WHITE}Dashboard{C_RESET}  {C_DIM}v2.2.2{C_RESET} {C_WHITE}(Bitcoin Core peer info/map/tools){C_RESET}")
+    print(f"  {C_BOLD}{C_WHITE}Dashboard{C_RESET}  {C_DIM}v2.2.4{C_RESET} {C_WHITE}(Bitcoin Core peer info/map/tools){C_RESET}")
     print(f"  {'─' * logo_w}")
     print(f"  {C_DIM}Created by mbhillrn{C_RESET}")
     print(f"  {C_DIM}MIT License - Free to use, modify, and distribute{C_RESET}")
@@ -976,17 +969,10 @@ def main():
     print("")
     print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
     print(f"  {C_BOLD}{C_RED}TROUBLESHOOTING:{C_RESET}")
-    print(f"  {C_DIM}If you receive an error or the page refuses to load:{C_RESET}")
+    print(f"  {C_DIM}If the page refuses to load from another computer on your network:{C_RESET}")
     print(f"  {C_DIM}  - Ensure your firewall allows port {port}/tcp{C_RESET}")
+    print(f"  {C_DIM}  - Use the {C_RESET}{C_YELLOW}Firewall Helper{C_RESET}{C_DIM} from the main menu for easy setup!{C_RESET}")
     print(f"  {C_DIM}  - Close any dashboard tabs left open from a previous session{C_RESET}")
-    print("")
-    print(f"  {C_RED}FIREWALL EXAMPLES (UBUNTU/MINT):{C_RESET}")
-    print(f"    {C_DIM}Option 1:{C_RESET}  sudo ufw allow from {subnet} to any port {port} proto tcp")
-    print(f"    {C_DIM}Option 2:{C_RESET}  sudo ufw allow {port}/tcp")
-    print("")
-    print(f"  {C_RED}TO REMOVE LATER:{C_RESET}")
-    print(f"    {C_DIM}Option 1:{C_RESET}  sudo ufw delete allow from {subnet} to any port {port} proto tcp")
-    print(f"    {C_DIM}Option 2:{C_RESET}  sudo ufw delete allow {port}/tcp")
     print("")
     print(f"{C_CYAN}{'─' * line_w}{C_RESET}")
     print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard (press twice to force)")

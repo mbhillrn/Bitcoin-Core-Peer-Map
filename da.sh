@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.2.2"
+VERSION="2.2.4"
 GITHUB_REPO="mbhillrn/MBCore-Dashboard"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
 UPDATE_AVAILABLE=0
@@ -137,6 +137,7 @@ show_menu() {
     echo ""
     echo -e "  ${T_WARN}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
     echo -e "  ${T_WARN}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
+    echo -e "  ${T_WARN}f)${RST} Firewall Helper    ${T_DIM}- Configure firewall for network access${RST}"
     echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
     if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
         echo -e "  ${T_WARN}u)${RST} Update             ${T_DIM}- Update to v${LATEST_VERSION}${RST}"
@@ -374,6 +375,149 @@ reset_database() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# FIREWALL HELPER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+get_local_network_info() {
+    # Get primary local IP and subnet
+    local ip_info
+    ip_info=$(ip -4 addr show 2>/dev/null | grep -oP 'inet \K[0-9./]+' | grep -v '^127\.' | head -1)
+
+    if [[ -n "$ip_info" ]]; then
+        LOCAL_IP="${ip_info%/*}"
+        local prefix="${ip_info#*/}"
+
+        # Calculate network address from IP and prefix
+        if [[ "$prefix" =~ ^[0-9]+$ ]] && [[ "$prefix" -ge 8 ]] && [[ "$prefix" -le 30 ]]; then
+            IFS='.' read -ra ip_parts <<< "$LOCAL_IP"
+            local mask=$(( 0xFFFFFFFF << (32 - prefix) ))
+            local net_int=$(( (ip_parts[0] << 24) | (ip_parts[1] << 16) | (ip_parts[2] << 8) | ip_parts[3] ))
+            net_int=$(( net_int & mask ))
+            LOCAL_SUBNET="$(( (net_int >> 24) & 0xFF )).$(( (net_int >> 16) & 0xFF )).$(( (net_int >> 8) & 0xFF )).$(( net_int & 0xFF ))/$prefix"
+        else
+            # Fallback: assume /24 for common home networks
+            IFS='.' read -ra ip_parts <<< "$LOCAL_IP"
+            LOCAL_SUBNET="${ip_parts[0]}.${ip_parts[1]}.${ip_parts[2]}.0/24"
+        fi
+    else
+        LOCAL_IP="127.0.0.1"
+        LOCAL_SUBNET="192.168.0.0/16"
+    fi
+}
+
+firewall_helper() {
+    clear
+    show_banner
+
+    echo ""
+    echo -e "${T_SECONDARY}${BOLD}Firewall Helper${RST}"
+    echo ""
+    echo -e "${T_DIM}This tool helps you configure your firewall to allow network access${RST}"
+    echo -e "${T_DIM}to the MBCore Dashboard from other computers on your local network.${RST}"
+    echo ""
+
+    # Get network info
+    get_local_network_info
+    local port=58333
+
+    echo -e "${T_INFO}Detected Network Info:${RST}"
+    echo -e "  Your IP:        ${T_SUCCESS}$LOCAL_IP${RST}"
+    echo -e "  Your Subnet:    ${T_SUCCESS}$LOCAL_SUBNET${RST}"
+    echo -e "  Dashboard Port: ${T_SUCCESS}$port${RST}"
+    echo ""
+
+    # Check for UFW
+    if command -v ufw &>/dev/null; then
+        local ufw_status
+        ufw_status=$(sudo ufw status 2>/dev/null)
+        local ufw_status_line
+        ufw_status_line=$(echo "$ufw_status" | head -1)
+
+        if [[ "$ufw_status_line" == *"active"* ]]; then
+            echo -e "${T_SUCCESS}✓${RST} UFW firewall detected and ${T_SUCCESS}active${RST}"
+            echo ""
+
+            # Check if port 58333 is already allowed
+            if echo "$ufw_status" | grep -qE "$port/(tcp|udp)|$port\s+ALLOW"; then
+                echo -e "${T_SUCCESS}✓${RST} Port $port is ${T_SUCCESS}already allowed${RST} in your firewall!"
+                echo ""
+                echo -e "${T_DIM}Current rules for port $port:${RST}"
+                echo "$ufw_status" | grep -E "$port" | while read -r line; do
+                    echo -e "  ${T_DIM}$line${RST}"
+                done
+                echo ""
+                echo -e "${T_INFO}You're all set! The dashboard should be accessible from your network.${RST}"
+                echo -e "  ${T_SUCCESS}http://$LOCAL_IP:$port${RST}"
+                echo ""
+                echo -e "${T_DIM}To remove the rule later, run:${RST}"
+                echo -e "  ${T_DIM}sudo ufw delete allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+                echo -e "  ${T_DIM}  - or -${RST}"
+                echo -e "  ${T_DIM}sudo ufw delete allow $port/tcp${RST}"
+            else
+                echo -e "${T_WARN}⚠${RST} Port $port is ${T_WARN}not yet allowed${RST} in your firewall"
+                echo ""
+                echo -e "${T_INFO}I can add a firewall rule to allow dashboard access.${RST}"
+                echo ""
+                echo -e "  ${T_DIM}This command will be run:${RST}"
+                echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+                echo ""
+                echo -e "${T_DIM}This allows computers on your local network ($LOCAL_SUBNET) to connect.${RST}"
+                echo ""
+                echo -e "${T_DIM}To remove later, run:${RST}"
+                echo -e "  ${T_DIM}sudo ufw delete allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+                echo ""
+
+                if prompt_yn "Add this firewall rule now?"; then
+                    echo ""
+                    if sudo ufw allow from "$LOCAL_SUBNET" to any port "$port" proto tcp; then
+                        echo ""
+                        msg_ok "Firewall rule added successfully!"
+                        echo ""
+                        echo -e "${T_INFO}You can now access the dashboard from other computers at:${RST}"
+                        echo -e "  ${T_SUCCESS}http://$LOCAL_IP:$port${RST}"
+                    else
+                        echo ""
+                        msg_err "Failed to add firewall rule"
+                    fi
+                else
+                    msg_info "Cancelled"
+                fi
+            fi
+
+        elif [[ "$ufw_status_line" == *"inactive"* ]]; then
+            echo -e "${T_WARN}⚠${RST} UFW firewall detected but ${T_WARN}inactive${RST}"
+            echo ""
+            echo -e "${T_DIM}Since UFW is not active, you likely don't need to configure it.${RST}"
+            echo -e "${T_DIM}The dashboard should be accessible from your network already.${RST}"
+            echo ""
+            echo -e "${T_INFO}If you want to enable UFW later, here's the command to allow the dashboard:${RST}"
+            echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+        else
+            echo -e "${T_WARN}⚠${RST} UFW detected but status unclear"
+            echo ""
+            echo -e "${T_DIM}Run 'sudo ufw status' to check your firewall status.${RST}"
+            echo ""
+            echo -e "${T_INFO}If you need to allow dashboard access, run:${RST}"
+            echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+        fi
+    else
+        # UFW not found
+        echo -e "${T_INFO}ℹ${RST} Common firewall (UFW) not detected"
+        echo ""
+        echo -e "${T_DIM}You may not have a firewall enabled, so the dashboard should work fine.${RST}"
+        echo ""
+        echo -e "${T_DIM}If you know you have a firewall, please open port ${T_WARN}$port/tcp${T_DIM} manually.${RST}"
+        echo ""
+        echo -e "${T_INFO}If you install UFW later, use this command:${RST}"
+        echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+    fi
+
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # VERSION CHECK AND AUTO-UPDATE
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -555,6 +699,9 @@ main() {
                 ;;
             m|M)
                 run_manual_config
+                ;;
+            f|F)
+                firewall_helper
                 ;;
             2)
                 reset_config

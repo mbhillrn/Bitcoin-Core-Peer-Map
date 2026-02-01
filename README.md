@@ -44,6 +44,58 @@ The script will:
 
 Then open your browser to the displayed URL (typically `http://localhost:58333`).
 
+## Network Access & Firewall
+
+The dashboard runs on **port 58333** by default.
+
+### Accessing from the Same Computer (Local)
+
+Simply open your browser to:
+```
+http://127.0.0.1:58333
+```
+No firewall configuration needed.
+
+### Accessing from Another Computer on Your Network
+
+To access the dashboard from a phone, tablet, or another computer on your local network:
+
+1. Use your computer's local IP address (e.g., `http://192.168.1.100:58333`)
+2. **You may need to open the firewall port** - see below
+
+### Firewall Configuration
+
+**The dashboard includes a built-in Firewall Helper!** From the main menu, select `f) Firewall Helper` to:
+- Auto-detect your IP and subnet
+- Check if UFW is active
+- Optionally add the firewall rule for you
+
+#### Manual Firewall Commands (Ubuntu/Mint/Debian with UFW)
+
+```bash
+# Option 1: Allow only your local network (recommended)
+sudo ufw allow from 192.168.1.0/24 to any port 58333 proto tcp
+
+# Option 2: Allow from anywhere on the machine
+sudo ufw allow 58333/tcp
+```
+
+Replace `192.168.1.0/24` with your actual subnet (the Firewall Helper will detect this for you).
+
+#### To Remove the Firewall Rule Later
+
+```bash
+# If you used Option 1:
+sudo ufw delete allow from 192.168.1.0/24 to any port 58333 proto tcp
+
+# If you used Option 2:
+sudo ufw delete allow 58333/tcp
+```
+
+#### No Firewall?
+
+If you don't have a firewall enabled (or UFW is inactive), the dashboard should work without any configuration.
+
 ## Dependencies
 
 All dependencies are automatically detected on startup. If anything is missing, you'll be offered the option to install it.
@@ -167,9 +219,13 @@ MBCore-Dashboard/
 
 ## Troubleshooting
 
-### Dashboard won't load in browser
-- Ensure your firewall allows the dashboard port (default: 58333)
-- Ubuntu/Mint: `sudo ufw allow 58333/tcp`
+### Dashboard won't load from another computer
+- Use the **Firewall Helper** from the main menu (`f` key) for easy setup
+- Or manually ensure your firewall allows port 58333 (see [Firewall Configuration](#firewall-configuration) above)
+
+### Dashboard won't load at all
+- Close any browser tabs from previous dashboard sessions
+- Check if port 58333 is in use: `ss -tlnp | grep 58333`
 
 ### Bitcoin Core not detected
 - Make sure `bitcoind` is running
