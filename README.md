@@ -136,16 +136,9 @@ All dependencies are automatically detected on startup. If anything is missing, 
 | `bitcoin-cli` | RPC interface to communicate with bitcoind |
 | `bitcoind` | Bitcoin Core daemon (must be running) |
 
-### Python Packages (Terminal)
+### Python Packages
 
 These are installed automatically into a local virtual environment (`./venv/`).
-
-| Package | Purpose |
-|---------|---------|
-| `rich` | Rich terminal UI library |
-| `requests` | HTTP library for API calls |
-
-### Python Packages (Web Dashboard)
 
 | Package | Purpose |
 |---------|---------|
@@ -196,7 +189,6 @@ The database can be reset from the main menu if needed.
 Additional options:
 - **d) Rerun Detection** - Re-detect Bitcoin Core settings
 - **m) Manual Settings** - Manually enter Bitcoin Core paths
-- **t) Terminal View** - Basic terminal-based peer list (limited features)
 - **u) Update** - Update to the latest version (shown when an update is available)
 
 ## Usage Tips
@@ -238,7 +230,7 @@ Click the gear icon on the right to configure:
 MBCore-Dashboard/
 ├── da.sh              # Main entry point
 ├── lib/               # Shell libraries (UI, config, prereqs)
-├── scripts/           # Detection and terminal tools
+├── scripts/           # Detection scripts
 ├── web/               # FastAPI server and frontend
 ├── data/              # Local database and config (created on first run)
 ├── venv/              # Python virtual environment (created on first run)

@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MBTC-DASH - Bitcoin Core Dashboard
-#  A terminal-based monitoring and management interface for Bitcoin Core
+#  A monitoring and management interface for Bitcoin Core
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.3.6"
+VERSION="2.3.7"
 GITHUB_REPO="mbhillrn/MBCore-Dashboard"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
 UPDATE_AVAILABLE=0
@@ -145,36 +145,12 @@ show_menu() {
     echo ""
     echo -e "  ${T_DIM}d)${RST} Rerun Detection    ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
     echo -e "  ${T_DIM}m)${RST} Manual Settings    ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
-    echo -e "  ${T_DIM}t)${RST} Terminal View      ${T_DIM}- Very limited terminal peer list${RST}"
     if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
         echo -e "  ${T_WARN}u)${RST} Update             ${T_DIM}- Update to v${LATEST_VERSION}${RST}"
     fi
     echo ""
     echo -e "  ${T_ERROR}q)${RST} Quit"
     echo ""
-}
-
-run_peer_list() {
-    if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
-        msg_err "Bitcoin Core not configured. Run detection first."
-        echo ""
-        echo -en "${T_DIM}Press Enter to continue...${RST}"
-        read -r
-        return
-    fi
-
-    # Check if venv exists and terminal packages are available
-    if ! is_terminal_available; then
-        msg_err "Python packages not installed"
-        msg_info "Please run the prerequisites check from the main menu"
-        echo ""
-        echo -en "${T_DIM}Press Enter to continue...${RST}"
-        read -r
-        return
-    fi
-
-    # Run Python peer list using venv
-    "$VENV_PYTHON" "$MBTC_DIR/scripts/peerlist.py"
 }
 
 run_web_dashboard() {
@@ -745,9 +721,6 @@ main() {
                 ;;
             m|M)
                 run_manual_config
-                ;;
-            t|T)
-                run_peer_list
                 ;;
             u|U)
                 if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
