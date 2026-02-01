@@ -15,7 +15,7 @@ source "$MBTC_DIR/lib/ui.sh"
 source "$MBTC_DIR/lib/prereqs.sh"
 source "$MBTC_DIR/lib/config.sh"
 
-VERSION="2.2.3"
+VERSION="2.2.4"
 GITHUB_REPO="mbhillrn/MBCore-Dashboard"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/da.sh"
 UPDATE_AVAILABLE=0
@@ -421,47 +421,70 @@ firewall_helper() {
     local port=58333
 
     echo -e "${T_INFO}Detected Network Info:${RST}"
-    echo -e "  Your IP:      ${T_SUCCESS}$LOCAL_IP${RST}"
-    echo -e "  Your Subnet:  ${T_SUCCESS}$LOCAL_SUBNET${RST}"
+    echo -e "  Your IP:        ${T_SUCCESS}$LOCAL_IP${RST}"
+    echo -e "  Your Subnet:    ${T_SUCCESS}$LOCAL_SUBNET${RST}"
     echo -e "  Dashboard Port: ${T_SUCCESS}$port${RST}"
     echo ""
 
     # Check for UFW
     if command -v ufw &>/dev/null; then
         local ufw_status
-        ufw_status=$(sudo ufw status 2>/dev/null | head -1)
+        ufw_status=$(sudo ufw status 2>/dev/null)
+        local ufw_status_line
+        ufw_status_line=$(echo "$ufw_status" | head -1)
 
-        if [[ "$ufw_status" == *"active"* ]]; then
+        if [[ "$ufw_status_line" == *"active"* ]]; then
             echo -e "${T_SUCCESS}✓${RST} UFW firewall detected and ${T_SUCCESS}active${RST}"
             echo ""
-            echo -e "${T_INFO}I can add a firewall rule to allow dashboard access.${RST}"
-            echo ""
-            echo -e "  ${T_DIM}This command will be run:${RST}"
-            echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
-            echo ""
-            echo -e "${T_DIM}This allows computers on your local network ($LOCAL_SUBNET) to connect.${RST}"
-            echo ""
-            echo -e "${T_DIM}To remove later, run:${RST}"
-            echo -e "  ${T_DIM}sudo ufw delete allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
-            echo ""
 
-            if prompt_yn "Add this firewall rule now?"; then
+            # Check if port 58333 is already allowed
+            if echo "$ufw_status" | grep -qE "$port/(tcp|udp)|$port\s+ALLOW"; then
+                echo -e "${T_SUCCESS}✓${RST} Port $port is ${T_SUCCESS}already allowed${RST} in your firewall!"
                 echo ""
-                if sudo ufw allow from "$LOCAL_SUBNET" to any port "$port" proto tcp; then
-                    echo ""
-                    msg_ok "Firewall rule added successfully!"
-                    echo ""
-                    echo -e "${T_INFO}You can now access the dashboard from other computers at:${RST}"
-                    echo -e "  ${T_SUCCESS}http://$LOCAL_IP:$port${RST}"
-                else
-                    echo ""
-                    msg_err "Failed to add firewall rule"
-                fi
+                echo -e "${T_DIM}Current rules for port $port:${RST}"
+                echo "$ufw_status" | grep -E "$port" | while read -r line; do
+                    echo -e "  ${T_DIM}$line${RST}"
+                done
+                echo ""
+                echo -e "${T_INFO}You're all set! The dashboard should be accessible from your network.${RST}"
+                echo -e "  ${T_SUCCESS}http://$LOCAL_IP:$port${RST}"
+                echo ""
+                echo -e "${T_DIM}To remove the rule later, run:${RST}"
+                echo -e "  ${T_DIM}sudo ufw delete allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+                echo -e "  ${T_DIM}  - or -${RST}"
+                echo -e "  ${T_DIM}sudo ufw delete allow $port/tcp${RST}"
             else
-                msg_info "Cancelled"
+                echo -e "${T_WARN}⚠${RST} Port $port is ${T_WARN}not yet allowed${RST} in your firewall"
+                echo ""
+                echo -e "${T_INFO}I can add a firewall rule to allow dashboard access.${RST}"
+                echo ""
+                echo -e "  ${T_DIM}This command will be run:${RST}"
+                echo -e "  ${T_WARN}sudo ufw allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+                echo ""
+                echo -e "${T_DIM}This allows computers on your local network ($LOCAL_SUBNET) to connect.${RST}"
+                echo ""
+                echo -e "${T_DIM}To remove later, run:${RST}"
+                echo -e "  ${T_DIM}sudo ufw delete allow from $LOCAL_SUBNET to any port $port proto tcp${RST}"
+                echo ""
+
+                if prompt_yn "Add this firewall rule now?"; then
+                    echo ""
+                    if sudo ufw allow from "$LOCAL_SUBNET" to any port "$port" proto tcp; then
+                        echo ""
+                        msg_ok "Firewall rule added successfully!"
+                        echo ""
+                        echo -e "${T_INFO}You can now access the dashboard from other computers at:${RST}"
+                        echo -e "  ${T_SUCCESS}http://$LOCAL_IP:$port${RST}"
+                    else
+                        echo ""
+                        msg_err "Failed to add firewall rule"
+                    fi
+                else
+                    msg_info "Cancelled"
+                fi
             fi
 
-        elif [[ "$ufw_status" == *"inactive"* ]]; then
+        elif [[ "$ufw_status_line" == *"inactive"* ]]; then
             echo -e "${T_WARN}⚠${RST} UFW firewall detected but ${T_WARN}inactive${RST}"
             echo ""
             echo -e "${T_DIM}Since UFW is not active, you likely don't need to configure it.${RST}"
