@@ -584,7 +584,7 @@ Bitcoin-Core-Peer-Map/
 - Try the manual settings option from the main menu
 
 ### Geo-location showing "Unknown"
-- The API may be rate limited; wait a few minutes and refresh
+- The API is throttled to one every 1.5 seconds, which is reasonably fast. "Stalking..." means that it is still finding the location of that peer.
 - Check your internet connection
 
 ## License
