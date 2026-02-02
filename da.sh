@@ -630,7 +630,7 @@ main() {
     # Check if config exists
     if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
         echo ""
-        msg_info "No configuration found. Running Bitcoin Core detection..."
+        msg_info "No MBCore configuration found. Running Bitcoin Core detection..."
         sleep 1
         run_detection
     else
