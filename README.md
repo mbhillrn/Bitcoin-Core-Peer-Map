@@ -7,10 +7,10 @@ A lightweight monitoring tool for Bitcoin Core nodes that visualizes peer connec
 - All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS)
 - Connect, disconnect, and ban peers directly from the dashboard
 - Mempool info with real-time stats
-- No accounts, no external services, runs locally
+- No accounts, no external services requiring signup, runs locally
 - Lightweight single script install
 - Real-time with SSE updates
-- Beautiful terminal aesthetic
+- Beautiful aesthetic
 
 **Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
 
