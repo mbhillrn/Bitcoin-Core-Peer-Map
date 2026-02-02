@@ -1,6 +1,6 @@
-# MBCore Dashboard
+# MBCore Dashboard - Live Bitcoin Core Peer Map
 
-A lightweight monitoring tool for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
+A lightweight real-time monitoring dashboard for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
 
 - Interactive world map of YOUR node's actual connected peers
 - Zero config - just point at bitcoind
