@@ -99,10 +99,77 @@ create_venv() {
         return 0
     else
         msg_err "Failed to create virtual environment"
-        msg_info "You may need to install python3-venv:"
-        msg_info "  Debian/Ubuntu: sudo apt install python3-venv"
-        msg_info "  Fedora: sudo dnf install python3-virtualenv"
-        return 1
+        msg_info "This usually means python3-venv is not installed"
+
+        # Detect system and offer to install
+        local pkg_mgr
+        pkg_mgr=$(detect_pkg_manager)
+
+        local install_cmd=""
+        local pkg_name=""
+
+        case "$pkg_mgr" in
+            debian)
+                # Try to detect Python version for correct package name
+                local py_version
+                py_version=$(python3 --version 2>/dev/null | grep -oP '\d+\.\d+' | head -1)
+                if [[ -n "$py_version" ]]; then
+                    pkg_name="python${py_version}-venv"
+                else
+                    pkg_name="python3-venv"
+                fi
+                install_cmd="apt install -y $pkg_name"
+                ;;
+            fedora)
+                pkg_name="python3-virtualenv"
+                install_cmd="dnf install -y $pkg_name"
+                ;;
+            arch)
+                # Arch includes venv in the python package, but may need python-virtualenv
+                pkg_name="python-virtualenv"
+                install_cmd="pacman -S --noconfirm $pkg_name"
+                ;;
+        esac
+
+        if [[ -n "$install_cmd" ]]; then
+            echo ""
+            if prompt_yn "Install $pkg_name now?"; then
+                # Add sudo if needed
+                if ! is_root && command -v sudo &>/dev/null; then
+                    install_cmd="sudo $install_cmd"
+                elif ! is_root; then
+                    msg_err "Need root privileges to install packages"
+                    msg_info "Run: sudo $install_cmd"
+                    return 1
+                fi
+
+                msg_info "Installing $pkg_name..."
+                if eval "$install_cmd"; then
+                    msg_ok "Installed $pkg_name"
+                    # Try creating venv again
+                    msg_info "Retrying virtual environment creation..."
+                    if python3 -m venv "$VENV_DIR" 2>/dev/null; then
+                        msg_ok "Virtual environment created"
+                        return 0
+                    else
+                        msg_err "Still failed to create virtual environment"
+                        return 1
+                    fi
+                else
+                    msg_err "Failed to install $pkg_name"
+                    return 1
+                fi
+            else
+                msg_info "You can install it manually:"
+                msg_info "  sudo $install_cmd"
+                return 1
+            fi
+        else
+            msg_info "You may need to install python3-venv:"
+            msg_info "  Debian/Ubuntu: sudo apt install python3-venv"
+            msg_info "  Fedora: sudo dnf install python3-virtualenv"
+            return 1
+        fi
     fi
 }
 
@@ -352,7 +419,10 @@ run_prereq_check() {
     fi
 
     # Check Python packages using venv
-    run_python_check
+    if ! run_python_check; then
+        echo ""
+        return 1
+    fi
 
     echo ""
     return 0
