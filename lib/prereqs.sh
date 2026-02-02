@@ -147,7 +147,7 @@ check_venv_health() {
 
 # Create virtual environment
 create_venv() {
-    msg_info "Creating virtual environment in ./venv/..."
+    msg_info "Creating MBCore virtual environment in $(basename "$MBTC_BASE_DIR")/venv/..."
 
     # Try to create venv and capture any error
     local venv_error
@@ -190,7 +190,7 @@ create_venv() {
                 pkg_name="python3-venv"
             fi
 
-            if prompt_yn "Install $pkg_name now?"; then
+            if prompt_yn "Install $pkg_name for MBCore now?"; then
                 local install_cmd="apt install -y $pkg_name"
 
                 # Add sudo if needed
@@ -225,7 +225,8 @@ create_venv() {
                 fi
             else
                 echo ""
-                echo "No problem. To continue later, install it yourself:"
+                echo "Unable to continue without the required packages."
+                echo "May install manually with:"
                 echo "  sudo apt install $pkg_name"
                 echo ""
                 echo "Then run this program again."
@@ -652,7 +653,7 @@ run_python_check() {
         # Create venv if needed
         if [[ $need_venv -eq 1 ]]; then
             echo ""
-            echo -e "Creating MBCore virtual environment..."
+            echo -e "${T_WARN}${BOLD}Creating MBCore virtual environment...${RST}"
             echo -e "${T_DIM}──────────────────────────────────${RST}"
             if ! create_venv; then
                 msg_err "Cannot proceed without virtual environment"
