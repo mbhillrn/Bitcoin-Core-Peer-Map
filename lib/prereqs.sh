@@ -652,7 +652,7 @@ run_python_check() {
         # Create venv if needed
         if [[ $need_venv -eq 1 ]]; then
             echo ""
-            echo -e "Creating virtual environment..."
+            echo -e "Creating MBCore virtual environment..."
             echo -e "${T_DIM}──────────────────────────────────${RST}"
             if ! create_venv; then
                 msg_err "Cannot proceed without virtual environment"
@@ -671,7 +671,7 @@ run_python_check() {
         local terminal_failed=0
         if [[ $need_terminal -eq 1 ]]; then
             echo ""
-            echo -e "Installing core Python packages..."
+            echo -e "Installing packages for MBCore..."
             echo -e "${T_DIM}───────────────────────────────────${RST}"
             for item in "${missing_terminal[@]}"; do
                 IFS='|' read -r pkg desc <<< "$item"
@@ -692,7 +692,7 @@ run_python_check() {
         local web_failed=0
         if [[ $need_web -eq 1 ]]; then
             echo ""
-            echo -e "Installing web dashboard packages..."
+            echo -e "Installing MBCore local web packages..."
             echo -e "${T_DIM}────────────────────────────────────${RST}"
             for item in "${missing_web[@]}"; do
                 IFS='|' read -r pkg desc <<< "$item"
