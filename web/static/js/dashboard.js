@@ -1128,6 +1128,7 @@ async function fetchStats() {
             const wrap = document.getElementById(`net-${net}-wrap`);
             const inEl = document.getElementById(`stat-${net}-in`);
             const outEl = document.getElementById(`stat-${net}-out`);
+            const totalEl = document.getElementById(`stat-${net}-total`);
 
             // Peer header count elements
             const countEl = document.getElementById(`count-${net}`);
@@ -1141,8 +1142,10 @@ async function fetchStats() {
                     // Configured - show actual counts
                     wrap.classList.remove('not-configured');
                     const netData = networks[net] || {in: 0, out: 0};
+                    const total = netData.in + netData.out;
                     if (inEl) inEl.textContent = netData.in;
                     if (outEl) outEl.textContent = netData.out;
+                    if (totalEl) totalEl.textContent = `(${total})`;
 
                     // Update peer header counts
                     if (countEl) {
@@ -1158,6 +1161,7 @@ async function fetchStats() {
                     wrap.classList.add('not-configured');
                     if (inEl) inEl.textContent = '-';
                     if (outEl) outEl.textContent = '-';
+                    if (totalEl) totalEl.textContent = '(-)';
 
                     // Hide from peer header if not configured
                     if (countEl) countEl.style.display = 'none';
@@ -2216,8 +2220,13 @@ async function disconnectPeer(peerId, shouldBan) {
             });
             const disconnectData = await disconnectResponse.json();
 
-            resultDiv.className = 'disconnect-result success';
-            resultDiv.textContent = `Banned ${banData.banned_ip} and disconnected peer ${peerId}`;
+            if (disconnectData.success) {
+                resultDiv.className = 'disconnect-result success';
+                resultDiv.textContent = `Banned ${banData.banned_ip} and disconnected peer ${peerId}`;
+            } else {
+                resultDiv.className = 'disconnect-result error';
+                resultDiv.textContent = `Banned ${banData.banned_ip}, but disconnect failed: ${disconnectData.error}`;
+            }
         } else {
             // Just disconnect
             const response = await fetch(`${API_BASE}/api/peer/disconnect`, {

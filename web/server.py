@@ -1048,7 +1048,7 @@ async def api_peer_disconnect(request: Request):
         if r.returncode == 0:
             return {'success': True}
         else:
-            return {'success': False, 'error': r.stderr.strip() or 'Failed to disconnect peer'}
+            return {'success': False, 'error': r.stderr.strip() or 'Sent, no response (status unknown)'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
@@ -1107,7 +1107,7 @@ async def api_peer_ban(request: Request):
         if r.returncode == 0:
             return {'success': True, 'banned_ip': ip, 'network': network}
         else:
-            return {'success': False, 'error': r.stderr.strip() or 'Failed to ban peer'}
+            return {'success': False, 'error': r.stderr.strip() or 'Sent, no response (status unknown)'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 

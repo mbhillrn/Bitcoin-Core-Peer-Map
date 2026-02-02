@@ -378,6 +378,17 @@ body {
 .net-name.net-i2p { color: var(--net-i2p); }
 .net-name.net-cjdns { color: var(--net-cjdns); }
 
+.net-total {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+}
+
+.network-col.not-configured .net-total {
+    opacity: 0.5;
+}
+
 .net-inout-row {
     display: flex;
     flex-direction: column;
