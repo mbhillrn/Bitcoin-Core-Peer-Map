@@ -120,6 +120,13 @@ set_config() {
     echo "${key}=\"${value}\"" >> "$MBTC_CACHE_FILE"
 }
 
+# Check if a key exists in config (regardless of value)
+# Usage: if has_config "KEY"; then ...
+has_config() {
+    local key="$1"
+    [[ -f "$MBTC_CACHE_FILE" ]] && grep -q "^${key}=" "$MBTC_CACHE_FILE" 2>/dev/null
+}
+
 # Check if config exists and is valid
 config_exists() {
     [[ -f "$MBTC_CACHE_FILE" ]] && load_config &>/dev/null

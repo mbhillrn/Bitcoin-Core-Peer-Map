@@ -700,11 +700,8 @@ show_geo_db_settings() {
 }
 
 show_first_run_db_setup() {
-    # Check if database has already been configured
-    local geo_db_configured
-    geo_db_configured=$(get_config "GEO_DB_CONFIGURED" "false")
-
-    if [[ "$geo_db_configured" == "true" ]]; then
+    # Check if database has already been configured (GEO_DB_ENABLED key exists in config)
+    if has_config "GEO_DB_ENABLED"; then
         return 0
     fi
 
@@ -735,7 +732,6 @@ show_first_run_db_setup() {
         1|"")
             set_config "GEO_DB_ENABLED" "true"
             set_config "GEO_DB_AUTO_UPDATE" "true"
-            set_config "GEO_DB_CONFIGURED" "true"
             msg_ok "Database enabled with auto-updates"
             echo ""
             msg_info "Downloading Bitcoin Node GeoIP Dataset..."
@@ -748,7 +744,6 @@ show_first_run_db_setup() {
         2)
             set_config "GEO_DB_ENABLED" "true"
             set_config "GEO_DB_AUTO_UPDATE" "false"
-            set_config "GEO_DB_CONFIGURED" "true"
             msg_ok "Database enabled (self-managed)"
             echo -e "  ${T_DIM}Your database will cache peers you discover.${RST}"
             echo -e "  ${T_DIM}Turn on auto-updates via: Geo/IP Database Settings (option g)${RST}"
@@ -756,7 +751,6 @@ show_first_run_db_setup() {
         3)
             set_config "GEO_DB_ENABLED" "false"
             set_config "GEO_DB_AUTO_UPDATE" "false"
-            set_config "GEO_DB_CONFIGURED" "true"
             msg_info "Database disabled - using API only"
             echo -e "  ${T_DIM}Enable anytime via: Geo/IP Database Settings (option g)${RST}"
             ;;
