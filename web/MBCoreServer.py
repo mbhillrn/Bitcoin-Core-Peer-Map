@@ -358,7 +358,7 @@ def save_geo_to_db(ip: str, data: dict):
         return
     try:
         now = int(time.time())
-        conn = sqlite3.connect(GEO_DB_FILE, timeout=10)
+        conn = sqlite3.connect(GEO_DB_FILE, timeout=5)
         conn.execute('''
             INSERT INTO geo_cache (
                 ip, continent, continentCode, country, countryCode,
@@ -1468,11 +1468,13 @@ async def api_geodb_update():
         # Validate it's a real SQLite database with the expected table
         try:
             tmp_conn = sqlite3.connect(tmp_path)
-            remote_count = tmp_conn.execute('SELECT COUNT(*) FROM geo_cache').fetchone()[0]
+            remote_rows = tmp_conn.execute('SELECT * FROM geo_cache').fetchall()
+            col_names = [desc[0] for desc in tmp_conn.execute('SELECT * FROM geo_cache LIMIT 0').description]
             tmp_conn.close()
         except Exception:
             tmp_path.unlink(missing_ok=True)
             return {'success': False, 'message': 'Downloaded file is not a valid geo database'}
+        remote_count = len(remote_rows)
         if remote_count == 0:
             tmp_path.unlink(missing_ok=True)
             return {'success': False, 'message': 'Remote database is empty'}
@@ -1480,16 +1482,16 @@ async def api_geodb_update():
             # No local DB — just use the downloaded one
             tmp_path.rename(GEO_DB_FILE)
             return {'success': True, 'message': f'Downloaded database ({remote_count} entries)'}
-        # Merge: add new entries from remote without overwriting local data
-        conn = sqlite3.connect(GEO_DB_FILE, timeout=30)
-        conn.execute(f"ATTACH '{tmp_path}' AS remote")
-        conn.execute("INSERT OR IGNORE INTO geo_cache SELECT * FROM remote.geo_cache")
-        new_count = conn.execute("SELECT changes()").fetchone()[0]
-        conn.execute("DETACH remote")
+        # Merge: read remote rows into memory, insert into local DB
+        tmp_path.unlink(missing_ok=True)
+        placeholders = ','.join(['?'] * len(col_names))
+        conn = sqlite3.connect(GEO_DB_FILE, timeout=5)
+        before = conn.execute('SELECT COUNT(*) FROM geo_cache').fetchone()[0]
+        conn.executemany(f"INSERT OR IGNORE INTO geo_cache ({','.join(col_names)}) VALUES ({placeholders})", remote_rows)
         conn.commit()
         total = conn.execute('SELECT COUNT(*) FROM geo_cache').fetchone()[0]
         conn.close()
-        tmp_path.unlink(missing_ok=True)
+        new_count = total - before
         if new_count > 0:
             return {'success': True, 'message': f'+{new_count} new entries ({total} total)'}
         else:
