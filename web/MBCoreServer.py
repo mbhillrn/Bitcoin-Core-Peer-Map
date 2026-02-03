@@ -52,6 +52,7 @@ DEFAULT_WEB_PORT = 58333
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / 'data'
+TMP_DIR = DATA_DIR / 'tmp'
 CONFIG_FILE = DATA_DIR / 'config.conf'
 GEO_DB_FILE = DATA_DIR / 'geo.db'  # Geolocation cache database
 STATIC_DIR = SCRIPT_DIR / 'static'
@@ -256,9 +257,21 @@ config = Config()
 geo_db_enabled = False
 geo_db_auto_update = True
 
+def cleanup_tmp_dir():
+    """Remove any leftover temp files from interrupted downloads"""
+    if TMP_DIR.exists():
+        for f in TMP_DIR.iterdir():
+            try:
+                f.unlink()
+            except Exception:
+                pass
+
+
 def init_geo_database():
     """Initialize the geolocation database with full schema"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    cleanup_tmp_dir()
     conn = sqlite3.connect(GEO_DB_FILE)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS geo_cache (
@@ -1456,8 +1469,8 @@ async def api_geodb_update():
     if not geo_db_enabled:
         return {'success': False, 'message': 'Geo database is disabled'}
     try:
-        import tempfile
-        tmp_path = DATA_DIR / 'geo_download.tmp'
+        TMP_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_path = TMP_DIR / 'geo_download.db'
         # Download remote database
         resp = requests.get(GEO_DB_REPO_URL, timeout=60, stream=True)
         if resp.status_code != 200:
