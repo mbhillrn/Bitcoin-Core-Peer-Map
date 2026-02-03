@@ -2243,7 +2243,7 @@ function formatBlockchainInfo(data) {
     </div>`;
 
     // Sync Progress with progress bar and color coding
-    const syncPercent = b.verificationprogress ? (b.verificationprogress * 100) : 100;
+    const syncPercent = (b.verificationprogress != null) ? (b.verificationprogress * 100) : 100;
     const syncPct = syncPercent.toFixed(2);
     const syncColorClass = getSyncColorClass(syncPercent);
 
