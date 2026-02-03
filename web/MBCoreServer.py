@@ -43,7 +43,7 @@ GEO_API_FIELDS = "status,continent,continentCode,country,countryCode,region,regi
 RECENT_WINDOW = 20     # Seconds for recent changes
 
 # Geo database repository URL
-GEO_DB_REPO_URL = "https://raw.githubusercontent.com/mbhillrn/MBCore-GeoDatabase/main/geo.db"
+GEO_DB_REPO_URL = "https://raw.githubusercontent.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset/main/geo.db"
 
 # Default port for web dashboard (can be configured)
 DEFAULT_WEB_PORT = 58333

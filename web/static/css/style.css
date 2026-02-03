@@ -501,9 +501,9 @@ body {
 }
 
 .system-value {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
 }
 
 .system-unit {
@@ -517,28 +517,39 @@ body {
     margin: 2px 0;
 }
 
-/* Geo DB status styles */
-.geodb-status-value {
-    font-size: 18px;
+/* Geo DB section in System card */
+.geodb-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
 }
 
-.geodb-clickable {
-    color: var(--text-primary);
-}
-
-.geodb-status-dim {
+.geodb-section-label {
+    font-size: 11px;
+    font-weight: 600;
     color: var(--text-dim);
-    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.geodb-status-warn {
+.geodb-info-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    min-width: 60px;
+}
+
+.geodb-status-badge {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.geodb-status-badge.geodb-status-warn {
     color: var(--accent-yellow);
-    font-size: 13px;
 }
 
-.geodb-status-error {
+.geodb-status-badge.geodb-status-error {
     color: var(--accent-red);
-    font-size: 13px;
     cursor: help;
 }
 
@@ -563,7 +574,7 @@ body {
 }
 
 .geodb-dropdown-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 8px;
@@ -572,8 +583,8 @@ body {
 .geodb-detail-row {
     display: flex;
     justify-content: space-between;
-    font-size: 12px;
-    padding: 3px 0;
+    font-size: 11px;
+    padding: 2px 0;
     color: var(--text-secondary);
 }
 
@@ -603,7 +614,7 @@ body {
 }
 
 .geodb-dropdown-note {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--text-dim);
     line-height: 1.4;
     margin-bottom: 8px;
@@ -611,19 +622,21 @@ body {
 
 .geodb-update-btn {
     width: 100%;
-    padding: 6px 0;
+    padding: 5px 0;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    color: var(--text-primary);
+    color: var(--accent-blue);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: all 0.2s;
 }
 
 .geodb-update-btn:hover {
-    background: var(--border-color);
+    background: rgba(88, 166, 255, 0.15);
+    border-color: var(--accent-blue);
 }
 
 .geodb-update-btn:disabled {

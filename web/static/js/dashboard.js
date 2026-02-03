@@ -2077,7 +2077,7 @@ function updateInfoPanel(data) {
 
     // Geo DB Status (inside System card)
     const geodbStatusEl = document.getElementById('info-geodb-status');
-    const geodbStatusRow = document.getElementById('geodb-status-row');
+    const geodbInfoBtn = document.getElementById('geodb-info-btn');
     const geodbDropdownRows = document.getElementById('geodb-dropdown-rows');
     const geodbUpdateBtn = document.getElementById('geodb-update-btn');
     const g = data.geo_db_stats;
@@ -2085,31 +2085,31 @@ function updateInfoPanel(data) {
         // Store latest stats for dropdown
         window._geodbStats = g;
         if (g.status === 'ok' && g.entries > 0) {
-            geodbStatusEl.textContent = g.entries.toLocaleString();
-            geodbStatusEl.className = 'system-value geodb-status-value geodb-clickable';
+            geodbStatusEl.textContent = g.entries.toLocaleString() + ' entries';
+            geodbStatusEl.className = 'geodb-status-badge';
             geodbStatusEl.title = '';
-            if (geodbStatusRow) geodbStatusRow.style.cursor = 'pointer';
+            if (geodbInfoBtn) geodbInfoBtn.style.display = '';
             if (geodbUpdateBtn) geodbUpdateBtn.style.display = '';
         } else if (g.status === 'ok' && g.entries === 0) {
-            geodbStatusEl.textContent = '0';
-            geodbStatusEl.className = 'system-value geodb-status-value geodb-clickable';
-            if (geodbStatusRow) geodbStatusRow.style.cursor = 'pointer';
+            geodbStatusEl.textContent = '0 entries';
+            geodbStatusEl.className = 'geodb-status-badge';
+            if (geodbInfoBtn) geodbInfoBtn.style.display = '';
             if (geodbUpdateBtn) geodbUpdateBtn.style.display = '';
         } else if (g.status === 'disabled') {
             geodbStatusEl.textContent = 'Disabled';
-            geodbStatusEl.className = 'system-value geodb-status-value geodb-status-dim';
-            if (geodbStatusRow) geodbStatusRow.style.cursor = 'default';
+            geodbStatusEl.className = 'geodb-status-badge';
+            if (geodbInfoBtn) geodbInfoBtn.style.display = 'none';
             if (geodbUpdateBtn) geodbUpdateBtn.style.display = 'none';
         } else if (g.status === 'not_found') {
             geodbStatusEl.textContent = 'Not Found';
-            geodbStatusEl.className = 'system-value geodb-status-value geodb-status-warn';
-            if (geodbStatusRow) geodbStatusRow.style.cursor = 'pointer';
+            geodbStatusEl.className = 'geodb-status-badge geodb-status-warn';
+            if (geodbInfoBtn) geodbInfoBtn.style.display = '';
             if (geodbUpdateBtn) geodbUpdateBtn.style.display = '';
         } else if (g.status === 'error') {
             geodbStatusEl.textContent = 'Error';
-            geodbStatusEl.className = 'system-value geodb-status-value geodb-status-error';
+            geodbStatusEl.className = 'geodb-status-badge geodb-status-error';
             geodbStatusEl.title = g.error || 'Unknown error';
-            if (geodbStatusRow) geodbStatusRow.style.cursor = 'pointer';
+            if (geodbInfoBtn) geodbInfoBtn.style.display = '';
             if (geodbUpdateBtn) geodbUpdateBtn.style.display = 'none';
         }
         // Build dropdown detail rows
@@ -2970,18 +2970,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Geo DB dropdown toggle
-    const geodbStatusRow = document.getElementById('geodb-status-row');
+    const geodbInfoBtn = document.getElementById('geodb-info-btn');
     const geodbDropdown = document.getElementById('geodb-dropdown');
-    if (geodbStatusRow && geodbDropdown) {
-        geodbStatusRow.addEventListener('click', (e) => {
+    if (geodbInfoBtn && geodbDropdown) {
+        geodbInfoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const g = window._geodbStats;
-            if (g && g.status === 'disabled') return;
             geodbDropdown.classList.toggle('active');
         });
         // Close on outside click
         document.addEventListener('click', (e) => {
-            if (!geodbDropdown.contains(e.target) && !geodbStatusRow.contains(e.target)) {
+            if (!geodbDropdown.contains(e.target) && !geodbInfoBtn.contains(e.target)) {
                 geodbDropdown.classList.remove('active');
             }
         });
