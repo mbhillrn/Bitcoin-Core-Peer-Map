@@ -218,6 +218,9 @@ body {
 .time-item #stat-countdown {
     color: var(--accent-yellow);
     font-weight: 600;
+    display: inline-block;
+    min-width: 2.2em;
+    text-align: right;
 }
 
 .time-sep {
@@ -1472,6 +1475,8 @@ th[data-col="direction"] {
     font-weight: 500;
     font-family: inherit;
     transition: all 0.2s;
+    min-width: 85px;
+    text-align: center;
 }
 
 .mempool-info-btn:hover {
@@ -1533,8 +1538,19 @@ th[data-col="direction"] {
     font-size: 16px;
 }
 
-.mempool-stat-value.green {
+.mempool-stat-value.green, .mempool-stat-value .green,
+.mempool-stat-sub.green {
     color: var(--accent-green);
+}
+
+.mempool-stat-value.orange, .mempool-stat-value .orange,
+.mempool-stat-sub.orange {
+    color: #f0883e;
+}
+
+.mempool-stat-value.red, .mempool-stat-value .red,
+.mempool-stat-sub.red {
+    color: var(--accent-red);
 }
 
 .mempool-stat-value.dim {

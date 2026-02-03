@@ -27,12 +27,15 @@ let autoSizedColumns = false;
 let changesColumnWidths = {};
 
 // All available columns (for reference)
+// Original columns first, then new geo columns alphabetized
 const allColumns = [
     'id', 'network', 'ip', 'port', 'direction', 'subver',
     'city', 'region', 'regionName', 'country', 'countryCode', 'continent', 'continentCode',
     'bytessent', 'bytesrecv', 'ping_ms', 'conntime', 'connection_type', 'services_abbrev',
     'lat', 'lon', 'isp',
-    'in_addrman'
+    'in_addrman',
+    // New geo columns (alphabetized, unchecked by default)
+    'asinfo', 'asname', 'currency', 'district', 'hosting', 'mobile', 'offset', 'org', 'proxy', 'timezone', 'zip'
 ];
 
 // Default visible columns in user's preferred order (id first, connection_type replaces direction)
@@ -72,7 +75,19 @@ const columnLabels = {
     'lat': 'Lat',
     'lon': 'Lon',
     'isp': 'ISP',
-    'in_addrman': 'In Addrman?'
+    'in_addrman': 'In Addrman?',
+    // New geo columns (alphabetized)
+    'asinfo': 'AS',
+    'asname': 'asname',
+    'currency': 'currency',
+    'district': 'district',
+    'hosting': 'hosting',
+    'mobile': 'mobile',
+    'offset': 'offset',
+    'org': 'org',
+    'proxy': 'proxy',
+    'timezone': 'timezone',
+    'zip': 'zip'
 };
 
 // DOM Elements
@@ -1416,21 +1431,33 @@ function renderPeers() {
             geoDisplay = {
                 city: 'Private', region: 'Private', regionName: 'Private',
                 country: 'Private', countryCode: 'Priv', continent: 'Private',
-                continentCode: 'Priv', lat: '-', lon: '-', isp: 'Private'
+                continentCode: 'Priv', lat: '-', lon: '-', isp: 'Private',
+                district: 'Private', zip: 'Private', timezone: 'Private',
+                offset: '-', currency: 'Private', org: 'Private',
+                asinfo: 'Private', asname: 'Private',
+                mobile: '-', proxy: '-', hosting: '-'
             };
         } else if (peer.location_status === 'unavailable') {
             geoClass = 'location-unavailable';
             geoDisplay = {
                 city: 'N/A', region: 'N/A', regionName: 'N/A',
                 country: 'N/A', countryCode: 'N/A', continent: 'N/A',
-                continentCode: 'N/A', lat: '-', lon: '-', isp: 'N/A'
+                continentCode: 'N/A', lat: '-', lon: '-', isp: 'N/A',
+                district: 'N/A', zip: 'N/A', timezone: 'N/A',
+                offset: '-', currency: 'N/A', org: 'N/A',
+                asinfo: 'N/A', asname: 'N/A',
+                mobile: '-', proxy: '-', hosting: '-'
             };
         } else if (peer.location_status === 'pending') {
             geoClass = 'location-pending';
             geoDisplay = {
                 city: 'Stalking...', region: 'Stalking...', regionName: 'Stalking...',
                 country: 'Stalking...', countryCode: '...', continent: 'Stalking...',
-                continentCode: '...', lat: '-', lon: '-', isp: 'Stalking...'
+                continentCode: '...', lat: '-', lon: '-', isp: 'Stalking...',
+                district: '...', zip: '...', timezone: '...',
+                offset: '-', currency: '...', org: '...',
+                asinfo: '...', asname: '...',
+                mobile: '-', proxy: '-', hosting: '-'
             };
         } else {
             // Normal display - use actual values
@@ -1444,7 +1471,18 @@ function renderPeers() {
                 continentCode: peer.continentCode || '-',
                 lat: peer.lat ? peer.lat.toFixed(2) : '-',
                 lon: peer.lon ? peer.lon.toFixed(2) : '-',
-                isp: peer.isp || '-'
+                isp: peer.isp || '-',
+                district: peer.district || '-',
+                zip: peer.zip || '-',
+                timezone: peer.timezone || '-',
+                offset: peer.offset != null ? peer.offset : '-',
+                currency: peer.currency || '-',
+                org: peer.org || '-',
+                asinfo: peer.as || '-',
+                asname: peer.asname || '-',
+                mobile: peer.mobile ? 'Yes' : 'No',
+                proxy: peer.proxy ? 'Yes' : 'No',
+                hosting: peer.hosting ? 'Yes' : 'No'
             };
         }
 
@@ -1497,7 +1535,19 @@ function renderPeers() {
             'lat': { class: `${geoClass} ${netTextClass}`, title: `Latitude: ${geoDisplay.lat}`, content: geoDisplay.lat },
             'lon': { class: `${geoClass} ${netTextClass}`, title: `Longitude: ${geoDisplay.lon}`, content: geoDisplay.lon },
             'isp': { class: `${geoClass} ${netTextClass}`, title: `ISP: ${geoDisplay.isp}`, content: geoDisplay.isp },
-            'in_addrman': { class: addrmanClass, title: `In Address Manager: ${inAddrman}`, content: inAddrman }
+            'in_addrman': { class: addrmanClass, title: `In Address Manager: ${inAddrman}`, content: inAddrman },
+            // New geo columns
+            'asinfo': { class: `${geoClass} ${netTextClass}`, title: `AS: ${geoDisplay.asinfo}`, content: geoDisplay.asinfo },
+            'asname': { class: `${geoClass} ${netTextClass}`, title: `AS Name: ${geoDisplay.asname}`, content: geoDisplay.asname },
+            'currency': { class: `${geoClass} ${netTextClass}`, title: `Currency: ${geoDisplay.currency}`, content: geoDisplay.currency },
+            'district': { class: `${geoClass} ${netTextClass}`, title: `District: ${geoDisplay.district}`, content: geoDisplay.district },
+            'hosting': { class: `${geoClass} ${netTextClass}`, title: `Hosting: ${geoDisplay.hosting}`, content: geoDisplay.hosting },
+            'mobile': { class: `${geoClass} ${netTextClass}`, title: `Mobile: ${geoDisplay.mobile}`, content: geoDisplay.mobile },
+            'offset': { class: `${geoClass} ${netTextClass}`, title: `UTC Offset: ${geoDisplay.offset}`, content: geoDisplay.offset },
+            'org': { class: `${geoClass} ${netTextClass}`, title: `Organization: ${geoDisplay.org}`, content: geoDisplay.org },
+            'proxy': { class: `${geoClass} ${netTextClass}`, title: `Proxy: ${geoDisplay.proxy}`, content: geoDisplay.proxy },
+            'timezone': { class: `${geoClass} ${netTextClass}`, title: `Timezone: ${geoDisplay.timezone}`, content: geoDisplay.timezone },
+            'zip': { class: `${geoClass} ${netTextClass}`, title: `ZIP/Postal: ${geoDisplay.zip}`, content: geoDisplay.zip }
         };
 
         // Build cells in column order
@@ -2156,6 +2206,194 @@ function formatMempoolInfo(data, btcPrice) {
     return html;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// BLOCKCHAIN INFO POPUP
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Format difficulty as human-readable (e.g. 141.7 T)
+function formatDifficulty(diff) {
+    if (!diff) return 'N/A';
+    const units = ['', ' K', ' M', ' G', ' T', ' P', ' E'];
+    let unitIndex = 0;
+    let val = diff;
+    while (val >= 1000 && unitIndex < units.length - 1) {
+        val /= 1000;
+        unitIndex++;
+    }
+    return val.toFixed(1) + units[unitIndex];
+}
+
+// Get sync progress color class based on percentage
+function getSyncColorClass(pct) {
+    if (pct >= 99.99) return 'green';
+    if (pct >= 75) return 'highlight';   // yellow
+    if (pct >= 50) return 'orange';
+    return 'red';
+}
+
+// Format blockchain info for display
+function formatBlockchainInfo(data) {
+    const b = data;
+    let html = '<div class="mempool-stats">';
+
+    // Chain name
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="The blockchain network this node is connected to">Chain</span>
+        <span class="mempool-stat-value highlight">${b.chain}</span>
+    </div>`;
+
+    // Sync Progress with progress bar and color coding
+    const syncPercent = b.verificationprogress ? (b.verificationprogress * 100) : 100;
+    const syncPct = syncPercent.toFixed(2);
+    const syncColorClass = getSyncColorClass(syncPercent);
+
+    // Calculate progress bar (20 chars total)
+    const filledChars = Math.round((syncPercent / 100) * 20);
+    const emptyChars = 20 - filledChars;
+    const progressBar = '\u2588'.repeat(filledChars) + '\u2591'.repeat(emptyChars);
+
+    // Headers count (total blocks on network)
+    const headersCount = b.headers || b.blocks;
+
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="How much of the blockchain has been verified locally">Sync Progress</span>
+        <div>
+            <span class="mempool-stat-value"><span class="${syncColorClass}">${b.blocks.toLocaleString()}</span> / <span class="green">${headersCount.toLocaleString()}</span></span>
+            <div class="mempool-stat-sub ${syncColorClass}" style="font-family: monospace;">[${progressBar}] ${syncPct}%</div>
+        </div>
+    </div>`;
+
+    // Block Height
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="The height of the most recent block in the local chain">Block Height</span>
+        <span class="mempool-stat-value green">${b.blocks.toLocaleString()}</span>
+    </div>`;
+
+    // Best Block Hash - show trailing end (leading zeros aren't useful)
+    const hashShort = b.bestblockhash ? ('...' + b.bestblockhash.slice(-12)) : 'N/A';
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="The hash of the tip of the best valid chain">Best Block Hash</span>
+        <span class="mempool-stat-value" title="${b.bestblockhash}" style="cursor: help;">${hashShort}</span>
+    </div>`;
+
+    // Difficulty - human readable with hover for full number
+    const diffHuman = formatDifficulty(b.difficulty);
+    const diffFull = b.difficulty ? b.difficulty.toLocaleString(undefined, {maximumFractionDigits: 0}) : 'N/A';
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="Current mining difficulty target">Difficulty</span>
+        <span class="mempool-stat-value" title="${diffFull}" style="cursor: help;">${diffHuman}</span>
+    </div>`;
+
+    // Median Time
+    if (b.mediantime) {
+        const medianDate = new Date(b.mediantime * 1000);
+        const medianStr = medianDate.toLocaleString();
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label" title="Median timestamp of the last 11 blocks - used for time-based consensus rules">Median Time</span>
+            <span class="mempool-stat-value">${medianStr}</span>
+        </div>`;
+    }
+
+    // Chain Work - show trailing end (leading zeros aren't useful)
+    if (b.chainwork) {
+        const cwShort = '...' + b.chainwork.slice(-16);
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label" title="Total amount of proof-of-work in active chain (hex)">Chain Work</span>
+            <span class="mempool-stat-value" title="${b.chainwork}" style="cursor: help; font-size: 0.85em;">${cwShort}</span>
+        </div>`;
+    }
+
+    // IBD Status
+    const ibdText = b.initialblockdownload ? 'Yes' : 'No';
+    const ibdClass = b.initialblockdownload ? 'highlight' : 'green';
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="Whether this node is still syncing the initial blockchain">Initial Block Download</span>
+        <span class="mempool-stat-value ${ibdClass}">${ibdText}</span>
+    </div>`;
+
+    // Size on Disk
+    if (b.size_on_disk) {
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label" title="Estimated size of the block data on disk">Size on Disk</span>
+            <span class="mempool-stat-value">${formatBytes(b.size_on_disk)}</span>
+        </div>`;
+    }
+
+    // Pruning Status
+    const prunedText = b.pruned ? 'Yes' : 'No';
+    const prunedClass = b.pruned ? '' : 'green';
+    let prunedDisplay = prunedText;
+    if (b.pruned && b.pruneheight) {
+        prunedDisplay = `Yes (keeping blocks after ${b.pruneheight.toLocaleString()})`;
+    }
+    html += `<div class="mempool-stat-row">
+        <span class="mempool-stat-label" title="Whether old block data has been deleted to save disk space">Pruning Enabled</span>
+        <span class="mempool-stat-value ${prunedClass}">${prunedDisplay}</span>
+    </div>`;
+
+    // Prune Target (if pruned)
+    if (b.pruned && b.prune_target_size) {
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label" title="Target size to reduce block storage to when pruning">Prune Target</span>
+            <span class="mempool-stat-value">~${formatBytes(b.prune_target_size)}</span>
+        </div>`;
+    }
+
+    // Automatic Pruning
+    if (b.automatic_pruning !== undefined) {
+        const autoPruneText = b.automatic_pruning ? 'Enabled' : 'Disabled';
+        html += `<div class="mempool-stat-row">
+            <span class="mempool-stat-label" title="Whether automatic pruning is enabled">Automatic Pruning</span>
+            <span class="mempool-stat-value">${autoPruneText}</span>
+        </div>`;
+    }
+
+    // Softforks section (if present)
+    if (b.softforks && Object.keys(b.softforks).length > 0) {
+        html += `<div class="mempool-stat-row" style="margin-top: 12px; border-top: 1px solid #333; padding-top: 12px;">
+            <span class="mempool-stat-label" style="font-weight: bold;">Softforks</span>
+            <span class="mempool-stat-value"></span>
+        </div>`;
+
+        for (const [name, info] of Object.entries(b.softforks)) {
+            const status = info.active ? 'Active' : (info.type === 'bip9' && info.bip9 ? info.bip9.status : 'Inactive');
+            const statusClass = info.active ? 'green' : '';
+            html += `<div class="mempool-stat-row">
+                <span class="mempool-stat-label" title="Fork type: ${info.type}">${name}</span>
+                <span class="mempool-stat-value ${statusClass}">${status}${info.height ? ` (block ${info.height.toLocaleString()})` : ''}</span>
+            </div>`;
+        }
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Fetch and display blockchain info
+async function fetchBlockchainInfo() {
+    const modalBody = document.getElementById('blockchain-modal-body');
+
+    modalBody.innerHTML = '<div class="mempool-loading">Loading blockchain info...</div>';
+
+    try {
+        const response = await fetch(`${API_BASE}/api/blockchain`);
+        const data = await response.json();
+
+        if (data.error) {
+            modalBody.innerHTML = `<div class="mempool-error">Error: ${data.error}</div>`;
+            return;
+        }
+
+        if (data.blockchain) {
+            modalBody.innerHTML = formatBlockchainInfo(data.blockchain);
+        } else {
+            modalBody.innerHTML = '<div class="mempool-error">No blockchain data available</div>';
+        }
+    } catch (error) {
+        modalBody.innerHTML = `<div class="mempool-error">Error: ${error.message}</div>`;
+    }
+}
+
 // Fetch and display mempool info
 async function fetchMempoolInfo() {
     const modalBody = document.getElementById('mempool-modal-body');
@@ -2481,6 +2719,29 @@ async function connectPeer(address) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Blockchain Info Button
+    const blockchainBtn = document.getElementById('blockchain-info-btn');
+    const blockchainModal = document.getElementById('blockchain-modal');
+    const blockchainModalClose = document.getElementById('blockchain-modal-close');
+
+    if (blockchainBtn && blockchainModal) {
+        blockchainBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            blockchainModal.classList.add('active');
+            fetchBlockchainInfo();
+        });
+
+        blockchainModalClose.addEventListener('click', () => {
+            blockchainModal.classList.remove('active');
+        });
+
+        blockchainModal.addEventListener('click', (e) => {
+            if (e.target === blockchainModal) {
+                blockchainModal.classList.remove('active');
+            }
+        });
+    }
+
     // Mempool Info Button
     const mempoolBtn = document.getElementById('mempool-info-btn');
     const mempoolModal = document.getElementById('mempool-modal');

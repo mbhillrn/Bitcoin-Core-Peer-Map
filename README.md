@@ -75,7 +75,8 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 - **Network Stats** - See connection counts by network type (IPv4, IPv6, Tor, I2P, CJDNS)
 - **Connection History** - Track recently connected and disconnected peers
 - **Web Dashboard** - Clean, responsive interface accessible from any device on your network
-- **Smart Caching** - Geo-location data is cached in a local SQLite database to minimize API calls
+- **Smart Caching** - Geo-location data is cached in a persistent SQLite database to minimize API calls
+- **Blockchain Info** - View detailed blockchain status including sync progress, difficulty, softforks, and pruning status
 - **Configurable Refresh Rate** - Set your preferred update frequency in seconds (default: 10s)
 - **Interactive Peer Selection** - Click any peer row to highlight it on the map
 - **Version Display** - Shows current version in the header
@@ -364,13 +365,6 @@ All dependencies are automatically detected on startup. If anything is missing, 
 | `vmstat` | System statistics for CPU monitoring |
 | `awk` | Text processing for system stats |
 
-### System Tools (Optional)
-
-| Tool | Purpose |
-|------|---------|
-| `ss` | Socket statistics for network info |
-| `bc` | Calculator for math operations |
-
 ### Bitcoin Core
 
 | Tool | Purpose |
@@ -413,23 +407,22 @@ All detected settings are saved locally for fast startup on subsequent runs.
 
 ### Database
 
-Peer data is cached in a local SQLite database at `./data/peers.db`:
-
-- Geographic location (city, region, country, continent, coordinates)
-- ISP and AS information
-- First seen / last seen timestamps
-- Connection count history
-
-The database can be reset from the main menu if needed.
+**Geo/IP Database** (`./data/geo.db`):
+- Caches full API responses from ip-api.com to minimize API calls
+- Stores: geographic location, ISP, AS info, timezone, currency, and more
+- Shared across sessions - data persists even after restart
+- Optionally downloads from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset) for instant lookups
+- Check integrity, reset, and configure from the main menu (**g) Geo/IP Database**)
+- First-run prompts you to enable/disable database caching
 
 ## Main Menu Options
 
 1. **Enter MBCore Web Dashboard** - Launch the web-based dashboard with interactive map
 2. **Reset Config** - Clear saved Bitcoin Core configuration
-3. **Reset Database** - Clear the peer geo-location cache
-4. **Firewall Helper** - Configure firewall for network access
+3. **Firewall Helper** - Configure firewall for network access
 
 Additional options:
+- **g) Geo/IP Database** - Manage the geo-location cache database (integrity check, reset, advanced options)
 - **d) Rerun Detection** - Re-detect Bitcoin Core settings
 - **m) Manual Settings** - Manually enter Bitcoin Core paths
 - **p) Port Settings** - Change the dashboard port (default: 58333). Useful if port 58333 is in use or you prefer a different port. This setting persists across reboots and updates.
@@ -468,9 +461,26 @@ Click the gear icon on the right to configure:
 - **Show/Hide** - Toggle visibility of individual metrics
 - **Collapse Panel** - Minimize the panel to just the gear icon
 
+### Blockchain Info
+
+Click the **Blockchain** button in the Node Status panel header to view detailed blockchain information:
+
+- **Chain** - The blockchain network (main, test, signet, regtest)
+- **Sync Progress** - Visual progress bar showing verified blocks vs. total headers
+- **Block Height** - Current height of the local blockchain
+- **Best Block Hash** - Hash of the tip of the best valid chain
+- **Difficulty** - Current mining difficulty target (human-readable, e.g. "141.7 T" - hover for full number)
+- **Median Time** - Median timestamp of the last 11 blocks
+- **Chain Work** - Total proof-of-work in the active chain
+- **Initial Block Download** - Whether the node is still syncing
+- **Size on Disk** - How much disk space the blockchain uses
+- **Pruning Enabled** - Whether old blocks are deleted (shows lowest kept block)
+- **Prune Target** - Target size for pruning (if enabled)
+- **Softforks** - Status of all protocol upgrades (taproot, segwit, etc.)
+
 ### Mempool Info
 
-Click the **MemPool Info** button in the Node Status panel header to view detailed mempool statistics:
+Click the **Mempool** button in the Node Status panel header to view detailed mempool statistics:
 
 - **Pending Transactions** - Number of unconfirmed transactions
 - **Data Size** - Total size of transaction data in the mempool

@@ -41,8 +41,11 @@
             <div class="panel-header">
                 <h2>Node Status</h2>
                 <div class="panel-header-right">
+                    <button class="mempool-info-btn" id="blockchain-info-btn" title="View Blockchain Info">
+                        Blockchain
+                    </button>
                     <button class="mempool-info-btn" id="mempool-info-btn" title="View Mempool Info">
-                        MemPool Info
+                        Mempool
                     </button>
                     <span class="status-time">
                         <span class="time-item">Next: <span id="stat-countdown">10s</span></span>
@@ -349,6 +352,19 @@
                 </div>
                 <div class="modal-body" id="column-checkboxes">
                     <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Blockchain Info Modal -->
+        <div class="modal" id="blockchain-modal">
+            <div class="modal-content modal-content-wide">
+                <div class="modal-header">
+                    <h3>Blockchain Information</h3>
+                    <button class="modal-close" id="blockchain-modal-close">&times;</button>
+                </div>
+                <div class="modal-body modal-body-single" id="blockchain-modal-body">
+                    <div class="mempool-loading">Loading blockchain info...</div>
                 </div>
             </div>
         </div>

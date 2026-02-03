@@ -129,7 +129,7 @@ The correct IP for your setup will be shown in the terminal output.
 
 **Firewall Setup:**
 
-The dashboard includes a **Firewall Helper** in the main menu (option `4`) that works with UFW to automatically configure the firewall for you.
+The dashboard includes a **Firewall Helper** in the main menu (option `3`) that works with UFW to automatically configure the firewall for you.
 
 **Using a different port?** Use `p) Port Settings` from the main menu to change the dashboard port first. The Firewall Helper will automatically use your configured port.
 
@@ -189,10 +189,10 @@ The tunnel forwards your local port 58333 to the headless machine's port 58333. 
 | Item | Location/Value |
 |------|----------------|
 | Main script | `./da.sh` |
-| Web server | `web/server.py` (FastAPI + Uvicorn) |
+| Web server | `web/MBCoreServer.py` (FastAPI + Uvicorn) |
 | **Default Port** | **58333** (configurable via `p) Port Settings` in main menu) |
 | Config | `data/config.conf` (auto-generated) |
-| Peer cache DB | `data/peers.db` (SQLite) |
+| Geo/IP cache DB | `data/geo.db` (SQLite) |
 | Python venv | `./venv/` (auto-created) |
 
 ### Changing the Dashboard Port
