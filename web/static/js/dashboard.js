@@ -2075,10 +2075,16 @@ function updateInfoPanel(data) {
         }
     }
 
-    // Geo DB Stats
-    const geodbCard = document.getElementById('card-geodb');
+    // Geo DB Stats (inside System card)
+    const geodbDivider = document.getElementById('geodb-divider');
+    const geodbRowEntries = document.getElementById('geodb-row-entries');
+    const geodbRowSize = document.getElementById('geodb-row-size');
+    const geodbRowOldest = document.getElementById('geodb-row-oldest');
     if (data.geo_db_stats && data.geo_db_stats.entries > 0) {
-        if (geodbCard) geodbCard.style.display = '';
+        if (geodbDivider) geodbDivider.style.display = '';
+        if (geodbRowEntries) geodbRowEntries.style.display = '';
+        if (geodbRowSize) geodbRowSize.style.display = '';
+        if (geodbRowOldest) geodbRowOldest.style.display = '';
         const entriesEl = document.getElementById('info-geodb-entries');
         const sizeEl2 = document.getElementById('info-geodb-size');
         const oldestEl = document.getElementById('info-geodb-oldest');
@@ -2095,7 +2101,10 @@ function updateInfoPanel(data) {
             }
         }
     } else {
-        if (geodbCard) geodbCard.style.display = 'none';
+        if (geodbDivider) geodbDivider.style.display = 'none';
+        if (geodbRowEntries) geodbRowEntries.style.display = 'none';
+        if (geodbRowSize) geodbRowSize.style.display = 'none';
+        if (geodbRowOldest) geodbRowOldest.style.display = 'none';
     }
 }
 
