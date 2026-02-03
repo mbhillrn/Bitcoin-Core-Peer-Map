@@ -51,8 +51,15 @@ load_config() {
 }
 
 # Save current configuration to cache file
+# Preserves any extra keys (GEO_DB_*, etc.) that were added via set_config
 save_config() {
     mkdir -p "$MBTC_CONFIG_DIR"
+
+    # Collect extra keys that aren't part of the core config
+    local extra_lines=""
+    if [[ -f "$MBTC_CACHE_FILE" ]]; then
+        extra_lines=$(grep -v '^#' "$MBTC_CACHE_FILE" | grep -v '^$' | grep -v '^MBTC_' 2>/dev/null || true)
+    fi
 
     cat > "$MBTC_CACHE_FILE" << EOF
 # MBTC-DASH Configuration
@@ -69,6 +76,13 @@ MBTC_COOKIE_PATH="$MBTC_COOKIE_PATH"
 MBTC_WEB_PORT="${MBTC_WEB_PORT:-58333}"
 MBTC_CONFIGURED=1
 EOF
+
+    # Re-append extra keys
+    if [[ -n "$extra_lines" ]]; then
+        echo "" >> "$MBTC_CACHE_FILE"
+        echo "$extra_lines" >> "$MBTC_CACHE_FILE"
+    fi
+
     chmod 600 "$MBTC_CACHE_FILE"
 }
 
