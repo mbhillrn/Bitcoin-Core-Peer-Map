@@ -607,6 +607,16 @@ body {
     color: var(--accent-yellow);
 }
 
+.geodb-detail-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}
+
+.geodb-setting-off {
+    color: var(--text-dim);
+}
+
 .geodb-dropdown-divider {
     height: 1px;
     background: var(--border-color);

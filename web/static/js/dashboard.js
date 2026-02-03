@@ -2135,6 +2135,13 @@ function updateInfoPanel(data) {
             } else if (g.status === 'disabled') {
                 html += `<div class="geodb-detail-row"><span>Status</span><span>Disabled in settings</span></div>`;
             }
+            // Settings
+            html += `<div class="geodb-detail-divider"></div>`;
+            const lookupOn = g.auto_lookup ? 'On' : 'Off';
+            const updateOn = g.auto_update ? 'On' : 'Off';
+            const dimClass = 'geodb-setting-off';
+            html += `<div class="geodb-detail-row"><span>Auto-lookup</span><span class="${g.auto_lookup ? '' : dimClass}">${lookupOn}</span></div>`;
+            html += `<div class="geodb-detail-row"><span>Auto-update</span><span class="${g.auto_update ? '' : dimClass}">${updateOn}</span></div>`;
             geodbDropdownRows.innerHTML = html;
         }
     }

@@ -1199,6 +1199,8 @@ async def api_info(currency: str = "USD"):
             if stats.get('oldest_updated'):
                 oldest_age_days = int((time.time() - stats['oldest_updated']) / 86400)
             stats['oldest_age_days'] = oldest_age_days
+        stats['auto_lookup'] = geo_db_enabled
+        stats['auto_update'] = geo_db_auto_update
         result['geo_db_stats'] = stats
     except Exception:
         result['geo_db_stats'] = {'status': 'error', 'error': 'Failed to query database'}
