@@ -1481,7 +1481,9 @@ async def api_geodb_update():
             return {'success': True, 'message': f'Downloaded database ({remote_count} entries)'}
         # Merge: add new entries from remote without overwriting local data
         conn = sqlite3.connect(GEO_DB_FILE)
-        new_count = conn.execute(f"ATTACH '{tmp_path}' AS remote; INSERT OR IGNORE INTO geo_cache SELECT * FROM remote.geo_cache; SELECT changes();").fetchone()[0]
+        conn.execute(f"ATTACH '{tmp_path}' AS remote")
+        conn.execute("INSERT OR IGNORE INTO geo_cache SELECT * FROM remote.geo_cache")
+        new_count = conn.execute("SELECT changes()").fetchone()[0]
         conn.execute("DETACH remote")
         conn.commit()
         total = conn.execute('SELECT COUNT(*) FROM geo_cache').fetchone()[0]
