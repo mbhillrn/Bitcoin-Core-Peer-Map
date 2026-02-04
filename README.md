@@ -2,6 +2,8 @@
 
 A lightweight real-time monitoring dashboard for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
 
+![MBCore Dashboard](docs/images/1.Full.Front.Dash.png)
+
 - Interactive world map of YOUR node's actual connected peers
 - Zero config - just point at bitcoind
 - All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS) with color-coded network indicators
