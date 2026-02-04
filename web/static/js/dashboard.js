@@ -118,6 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPanelResize();
     setupPeerRowClick();
     initMap();
+    setupMapRegionSelector();
+    setupCurrencyDropdown();
+    setupToggleChangesPanel();
+    setupRestoreAllDefaults();
     fetchPeers();
     fetchStats();
     fetchChanges();
@@ -171,60 +175,164 @@ function setupPeerRowClick() {
     });
 }
 
-// Setup restore defaults button
+// Setup currency dropdown toggle (click on currency label in sidebar)
+function setupCurrencyDropdown() {
+    const currencyLabel = document.getElementById('info-btc-currency');
+    const currencyDropdown = document.getElementById('currency-dropdown');
+    if (!currencyLabel || !currencyDropdown) return;
+
+    currencyLabel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currencyDropdown.classList.toggle('active');
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+        if (!currencyDropdown.contains(e.target) && e.target !== currencyLabel) {
+            currencyDropdown.classList.remove('active');
+        }
+    });
+}
+
+// Setup toggle for the changes bottom panel
+function setupToggleChangesPanel() {
+    const toggleBtn = document.getElementById('toggle-changes-panel-btn');
+    const changesPanel = document.getElementById('changes-panel');
+    if (!toggleBtn || !changesPanel) return;
+
+    toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (changesPanel.style.display === 'none') {
+            changesPanel.style.display = '';
+        } else {
+            changesPanel.style.display = 'none';
+        }
+    });
+}
+
+// Setup restore ALL defaults button (header button - resets everything)
+function setupRestoreAllDefaults() {
+    const btn = document.getElementById('restore-all-defaults-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        // Reset columns
+        visibleColumns = [...defaultVisibleColumns];
+        columnOrder = [...defaultVisibleColumns];
+        networkFilter = 'all';
+
+        // Update filter button states
+        document.querySelectorAll('.network-filter-btn').forEach(b => b.classList.remove('active'));
+        const allBtn = document.querySelector('.network-filter-btn[data-filter="all"]');
+        if (allBtn) allBtn.classList.add('active');
+
+        // Clear ALL localStorage
+        try {
+            localStorage.removeItem('mbcore_visible_columns');
+            localStorage.removeItem('mbcore_column_order');
+            localStorage.removeItem('mbcore_column_widths');
+            localStorage.removeItem('mbcore_changes_column_widths');
+            localStorage.removeItem('mbcore_refresh_interval');
+            localStorage.removeItem('mbcore_price_interval');
+            localStorage.removeItem('mbcore_info_currency');
+            localStorage.removeItem('mbcore_card_visibility');
+            localStorage.removeItem('mbcore_changes_window');
+            localStorage.removeItem('mbcore_show_antarctica');
+        } catch (e) {}
+
+        // Reset refresh rate
+        refreshInterval = 10000;
+        const refreshInput = document.getElementById('refresh-rate-input');
+        if (refreshInput) refreshInput.value = 10;
+        resetCountdown();
+
+        // Reset price rate
+        priceUpdateInterval = 10000;
+        const priceInput = document.getElementById('price-rate-input');
+        if (priceInput) priceInput.value = 10;
+        startPriceTimer();
+
+        // Reset currency
+        infoCurrency = 'USD';
+        const currencySelect = document.getElementById('info-currency-select');
+        if (currencySelect) currencySelect.value = 'USD';
+        const currencyEl = document.getElementById('info-btc-currency');
+        if (currencyEl) currencyEl.textContent = 'USD';
+
+        // Reset card visibility
+        infoVisibility = { networks: true, chain: true, system: true, btc: true };
+        Object.entries({ 'info-show-networks': 'networks', 'info-show-chain': 'chain', 'info-show-system': 'system', 'info-show-btc': 'btc' }).forEach(([id, key]) => {
+            const cb = document.getElementById(id);
+            if (cb) cb.checked = true;
+        });
+        applyCardVisibility();
+
+        // Reset changes window
+        changesWindowSeconds = 20;
+        updateChangesWindowDisplay();
+
+        // Reset Antarctica toggle
+        showAntarcticaDots = true;
+        const antToggle = document.getElementById('antarctica-toggle');
+        if (antToggle) antToggle.textContent = 'Hide';
+
+        // Reset map region
+        const regionSelect = document.getElementById('map-region-select');
+        if (regionSelect) regionSelect.value = 'world';
+        if (map) {
+            map.fitBounds([[-85, -180], [85, 180]], { animate: true, maxZoom: 2 });
+        }
+
+        // Reset column widths
+        const table = document.getElementById('peer-table');
+        if (table) {
+            table.querySelectorAll('th[data-col], td[data-col]').forEach(cell => {
+                cell.style.width = '';
+                cell.style.maxWidth = '';
+            });
+        }
+        columnWidths = {};
+        hasSavedColumnWidths = false;
+        autoSizedColumns = false;
+        setInitialColumnWidths();
+
+        // Reset changes table column widths
+        const changesTable = document.getElementById('changes-table');
+        if (changesTable) {
+            changesTable.querySelectorAll('th[data-col], td[data-col]').forEach(cell => {
+                cell.style.width = '';
+                cell.style.maxWidth = '';
+            });
+        }
+        changesColumnWidths = {};
+        setInitialChangesColumnWidths();
+
+        // Re-apply
+        applyColumnVisibility();
+        reorderTableColumns();
+        renderPeers();
+        fetchInfoPanel();
+        updateMap();
+    });
+}
+
+// Setup restore column defaults button (inside column config modal - columns only)
 function setupRestoreDefaults() {
     const btn = document.getElementById('restore-defaults-btn');
     if (btn) {
         btn.addEventListener('click', () => {
-            // Reset to defaults
+            // Reset columns only
             visibleColumns = [...defaultVisibleColumns];
             columnOrder = [...defaultVisibleColumns];
-            networkFilter = 'all';
 
-            // Update filter button states
-            document.querySelectorAll('.network-filter-btn').forEach(b => b.classList.remove('active'));
-            const allBtn = document.querySelector('.network-filter-btn[data-filter="all"]');
-            if (allBtn) allBtn.classList.add('active');
-
-            // Clear localStorage
+            // Clear column localStorage
             try {
                 localStorage.removeItem('mbcore_visible_columns');
                 localStorage.removeItem('mbcore_column_order');
                 localStorage.removeItem('mbcore_column_widths');
-                localStorage.removeItem('mbcore_changes_column_widths');
-                localStorage.removeItem('mbcore_refresh_interval');
-                localStorage.removeItem('mbcore_price_interval');
-                localStorage.removeItem('mbcore_info_currency');
-                localStorage.removeItem('mbcore_card_visibility');
-                localStorage.removeItem('mbcore_changes_window');
             } catch (e) {}
 
-            // Reset refresh rate to default
-            refreshInterval = 10000;
-            const refreshInput = document.getElementById('refresh-rate-input');
-            if (refreshInput) refreshInput.value = 10;
-            resetCountdown();
-
-            // Reset price rate to default
-            priceUpdateInterval = 10000;
-            const priceInput = document.getElementById('price-rate-input');
-            if (priceInput) priceInput.value = 10;
-            startPriceTimer();
-
-            // Reset currency to USD
-            infoCurrency = 'USD';
-            const currencySelect = document.getElementById('info-currency-select');
-            if (currencySelect) currencySelect.value = 'USD';
-
-            // Reset card visibility
-            infoVisibility = { networks: true, chain: true, system: true, btc: true };
-            Object.entries({ 'info-show-networks': 'networks', 'info-show-chain': 'chain', 'info-show-system': 'system', 'info-show-btc': 'btc' }).forEach(([id, key]) => {
-                const cb = document.getElementById(id);
-                if (cb) cb.checked = true;
-            });
-            applyCardVisibility();
-
-            // Reset peer table column widths - clear inline styles and set defaults
+            // Reset peer table column widths
             const table = document.getElementById('peer-table');
             if (table) {
                 table.querySelectorAll('th[data-col], td[data-col]').forEach(cell => {
@@ -236,17 +344,6 @@ function setupRestoreDefaults() {
             hasSavedColumnWidths = false;
             autoSizedColumns = false;
             setInitialColumnWidths();
-
-            // Reset changes table column widths
-            const changesTable = document.getElementById('changes-table');
-            if (changesTable) {
-                changesTable.querySelectorAll('th[data-col], td[data-col]').forEach(cell => {
-                    cell.style.width = '';
-                    cell.style.maxWidth = '';
-                });
-            }
-            changesColumnWidths = {};
-            setInitialChangesColumnWidths();
 
             // Re-apply and re-render
             applyColumnVisibility();
@@ -595,12 +692,12 @@ function initMap() {
 
     map = L.map('map', {
         center: [20, 0],
-        zoom: 1,                   // Zoomed out to show whole world
-        minZoom: 1,
+        zoom: 2,                   // Zoomed to show whole world without repeat
+        minZoom: 2,
         maxZoom: 18,
-        worldCopyJump: true,       // Single-extent mode: wrap at edges
+        worldCopyJump: false,      // Finite world: no wrapping
         maxBounds: worldBounds,    // Confined box: restrict panning
-        maxBoundsViscosity: 0.8    // How "sticky" the bounds are (0-1)
+        maxBoundsViscosity: 0.9    // How "sticky" the bounds are (0-1)
     });
 
     // Dark tile layer (CartoDB Dark Matter)
@@ -608,7 +705,7 @@ function initMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19,
-        noWrap: false  // Allow world to wrap for continuous scrolling
+        noWrap: true  // Finite world: no tile repetition
     }).addTo(map);
 
     // Fix map size when container resizes
@@ -619,6 +716,32 @@ function initMap() {
         });
         resizeObserver.observe(mapContainer);
     }
+}
+
+// Map region presets
+const MAP_REGIONS = {
+    'world':          { bounds: [[-85, -180], [85, 180]], zoom: 2 },
+    'north-america':  { bounds: [[10, -170], [72, -50]], zoom: 3 },
+    'south-america':  { bounds: [[-60, -90], [15, -30]], zoom: 3 },
+    'europe':         { bounds: [[35, -12], [72, 45]], zoom: 4 },
+    'africa':         { bounds: [[-38, -20], [38, 55]], zoom: 3 },
+    'middle-east':    { bounds: [[12, 25], [45, 65]], zoom: 4 },
+    'asia':           { bounds: [[5, 60], [55, 150]], zoom: 3 },
+    'oceania':        { bounds: [[-50, 105], [0, 180]], zoom: 4 },
+    'antarctica':     { bounds: [[-85, -180], [-60, 180]], zoom: 3 }
+};
+
+// Setup map region selector
+function setupMapRegionSelector() {
+    const select = document.getElementById('map-region-select');
+    if (!select || !map) return;
+
+    select.addEventListener('change', () => {
+        const region = MAP_REGIONS[select.value];
+        if (region) {
+            map.fitBounds(region.bounds, { animate: true, maxZoom: region.zoom });
+        }
+    });
 }
 
 // Antarctica research station coordinates (all on land, near coast)
@@ -1248,9 +1371,13 @@ async function fetchStats() {
         const enabled = stats.enabled_networks || ['ipv4'];
         const networks = stats.networks || {};
 
-        // Connected count
+        // Connected count (node status bar + sidebar)
         document.getElementById('stat-connected').textContent = stats.connected || 0;
         pulseOnChange('stat-connected', stats.connected || 0);
+        const sidebarPeersFromStats = document.getElementById('sidebar-peers');
+        if (sidebarPeersFromStats) {
+            sidebarPeersFromStats.textContent = stats.connected || 0;
+        }
 
         // Update peer header total count (with "all" prefix)
         const countTotal = document.getElementById('count-total');
@@ -1357,6 +1484,8 @@ async function fetchStats() {
         if (stats.system_stats) {
             const cpuEl = document.getElementById('info-cpu');
             const memEl = document.getElementById('info-mem');
+            const cpuLabel = document.getElementById('sidebar-cpu-label');
+            const memLabel = document.getElementById('sidebar-mem-label');
             if (cpuEl) {
                 const cpuVal = stats.system_stats.cpu_pct;
                 cpuEl.textContent = cpuVal !== null ? cpuVal : '-';
@@ -1365,6 +1494,11 @@ async function fetchStats() {
                     if (cpuVal >= 90) cpuEl.classList.add('threshold-critical');
                     else if (cpuVal >= 75) cpuEl.classList.add('threshold-warn');
                     else pulseOnChange('info-cpu', cpuVal, 'white');
+                }
+                // CPU breakdown tooltip
+                if (cpuLabel && stats.system_stats.cpu_breakdown) {
+                    const bd = stats.system_stats.cpu_breakdown;
+                    cpuLabel.title = `CPU Breakdown:\nUser: ${bd.user}%\nSystem: ${bd.system}%\nIO Wait: ${bd.iowait}%\nSteal: ${bd.steal}%\nIdle: ${bd.idle}%`;
                 }
             }
             if (memEl) {
@@ -1375,6 +1509,12 @@ async function fetchStats() {
                     if (memVal >= 90) memEl.classList.add('threshold-critical');
                     else if (memVal >= 80) memEl.classList.add('threshold-warn');
                     else pulseOnChange('info-mem', memVal, 'white');
+                }
+                // RAM MB tooltip
+                if (memLabel && stats.system_stats.mem_used_mb != null && stats.system_stats.mem_total_mb != null) {
+                    const used = stats.system_stats.mem_used_mb;
+                    const total = stats.system_stats.mem_total_mb;
+                    memLabel.title = `RAM Usage: ${used.toLocaleString()} MB / ${total.toLocaleString()} MB`;
                 }
             }
         }
@@ -1464,7 +1604,7 @@ async function fetchChanges() {
     }
 }
 
-// Render recent changes table
+// Render recent changes table + sidebar updates widget
 function renderChanges(changes) {
     // Filter changes based on user-configured window
     const now = Date.now() / 1000;
@@ -1472,6 +1612,25 @@ function renderChanges(changes) {
         return (now - change.time) < changesWindowSeconds;
     });
 
+    // Update sidebar mini-widget
+    const sidebarList = document.getElementById('sidebar-updates-list');
+    if (sidebarList) {
+        if (filteredChanges.length === 0) {
+            sidebarList.innerHTML = '<div class="sidebar-updates-empty">No recent changes</div>';
+        } else {
+            // Show last 4 changes in sidebar
+            const sidebarItems = filteredChanges.slice(0, 4).map(change => {
+                const prefix = change.type === 'connected' ? '+' : '-';
+                const cls = change.type === 'connected' ? 'update-connected' : 'update-disconnected';
+                const ip = change.peer.ip || '-';
+                const net = change.peer.network ? ` (${change.peer.network})` : '';
+                return `<div class="sidebar-update-item ${cls}" title="${change.type}: ${ip}${net}">${prefix} ${ip}${net}</div>`;
+            }).join('');
+            sidebarList.innerHTML = sidebarItems;
+        }
+    }
+
+    // Update changes table (bottom panel)
     if (filteredChanges.length === 0) {
         changesTbody.innerHTML = `
             <tr class="loading-row">
@@ -2192,6 +2351,32 @@ function updateInfoPanel(data) {
         const timeStr = formatBlockTime(data.last_block.time);
         blockEl.textContent = `${timeStr} (${data.last_block.height.toLocaleString()})`;
         pulseOnChange('info-last-block', data.last_block.height);
+    }
+
+    // Sidebar peer count
+    const sidebarPeers = document.getElementById('sidebar-peers');
+    if (sidebarPeers && data.connected !== undefined) {
+        sidebarPeers.textContent = data.connected;
+        pulseOnChange('sidebar-peers', data.connected);
+    }
+
+    // Sidebar mempool size
+    const sidebarMempool = document.getElementById('sidebar-mempool');
+    if (sidebarMempool && data.mempool_size !== undefined) {
+        sidebarMempool.textContent = data.mempool_size.toLocaleString() + ' tx';
+        pulseOnChange('sidebar-mempool', data.mempool_size);
+    }
+
+    // Sidebar node subversion string
+    const sidebarSubver = document.getElementById('sidebar-node-subver');
+    const sidebarNodeHeader = document.getElementById('sidebar-node-header');
+    if (data.subversion) {
+        if (sidebarSubver) {
+            sidebarSubver.textContent = data.subversion;
+        }
+        if (sidebarNodeHeader) {
+            sidebarNodeHeader.title = `Node: ${data.subversion}`;
+        }
     }
 
     // Node Info Card

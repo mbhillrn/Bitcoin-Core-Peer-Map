@@ -4,213 +4,249 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MBCore Dashboard - Peer info, map, and tools for Bitcoin Core</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- HEADER BAR                                                     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <header class="header">
-            <div class="header-title">
-                <h1 class="logo-text">MBCore Dashboard <span class="version">v{{ version }}</span></h1>
-                <span class="subtitle">Peer info, map, and tools for Bitcoin Core</span>
-                <span class="credits">Created by <a href="https://github.com/mbhillrn" target="_blank" rel="noopener" class="credits-link">mbhillrn</a> | Support (btc): <span class="btc-copy" id="header-btc-copy" title="Click to copy">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
+            <div class="header-left">
+                <div class="header-logo-row">
+                    <h1 class="logo-text" title="Peer info, map, and tools for Bitcoin Core">MBCore<span class="logo-light">Dashboard</span> <span class="version">v{{ version }}</span></h1>
+                    <span class="header-author">Created by <a href="https://github.com/mbhillrn" target="_blank" rel="noopener" class="author-link">@mbhillrn</a></span>
+                </div>
+                <span class="header-btc-line">Support (btc): <span class="btc-copy" id="header-btc-copy" title="Click to copy">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
             </div>
-            <div class="header-info">
-                <span class="status-indicator" id="status-indicator"></span>
-                <span id="connection-status">Connecting...</span>
-                <div class="protocol-status" id="protocol-status">
-                    <div class="protocol-line">
-                        <span class="protocol-label">Enabled:</span>
-                        <span class="protocol-list" id="protocols-enabled">-</span>
+            <div class="header-right">
+                <span class="header-time data-value" id="stat-localtime">--:--:--</span>
+                <button class="header-btn header-btn-restore" id="restore-all-defaults-btn" title="Restore all settings to defaults">Restore Defaults</button>
+                <button class="header-btn header-btn-settings" id="node-config-btn" title="Settings">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                    </svg>
+                </button>
+                <!-- Unified Settings Dropdown -->
+                <div class="settings-dropdown" id="node-config-dropdown">
+                    <div class="dropdown-section">
+                        <span class="dropdown-section-title">Peer Update Frequency</span>
+                        <div class="dropdown-row">
+                            <input type="text" id="refresh-rate-input" value="10" class="refresh-input" title="Peer update frequency in seconds (min 5s)">
+                            <span class="dropdown-unit">seconds</span>
+                        </div>
+                        <div class="dropdown-hint" id="refresh-rate-hint"></div>
                     </div>
-                    <div class="protocol-line">
-                        <span class="protocol-label">Not Configured:</span>
-                        <span class="protocol-list" id="protocols-disabled">-</span>
-                    </div>
-                    <div class="protocol-hint" id="protocol-hint" style="display: none;">
-                        <span>(Configure in Bitcoin Core to view)</span>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-section">
+                        <span class="dropdown-section-title">Show/Hide Sections</span>
+                        <label class="dropdown-checkbox">
+                            <input type="checkbox" id="info-show-networks" checked> Network Stats
+                        </label>
+                        <label class="dropdown-checkbox">
+                            <input type="checkbox" id="info-show-chain" checked> Node Info
+                        </label>
+                        <label class="dropdown-checkbox">
+                            <input type="checkbox" id="info-show-system" checked> System
+                        </label>
+                        <label class="dropdown-checkbox">
+                            <input type="checkbox" id="info-show-btc" checked> Bitcoin Price
+                        </label>
                     </div>
                 </div>
             </div>
         </header>
 
-        <!-- Node Status Panel - Unified -->
-        <div class="panel node-status-panel" id="node-status-panel">
-            <div class="panel-header">
-                <h2>Node Status</h2>
-                <div class="panel-header-right">
-                    <button class="mempool-info-btn" id="blockchain-info-btn" title="View Blockchain Info">
-                        Blockchain
-                    </button>
-                    <button class="mempool-info-btn" id="mempool-info-btn" title="View Mempool Info">
-                        Mempool
-                    </button>
-                    <span class="status-time">
-                        <span class="time-item" id="stat-localtime">--:--:--</span>
-                    </span>
-                    <button class="panel-config-btn" id="node-config-btn" title="Configure panel">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-                        </svg>
-                    </button>
-                    <!-- Settings Dropdown -->
-                    <div class="node-config-dropdown" id="node-config-dropdown">
-                        <div class="dropdown-section">
-                            <span class="dropdown-section-title">Peer Update Frequency</span>
-                            <div class="dropdown-row">
-                                <input type="text" id="refresh-rate-input" value="10" class="refresh-input" title="Peer update frequency in seconds (min 5s)">
-                                <span class="dropdown-unit">seconds</span>
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- MAIN CONTENT: Two-column layout (left + sidebar)              -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="main-content">
+            <!-- LEFT COLUMN: Node Status Bar + Map -->
+            <div class="content-left">
+                <!-- Node Status Bar -->
+                <div class="panel node-status-bar" id="node-status-panel">
+                    <div class="node-status-left">
+                        <span class="status-indicator" id="status-indicator"></span>
+                        <span class="status-text" id="connection-status">Connecting...</span>
+                        <span class="status-count data-value" id="stat-connected">-</span>
+                        <div class="protocol-status" id="protocol-status">
+                            <div class="protocol-line">
+                                <span class="protocol-label" title="Networks enabled in your Bitcoin Core configuration">Enabled:</span>
+                                <span class="protocol-list" id="protocols-enabled">-</span>
                             </div>
-                            <div class="dropdown-hint" id="refresh-rate-hint"></div>
-                        </div>
-                        <div class="dropdown-divider"></div>
-                        <div class="dropdown-section">
-                            <span class="dropdown-section-title">Bitcoin Price Update</span>
-                            <div class="dropdown-row">
-                                <input type="text" id="price-rate-input" value="10" class="refresh-input" title="Price update frequency in seconds (min 5s)">
-                                <span class="dropdown-unit">seconds</span>
+                            <div class="protocol-line">
+                                <span class="protocol-label" title="Networks not configured - add to bitcoin.conf to enable">Not Configured:</span>
+                                <span class="protocol-list" id="protocols-disabled">-</span>
                             </div>
-                            <div class="dropdown-hint" id="price-rate-hint"></div>
-                        </div>
-                        <div class="dropdown-divider"></div>
-                        <div class="dropdown-section">
-                            <span class="dropdown-section-title">Currency</span>
-                            <select id="info-currency-select" class="info-currency-select">
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                                <option value="GBP">GBP</option>
-                                <option value="JPY">JPY</option>
-                                <option value="CHF">CHF</option>
-                                <option value="CAD">CAD</option>
-                                <option value="AUD">AUD</option>
-                                <option value="CNY">CNY</option>
-                                <option value="HKD">HKD</option>
-                                <option value="SGD">SGD</option>
-                            </select>
-                        </div>
-                        <div class="dropdown-divider"></div>
-                        <div class="dropdown-section">
-                            <span class="dropdown-section-title">Show/Hide Cards</span>
-                            <label class="dropdown-checkbox">
-                                <input type="checkbox" id="info-show-networks" checked> Network Stats
-                            </label>
-                            <label class="dropdown-checkbox">
-                                <input type="checkbox" id="info-show-chain" checked> Node Info
-                            </label>
-                            <label class="dropdown-checkbox">
-                                <input type="checkbox" id="info-show-system" checked> System
-                            </label>
-                            <label class="dropdown-checkbox">
-                                <input type="checkbox" id="info-show-btc" checked> Bitcoin Price
-                            </label>
+                            <div class="protocol-hint" id="protocol-hint" style="display: none;">
+                                <span>(Configure in Bitcoin Core to view)</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-            <div class="node-status-content">
-                <!-- Connected Card -->
-                <div class="status-card card-connected">
-                    <div class="card-label">Connected</div>
-                    <div class="card-value-large" id="stat-connected">-</div>
-                </div>
-
-                <!-- Networks Card -->
-                <div class="status-card card-networks" id="card-networks">
-                    <div class="networks-grid">
+                    <div class="node-status-networks" id="card-networks">
                         <div class="network-col" id="net-ipv4-wrap">
-                            <span class="net-name net-ipv4">IPv4</span>
-                            <span class="net-total" id="stat-ipv4-total">(-)</span>
-                            <div class="net-inout-row">
-                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-ipv4-in">-</span></span>
-                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-ipv4-out">-</span></span>
-                            </div>
-                            <span class="net-score-label" id="score-label-ipv4">Score</span>
-                            <span class="net-score" id="info-score-ipv4">-</span>
+                            <span class="net-name net-ipv4" title="Public IPv4 network">IPv4</span>
+                            <span class="net-compact" title="In / Out">(<span class="data-value" id="stat-ipv4-in">-</span>/<span class="data-value" id="stat-ipv4-out">-</span>)</span>
+                            <span class="net-total" id="stat-ipv4-total" style="display:none">(-)</span>
+                            <span class="net-score data-value" id="info-score-ipv4" title="Bitcoin Core local network score">-</span>
+                            <span class="net-score-label" id="score-label-ipv4" style="display:none">Score</span>
                         </div>
                         <div class="network-col" id="net-ipv6-wrap">
-                            <span class="net-name net-ipv6">IPv6</span>
-                            <span class="net-total" id="stat-ipv6-total">(-)</span>
-                            <div class="net-inout-row">
-                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-ipv6-in">-</span></span>
-                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-ipv6-out">-</span></span>
-                            </div>
-                            <span class="net-score-label" id="score-label-ipv6">Score</span>
-                            <span class="net-score" id="info-score-ipv6">-</span>
+                            <span class="net-name net-ipv6" title="Public IPv6 network">IPv6</span>
+                            <span class="net-compact" title="In / Out">(<span class="data-value" id="stat-ipv6-in">-</span>/<span class="data-value" id="stat-ipv6-out">-</span>)</span>
+                            <span class="net-total" id="stat-ipv6-total" style="display:none">(-)</span>
+                            <span class="net-score data-value" id="info-score-ipv6" title="Bitcoin Core local network score">-</span>
+                            <span class="net-score-label" id="score-label-ipv6" style="display:none">Score</span>
                         </div>
                         <div class="network-col" id="net-onion-wrap">
-                            <span class="net-name net-onion">Tor</span>
-                            <span class="net-total" id="stat-onion-total">(-)</span>
-                            <div class="net-inout-row">
-                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-onion-in">-</span></span>
-                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-onion-out">-</span></span>
-                            </div>
-                            <span class="net-score-label">Score</span>
-                            <span class="net-score">overlay</span>
+                            <span class="net-name net-onion" title="Tor onion routing network">Tor</span>
+                            <span class="net-compact" title="In / Out">(<span class="data-value" id="stat-onion-in">-</span>/<span class="data-value" id="stat-onion-out">-</span>)</span>
+                            <span class="net-total" id="stat-onion-total" style="display:none">(-)</span>
+                            <span class="net-score net-score-overlay" title="Network Score not available.&#10;Privacy overlay network using onion routing.">Overlay</span>
                         </div>
                         <div class="network-col" id="net-i2p-wrap">
-                            <span class="net-name net-i2p">I2P</span>
-                            <span class="net-total" id="stat-i2p-total">(-)</span>
-                            <div class="net-inout-row">
-                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-i2p-in">-</span></span>
-                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-i2p-out">-</span></span>
-                            </div>
-                            <span class="net-score-label">Score</span>
-                            <span class="net-score">overlay</span>
+                            <span class="net-name net-i2p" title="I2P anonymous network">I2P</span>
+                            <span class="net-compact" title="In / Out">(<span class="data-value" id="stat-i2p-in">-</span>/<span class="data-value" id="stat-i2p-out">-</span>)</span>
+                            <span class="net-total" id="stat-i2p-total" style="display:none">(-)</span>
+                            <span class="net-score net-score-overlay" title="Network Score not available.&#10;Anonymous peer-to-peer overlay network.">Overlay</span>
                         </div>
                         <div class="network-col" id="net-cjdns-wrap">
-                            <span class="net-name net-cjdns">CJDNS</span>
-                            <span class="net-total" id="stat-cjdns-total">(-)</span>
-                            <div class="net-inout-row">
-                                <span class="net-inout-item"><span class="net-inout-label">In</span><span class="net-inout-value" id="stat-cjdns-in">-</span></span>
-                                <span class="net-inout-item"><span class="net-inout-label">Out</span><span class="net-inout-value" id="stat-cjdns-out">-</span></span>
+                            <span class="net-name net-cjdns" title="CJDNS encrypted mesh network">CJDNS</span>
+                            <span class="net-compact" title="In / Out">(<span class="data-value" id="stat-cjdns-in">-</span>/<span class="data-value" id="stat-cjdns-out">-</span>)</span>
+                            <span class="net-total" id="stat-cjdns-total" style="display:none">(-)</span>
+                            <span class="net-score net-score-overlay" title="Network Score not available.&#10;Encrypted IPv6 mesh overlay network.">Overlay</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Panel -->
+                <div class="panel map-panel resizable-panel" id="map-panel">
+                    <div class="panel-header map-header">
+                        <h2>Map</h2>
+                        <span class="map-status" id="map-status">
+                            <span class="map-countdown-label">Update in:</span>
+                            <span class="map-countdown data-value" id="stat-countdown">10s</span>
+                            <span class="map-status-sep">|</span>
+                            <span class="status-dot status-ok" id="map-status-dot"></span>
+                            <span id="map-status-text">Map Loaded!</span>
+                        </span>
+                        <div class="map-region-selector">
+                            <select id="map-region-select" title="Select map region">
+                                <option value="world">World</option>
+                                <option value="north-america">North America</option>
+                                <option value="south-america">South America</option>
+                                <option value="europe">Europe</option>
+                                <option value="africa">Africa</option>
+                                <option value="middle-east">Middle East</option>
+                                <option value="asia">Asia</option>
+                                <option value="oceania">Oceania</option>
+                                <option value="antarctica">Antarctica (Private Networks)</option>
+                            </select>
+                        </div>
+                        <span class="map-legend">
+                            <span class="legend-group" title="Public networks with geo location">
+                                <span class="legend-label">Public:</span>
+                                <span class="dot dot-ipv4" title="IPv4"></span>
+                                <span class="dot dot-ipv6" title="IPv6"></span>
+                            </span>
+                            <span class="legend-group" title="Private networks clustered near Antarctic research stations">
+                                <span class="legend-label">Private (<a href="#" id="antarctica-toggle" class="antarctica-toggle" title="Toggle visibility of private network dots in Antarctica">Hide</a> <span class="penguin-icon" title="Private networks (Tor, I2P, CJDNS) are placed near Antarctic research stations since they have no real geolocation. Click Hide/Show to toggle.">&#x1F427;</span>):</span>
+                                <span class="dot dot-onion" title="Tor/Onion"></span>
+                                <span class="dot dot-i2p" title="I2P"></span>
+                                <span class="dot dot-cjdns" title="CJDNS"></span>
+                                <span class="dot dot-unavailable" title="Unavailable"></span>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="map-container" id="map"></div>
+                    <div class="resize-handle" data-panel="map-panel"></div>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDEBAR -->
+            <div class="sidebar">
+                <!-- Node Info Section -->
+                <div class="sidebar-section" id="card-node">
+                    <div class="sidebar-section-header" id="sidebar-node-header" title="Node information">
+                        <span class="sidebar-section-title">Node Info</span>
+                        <span class="sidebar-subver data-value" id="sidebar-node-subver" title="Bitcoin Core version string"></span>
+                    </div>
+                    <div class="sidebar-rows">
+                        <div class="sidebar-row">
+                            <span class="sidebar-label">Peers</span>
+                            <span class="sidebar-value data-value" id="sidebar-peers">-</span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label" title="Total size of Bitcoin Core including database, chain state, and indexes">Size</span>
+                            <span class="sidebar-value data-value" id="info-chain-size">-</span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label" title="Whether this node stores the full blockchain or is pruned to save disk space">Type</span>
+                            <span class="sidebar-value data-value" id="info-node-type">-</span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label" title="Whether transaction index (txindex) is enabled for this node">Indexed</span>
+                            <span class="sidebar-value data-value" id="info-node-indexed">-</span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label" title="Whether Initial Block Download (IBD) is complete">Up to date</span>
+                            <span class="sidebar-value data-value" id="info-sync-status">-</span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label sidebar-link" id="mempool-info-btn" title="Click for mempool info">Mempool</span>
+                            <span class="sidebar-value data-value" id="sidebar-mempool">-</span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label sidebar-link" id="blockchain-info-btn" title="Click for blockchain info">Last Block</span>
+                            <span class="sidebar-value data-value" id="info-last-block">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Information Section -->
+                <div class="sidebar-section" id="card-system">
+                    <div class="sidebar-section-header" title="System and MBCore information">
+                        <span class="sidebar-section-title">System Information</span>
+                    </div>
+                    <div class="sidebar-rows">
+                        <div class="sidebar-row">
+                            <span class="sidebar-label" id="sidebar-cpu-label" title="Host CPU utilization (all cores averaged)">CPU</span>
+                            <span class="sidebar-value">
+                                <span class="data-value" id="info-cpu">-</span><span class="sidebar-unit">%</span>
+                            </span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label" id="sidebar-mem-label" title="System memory usage">RAM</span>
+                            <span class="sidebar-value">
+                                <span class="data-value" id="info-mem">-</span><span class="sidebar-unit">%</span>
+                            </span>
+                        </div>
+                        <div class="sidebar-row">
+                            <span class="sidebar-label sidebar-link" id="geodb-info-btn" title="Click for MBCore DB info and update">MBCore DB</span>
+                            <span class="sidebar-value data-value" id="info-geodb-status">-</span>
+                        </div>
+                        <!-- Network Traffic Bars -->
+                        <div class="sidebar-traffic" title="Real-time network throughput (all interfaces)">
+                            <div class="net-traffic-row-inline">
+                                <span class="net-traffic-dir-inline">IN</span>
+                                <div class="net-traffic-bar-wrap-inline">
+                                    <div class="net-traffic-bar net-traffic-bar-in" id="net-traffic-bar-in"></div>
+                                </div>
+                                <span class="net-traffic-rate-inline data-value" id="net-traffic-rate-in">-</span>
                             </div>
-                            <span class="net-score-label">Score</span>
-                            <span class="net-score">overlay</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Node Info Card -->
-                <div class="status-card card-node" id="card-node">
-                    <div class="card-label">Node Info</div>
-                    <div class="node-info-grid">
-                        <div class="node-info-row">
-                            <span class="node-info-value" id="info-chain-size">-</span>
-                        </div>
-                        <div class="node-info-row">
-                            <span class="node-info-value" id="info-node-type">-</span>
-                        </div>
-                        <div class="node-info-row">
-                            <span class="node-info-value" id="info-node-indexed">-</span>
-                        </div>
-                        <div class="node-info-row">
-                            <span class="node-info-value" id="info-sync-status">-</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- System Card -->
-                <div class="status-card card-system" id="card-system" style="position:relative;">
-                    <div class="card-label">System</div>
-                    <div class="system-stats">
-                        <div class="system-row">
-                            <span class="system-label">CPU</span>
-                            <span class="system-value" id="info-cpu">-</span>
-                            <span class="system-unit">%</span>
-                        </div>
-                        <div class="system-row">
-                            <span class="system-label">MEM</span>
-                            <span class="system-value" id="info-mem">-</span>
-                            <span class="system-unit">%</span>
-                        </div>
-                        <div class="system-divider" id="geodb-divider"></div>
-                        <div class="geodb-section">
-                            <div class="geodb-section-label">Geo/IP DB</div>
-                            <button class="mempool-info-btn geodb-info-btn" id="geodb-info-btn" title="View Geo/IP Database Info">Info</button>
-                            <span class="geodb-status-badge" id="info-geodb-status"></span>
+                            <div class="net-traffic-row-inline">
+                                <span class="net-traffic-dir-inline">OUT</span>
+                                <div class="net-traffic-bar-wrap-inline">
+                                    <div class="net-traffic-bar net-traffic-bar-out" id="net-traffic-bar-out"></div>
+                                </div>
+                                <span class="net-traffic-rate-inline data-value" id="net-traffic-rate-out">-</span>
+                            </div>
                         </div>
                     </div>
                     <!-- Geo DB Dropdown -->
@@ -224,54 +260,90 @@
                     </div>
                 </div>
 
-                <!-- Bitcoin Price Card -->
-                <div class="status-card card-btc" id="card-btc">
-                    <div class="card-label">&#8383;itcoin Price</div>
-                    <div class="btc-price" id="info-btc-price">-</div>
-                    <div class="btc-currency" id="info-btc-currency">USD</div>
-                    <div class="btc-block">
-                        <span class="btc-block-label">Last Block:</span>
-                        <span class="btc-block-value" id="info-last-block">-</span>
+                <!-- Bitcoin Price Section -->
+                <div class="sidebar-section" id="card-btc">
+                    <div class="sidebar-section-header" title="Change currency by clicking the currency code below">
+                        <span class="sidebar-section-title">&#8383; Price</span>
+                    </div>
+                    <div class="sidebar-price">
+                        <div class="sidebar-price-value data-value" id="info-btc-price">-</div>
+                        <div class="sidebar-price-currency-row">
+                            <span class="sidebar-price-currency sidebar-link" id="info-btc-currency" title="Click to change currency">USD</span>
+                        </div>
+                        <!-- Currency Dropdown -->
+                        <div class="currency-dropdown" id="currency-dropdown">
+                            <div class="dropdown-section">
+                                <span class="dropdown-section-title">Currency</span>
+                                <select id="info-currency-select" class="info-currency-select">
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="GBP">GBP</option>
+                                    <option value="JPY">JPY</option>
+                                    <option value="CHF">CHF</option>
+                                    <option value="CAD">CAD</option>
+                                    <option value="AUD">AUD</option>
+                                    <option value="CNY">CNY</option>
+                                    <option value="HKD">HKD</option>
+                                    <option value="SGD">SGD</option>
+                                </select>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-section">
+                                <span class="dropdown-section-title">Price Update Frequency</span>
+                                <div class="dropdown-row">
+                                    <input type="text" id="price-rate-input" value="10" class="refresh-input" title="Price update frequency in seconds (min 5s)">
+                                    <span class="dropdown-unit">seconds</span>
+                                </div>
+                                <div class="dropdown-hint" id="price-rate-hint"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Updates Mini-Widget -->
+                <div class="sidebar-section sidebar-section-updates">
+                    <div class="sidebar-section-header">
+                        <span class="sidebar-section-title">Recent Updates</span>
+                        <div class="sidebar-updates-controls">
+                            <button class="sidebar-small-btn" id="changes-config-btn" title="Configure time window">
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                                    <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                                </svg>
+                            </button>
+                            <div class="changes-config-dropdown" id="changes-config-dropdown">
+                                <span class="dropdown-label">Show last:</span>
+                                <button class="dropdown-option" data-seconds="10">10s</button>
+                                <button class="dropdown-option" data-seconds="20">20s</button>
+                                <button class="dropdown-option" data-seconds="30">30s</button>
+                                <button class="dropdown-option" data-seconds="60">1m</button>
+                                <button class="dropdown-option" data-seconds="120">2m</button>
+                                <button class="dropdown-option" data-seconds="300">5m</button>
+                            </div>
+                            <button class="sidebar-small-btn" id="toggle-changes-panel-btn" title="Show/hide detailed changes panel below">
+                                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M2 2.5A.5.5 0 0 1 2.5 2h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 2.5zm0 4A.5.5 0 0 1 2.5 6h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 6.5zm0 4A.5.5 0 0 1 2.5 10h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5zm0 4A.5.5 0 0 1 2.5 14h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="sidebar-updates-window">
+                        <span class="changes-window" id="changes-window-label">Last <span class="data-value" id="changes-window-value">20</span>s</span>
+                    </div>
+                    <div class="sidebar-updates-list" id="sidebar-updates-list">
+                        <div class="sidebar-updates-empty">No recent changes</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Map Panel -->
-        <div class="panel map-panel-full resizable-panel" id="map-panel">
-            <div class="panel-header">
-                <h2>Peer Map</h2>
-                <span class="map-status" id="map-status">
-                    <span class="map-countdown-label">Update in:</span>
-                    <span class="map-countdown" id="stat-countdown">10s</span>
-                    <span class="map-status-sep">|</span>
-                    <span class="status-dot status-ok" id="map-status-dot"></span>
-                    <span id="map-status-text">Map Loaded!</span>
-                </span>
-                <span class="map-legend">
-                    <span class="legend-group" title="Public networks with geo location">
-                        <span class="legend-label">Public:</span>
-                        <span class="dot dot-ipv4" title="IPv4"></span>
-                        <span class="dot dot-ipv6" title="IPv6"></span>
-                    </span>
-                    <span class="legend-group" title="Private networks clustered in Antarctica">
-                        <span class="legend-label">Private (<a href="#" id="antarctica-toggle" class="antarctica-toggle">Hide</a> in Antarctica 🐧):</span>
-                        <span class="dot dot-onion" title="Tor/Onion"></span>
-                        <span class="dot dot-i2p" title="I2P"></span>
-                        <span class="dot dot-cjdns" title="CJDNS"></span>
-                        <span class="dot dot-unavailable" title="Unavailable"></span>
-                    </span>
-                </span>
-            </div>
-            <div class="map-container" id="map"></div>
-            <div class="resize-handle" data-panel="map-panel"></div>
-        </div>
-
-        <!-- Main Peer Table - 23 COLUMNS -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- PEER TABLE (full width)                                        -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <div class="panel peer-panel resizable-panel" id="peer-panel">
             <div class="panel-header">
                 <div class="peer-header-left">
-                    <h2>Connected Peers:</h2>
+                    <h2>Peers</h2>
                     <div class="network-counts" id="network-counts">
                         <span class="count-total network-filter-btn active" id="count-total" data-filter="all" title="Click to show all peers">all 0</span>
                         <span class="count-sep">|</span>
@@ -284,23 +356,6 @@
                         <span class="count-i2p network-filter-btn" id="count-i2p" data-filter="i2p" style="display: none;" title="Click to filter by I2P">I2P 0</span>
                         <span class="count-sep" id="sep-i2p" style="display: none;">|</span>
                         <span class="count-cjdns network-filter-btn" id="count-cjdns" data-filter="cjdns" style="display: none;" title="Click to filter by CJDNS">CJDNS 0</span>
-                    </div>
-                    <span class="count-sep net-traffic-sep" id="sep-traffic">|</span>
-                    <div class="net-traffic-inline" id="net-traffic-inline">
-                        <div class="net-traffic-row-inline">
-                            <span class="net-traffic-dir-inline">IN</span>
-                            <div class="net-traffic-bar-wrap-inline">
-                                <div class="net-traffic-bar net-traffic-bar-in" id="net-traffic-bar-in"></div>
-                            </div>
-                            <span class="net-traffic-rate-inline" id="net-traffic-rate-in">-</span>
-                        </div>
-                        <div class="net-traffic-row-inline">
-                            <span class="net-traffic-dir-inline">OUT</span>
-                            <div class="net-traffic-bar-wrap-inline">
-                                <div class="net-traffic-bar net-traffic-bar-out" id="net-traffic-bar-out"></div>
-                            </div>
-                            <span class="net-traffic-rate-inline" id="net-traffic-rate-out">-</span>
-                        </div>
                     </div>
                 </div>
                 <div class="panel-controls">
@@ -333,11 +388,12 @@
                             <button class="disconnect-action-btn disconnect-action-btn-danger" id="clear-bans-btn">Clear All Bans</button>
                         </div>
                     </div>
-                    <button class="restore-defaults-btn" id="restore-defaults-btn" title="Restore default columns and order">Restore Defaults</button>
+                    <!-- Column config button (columns icon, not gear) -->
                     <button class="config-btn" id="column-config-btn" title="Configure visible columns">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                            <rect x="1" y="1" width="3" height="14" rx="0.5" opacity="0.7"/>
+                            <rect x="6.5" y="1" width="3" height="14" rx="0.5" opacity="0.5"/>
+                            <rect x="12" y="1" width="3" height="14" rx="0.5" opacity="0.7"/>
                         </svg>
                     </button>
                 </div>
@@ -346,14 +402,12 @@
                 <table class="peer-table" id="peer-table">
                     <thead>
                         <tr>
-                            <!-- 1-6: getpeerinfo (instant) -->
                             <th data-sort="id" data-col="id" title="Peer ID assigned by Bitcoin Core">ID</th>
                             <th data-sort="network" data-col="network" title="Network type (ipv4, ipv6, onion, i2p, cjdns)">Net</th>
                             <th data-sort="ip" data-col="ip" title="IP address of the peer">IP</th>
                             <th data-sort="port" data-col="port" title="Port number">Port</th>
                             <th data-sort="direction" data-col="direction" title="Connection direction: IN=they connected to us, OUT=we connected to them">in/out</th>
                             <th data-sort="subver" data-col="subver" title="User agent / software version">Node ver/name</th>
-                            <!-- 7-13: ip-api geo (loads second) -->
                             <th data-sort="city" data-col="city" title="City from geolocation">City</th>
                             <th data-sort="region" data-col="region" title="Region/state code">State/reg</th>
                             <th data-sort="regionName" data-col="regionName" title="Full region/state name">State/reg (full)</th>
@@ -361,18 +415,15 @@
                             <th data-sort="countryCode" data-col="countryCode" title="2-letter country code">Ctry Code</th>
                             <th data-sort="continent" data-col="continent" title="Continent name">Continent</th>
                             <th data-sort="continentCode" data-col="continentCode" title="2-letter continent code">ContC</th>
-                            <!-- 14-19: more getpeerinfo -->
                             <th data-sort="bytessent" data-col="bytessent" title="Total bytes sent to this peer">Sent</th>
                             <th data-sort="bytesrecv" data-col="bytesrecv" title="Total bytes received from this peer">Received</th>
                             <th data-sort="ping_ms" data-col="ping_ms" title="Current ping latency in milliseconds">Ping</th>
                             <th data-sort="conntime" data-col="conntime" title="How long connected">Duration</th>
                             <th data-sort="connection_type" data-col="connection_type" title="Connection type (outbound-full-relay, inbound, etc)">Type</th>
                             <th data-sort="services_abbrev" data-col="services_abbrev" title="Service flags: N=NETWORK, W=WITNESS, NL=NETWORK_LIMITED, P=P2P_V2, etc">Service</th>
-                            <!-- 20-22: more ip-api -->
                             <th data-sort="lat" data-col="lat" title="Latitude coordinate">Lat</th>
                             <th data-sort="lon" data-col="lon" title="Longitude coordinate">Lon</th>
                             <th data-sort="isp" data-col="isp" title="Internet Service Provider">ISP</th>
-                            <!-- 23: addrman status -->
                             <th data-sort="in_addrman" data-col="in_addrman" title="Is this peer's address in our address manager?">In Addrman?</th>
                         </tr>
                     </thead>
@@ -386,6 +437,9 @@
             <div class="resize-handle" data-panel="peer-panel"></div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- MODALS (unchanged logic, preserved IDs)                        -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- Column Config Modal -->
         <div class="modal" id="column-config-modal">
             <div class="modal-content">
@@ -393,8 +447,9 @@
                     <h3>Configure Columns</h3>
                     <button class="modal-close" id="modal-close">&times;</button>
                 </div>
-                <div class="modal-body" id="column-checkboxes">
-                    <!-- Populated by JS -->
+                <div class="modal-body" id="column-checkboxes"></div>
+                <div class="modal-footer">
+                    <button class="restore-defaults-btn" id="restore-defaults-btn" title="Restore default columns and order">Restore Column Defaults</button>
                 </div>
             </div>
         </div>
@@ -472,7 +527,7 @@
             </div>
         </div>
 
-        <!-- List Bans Modal -->
+        <!-- Bans List Modal -->
         <div class="modal" id="bans-modal">
             <div class="modal-content modal-content-wide">
                 <div class="modal-header">
@@ -485,28 +540,10 @@
             </div>
         </div>
 
-        <!-- Recent Connections/Disconnections Table -->
-        <div class="panel changes-panel resizable-panel" id="changes-panel">
+        <!-- Recent Changes Bottom Panel (hidden by default) -->
+        <div class="panel changes-panel resizable-panel" id="changes-panel" style="display: none;">
             <div class="panel-header">
                 <h2>Recent Connections/Disconnections</h2>
-                <div class="changes-window-control">
-                    <span class="changes-window" id="changes-window-label">Last <span id="changes-window-value">20</span> seconds</span>
-                    <button class="changes-config-btn" id="changes-config-btn" title="Configure time window">
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-                        </svg>
-                    </button>
-                    <div class="changes-config-dropdown" id="changes-config-dropdown">
-                        <span class="dropdown-label">Show last:</span>
-                        <button class="dropdown-option" data-seconds="10">10s</button>
-                        <button class="dropdown-option" data-seconds="20">20s</button>
-                        <button class="dropdown-option" data-seconds="30">30s</button>
-                        <button class="dropdown-option" data-seconds="60">1m</button>
-                        <button class="dropdown-option" data-seconds="120">2m</button>
-                        <button class="dropdown-option" data-seconds="300">5m</button>
-                    </div>
-                </div>
             </div>
             <div class="table-container" id="changes-table-container">
                 <table class="peer-table changes-table" id="changes-table">
@@ -530,7 +567,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <span>MBCore Dashboard v{{ version }} | created by <a href="https://github.com/mbhillrn" target="_blank" rel="noopener" class="credits-link">mbhillrn</a> | Support (btc): <span class="btc-copy" id="footer-btc-copy" title="Click to copy">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
+            <span>MBCore Dashboard v{{ version }}</span>
             <span id="refresh-timer">Refreshing in 10s</span>
         </footer>
     </div>
