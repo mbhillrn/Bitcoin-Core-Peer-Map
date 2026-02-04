@@ -100,7 +100,17 @@ const changesTbody = document.getElementById('changes-tbody');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    loadColumnPreferences();  // Load saved order/visibility first
+    // Always start with default columns (no persistence)
+    visibleColumns = [...defaultVisibleColumns];
+    columnOrder = [...defaultVisibleColumns];
+    try {
+        localStorage.removeItem('mbcore_visible_columns');
+        localStorage.removeItem('mbcore_column_order');
+        localStorage.removeItem('mbcore_column_widths');
+    } catch (e) {}
+    columnWidths = {};
+    hasSavedColumnWidths = false;
+    autoSizedColumns = false;
     setupRefreshRateControl(); // Load refresh rate preference early
     setupChangesWindowControl(); // Load changes window preference
     setupAntarcticaToggle(); // Setup Antarctica show/hide toggle
@@ -684,7 +694,7 @@ function setupPanelResize() {
 
 // Initialize Leaflet map
 function initMap() {
-    // Bounds to prevent panning too far outside world
+    // Bounds: top of Russia (~75N) down to top of Antarctica (~65S)
     const worldBounds = L.latLngBounds(
         L.latLng(-85, -180),  // Southwest corner
         L.latLng(85, 180)     // Northeast corner
@@ -692,12 +702,12 @@ function initMap() {
 
     map = L.map('map', {
         center: [20, 0],
-        zoom: 2,                   // Zoomed to show whole world without repeat
+        zoom: 2,
         minZoom: 2,
         maxZoom: 18,
-        worldCopyJump: false,      // Finite world: no wrapping
-        maxBounds: worldBounds,    // Confined box: restrict panning
-        maxBoundsViscosity: 0.9    // How "sticky" the bounds are (0-1)
+        worldCopyJump: false,
+        maxBounds: worldBounds,
+        maxBoundsViscosity: 1.0
     });
 
     // Dark tile layer (CartoDB Dark Matter)
@@ -705,8 +715,11 @@ function initMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19,
-        noWrap: true  // Finite world: no tile repetition
+        noWrap: true
     }).addTo(map);
+
+    // Fit to show full world vertically (Russia to Antarctica)
+    map.fitBounds([[-70, -180], [80, 180]], { padding: [10, 10] });
 
     // Fix map size when container resizes
     const mapContainer = document.getElementById('map-panel');
@@ -1495,10 +1508,13 @@ async function fetchStats() {
                     else if (cpuVal >= 75) cpuEl.classList.add('threshold-warn');
                     else pulseOnChange('info-cpu', cpuVal, 'white');
                 }
-                // CPU breakdown tooltip
-                if (cpuLabel && stats.system_stats.cpu_breakdown) {
+                // CPU breakdown tooltip on label AND value
+                if (stats.system_stats.cpu_breakdown) {
                     const bd = stats.system_stats.cpu_breakdown;
-                    cpuLabel.title = `CPU Breakdown:\nUser: ${bd.user}%\nSystem: ${bd.system}%\nIO Wait: ${bd.iowait}%\nSteal: ${bd.steal}%\nIdle: ${bd.idle}%`;
+                    const cpuTip = `CPU Breakdown:\nUser: ${bd.user}%\nSystem: ${bd.system}%\nIO Wait: ${bd.iowait}%\nSteal: ${bd.steal}%\nIdle: ${bd.idle}%`;
+                    if (cpuLabel) cpuLabel.title = cpuTip;
+                    const cpuValueEl = document.getElementById('sidebar-cpu-value');
+                    if (cpuValueEl) cpuValueEl.title = cpuTip;
                 }
             }
             if (memEl) {
@@ -1510,11 +1526,14 @@ async function fetchStats() {
                     else if (memVal >= 80) memEl.classList.add('threshold-warn');
                     else pulseOnChange('info-mem', memVal, 'white');
                 }
-                // RAM MB tooltip
-                if (memLabel && stats.system_stats.mem_used_mb != null && stats.system_stats.mem_total_mb != null) {
+                // RAM MB tooltip on label AND value
+                if (stats.system_stats.mem_used_mb != null && stats.system_stats.mem_total_mb != null) {
                     const used = stats.system_stats.mem_used_mb;
                     const total = stats.system_stats.mem_total_mb;
-                    memLabel.title = `RAM Usage: ${used.toLocaleString()} MB / ${total.toLocaleString()} MB`;
+                    const memTip = `RAM Usage: ${used.toLocaleString()} MB / ${total.toLocaleString()} MB`;
+                    if (memLabel) memLabel.title = memTip;
+                    const memValueEl = document.getElementById('sidebar-mem-value');
+                    if (memValueEl) memValueEl.title = memTip;
                 }
             }
         }
@@ -1618,15 +1637,33 @@ function renderChanges(changes) {
         if (filteredChanges.length === 0) {
             sidebarList.innerHTML = '<div class="sidebar-updates-empty">No recent changes</div>';
         } else {
-            // Show last 4 changes in sidebar
-            const sidebarItems = filteredChanges.slice(0, 4).map(change => {
+            // Show changes in sidebar (scrollable)
+            const sidebarItems = filteredChanges.map(change => {
                 const prefix = change.type === 'connected' ? '+' : '-';
-                const cls = change.type === 'connected' ? 'update-connected' : 'update-disconnected';
+                const cls = change.type === 'connected' ? 'update-connected update-clickable' : 'update-disconnected';
                 const ip = change.peer.ip || '-';
                 const net = change.peer.network ? ` (${change.peer.network})` : '';
-                return `<div class="sidebar-update-item ${cls}" title="${change.type}: ${ip}${net}">${prefix} ${ip}${net}</div>`;
+                const clickAttr = change.type === 'connected' ? ` data-ip="${ip}"` : '';
+                const titleExtra = change.type === 'connected' ? ' (click to find on map)' : '';
+                return `<div class="sidebar-update-item ${cls}" title="${change.type}: ${ip}${net}${titleExtra}"${clickAttr}>${prefix} ${ip}${net}</div>`;
             }).join('');
             sidebarList.innerHTML = sidebarItems;
+
+            // Add click handlers for connected entries to fly to map
+            sidebarList.querySelectorAll('.update-clickable').forEach(item => {
+                item.addEventListener('click', () => {
+                    const ip = item.dataset.ip;
+                    if (!ip || !map) return;
+                    // Find the peer with this IP and fly to it on the map
+                    const peer = currentPeers.find(p => p.ip === ip);
+                    if (peer && peer.lat && peer.lon) {
+                        map.flyTo([peer.lat, peer.lon], 6, { duration: 1.0 });
+                        // Open popup if marker exists
+                        const marker = markers[peer.id];
+                        if (marker) marker.openPopup();
+                    }
+                });
+            });
         }
     }
 
@@ -1826,20 +1863,26 @@ function renderPeers() {
         // Network text color class for ALL columns except direction and in_addrman
         const netTextClass = `network-${peer.network}`;
 
-        // Connection type badge and tooltip
+        // Connection type badge and tooltip with inbound/outbound highlighting
         const connTypeAbbrev = (peer.connection_type_abbrev || '-').toUpperCase();
-        const connTypeBadgeClass = connTypeAbbrev.toLowerCase();
         const connTypeDescriptions = {
-            'INB': 'Inbound: They connected to us (full relay)',
-            'OFR': 'Outbound Full Relay: We connected to them (transactions + blocks)',
-            'BLO': 'Block Relay Only: We connected, blocks only (no transactions)',
-            'MAN': 'Manual: Added via addnode command',
-            'FET': 'Address Fetch: Temporary connection to get addresses',
-            'FEL': 'Feeler: Temporary connection to test reachability'
+            'INB': 'Inbound: Peer initiated the connection to you',
+            'OFR': 'Outbound Full Relay: Normal outbound peer (transactions + blocks)',
+            'BLO': 'Block Relay Only: Outbound peer used for blocks only (no tx or addr relay)',
+            'MAN': 'Manual: You explicitly connected via addnode RPC or config',
+            'FET': 'Address Fetch: Short-lived outbound connection to solicit addresses',
+            'FEL': 'Feeler: Short-lived outbound connection to test reachability'
         };
+        // INB = inbound (green bg), all others = outbound (blue bg)
+        const isInboundType = connTypeAbbrev === 'INB';
+        const connTypeBgClass = isInboundType ? 'conn-type-inbound' : 'conn-type-outbound';
+        // BLO gets yellow text, FET/FEL get lighter blue text, others get normal
+        let connTypeTextClass = '';
+        if (connTypeAbbrev === 'BLO') connTypeTextClass = 'conn-type-text-yellow';
+        else if (connTypeAbbrev === 'FET' || connTypeAbbrev === 'FEL') connTypeTextClass = 'conn-type-text-lightblue';
         const connTypeTooltip = connTypeDescriptions[connTypeAbbrev] || `Connection Type: ${peer.connection_type || '-'}`;
         const connTypeBadge = connTypeAbbrev !== '-'
-            ? `<span class="conn-type-badge ${connTypeBadgeClass}">${connTypeAbbrev}</span>`
+            ? `<span class="conn-type-badge ${connTypeBgClass} ${connTypeTextClass}">${connTypeAbbrev}</span>`
             : '-';
 
         // Cell definitions for dynamic column ordering
@@ -1859,8 +1902,8 @@ function renderPeers() {
             'countryCode': { class: `${geoClass} ${netTextClass}`, title: `Country Code: ${geoDisplay.countryCode}`, content: geoDisplay.countryCode },
             'continent': { class: `${geoClass} ${netTextClass}`, title: `Continent: ${geoDisplay.continent}`, content: geoDisplay.continent },
             'continentCode': { class: `${geoClass} ${netTextClass}`, title: `Continent Code: ${geoDisplay.continentCode}`, content: geoDisplay.continentCode },
-            'bytessent': { class: netTextClass, title: `Bytes Sent: ${peer.bytessent_fmt}`, content: peer.bytessent_fmt },
-            'bytesrecv': { class: netTextClass, title: `Bytes Received: ${peer.bytesrecv_fmt}`, content: peer.bytesrecv_fmt },
+            'bytessent': { class: 'bytes-sent', title: `Bytes Sent: ${peer.bytessent_fmt}`, content: peer.bytessent_fmt },
+            'bytesrecv': { class: 'bytes-recv', title: `Bytes Received: ${peer.bytesrecv_fmt}`, content: peer.bytesrecv_fmt },
             'ping_ms': { class: netTextClass, title: `Ping: ${peer.ping_ms != null ? peer.ping_ms + 'ms' : '-'}`, content: peer.ping_ms != null ? peer.ping_ms + 'ms' : '-' },
             'conntime': { class: netTextClass, title: `Connected: ${peer.conntime_fmt}`, content: peer.conntime_fmt },
             'connection_type': { class: '', title: connTypeTooltip, content: connTypeBadge },
@@ -2387,7 +2430,7 @@ function updateInfoPanel(data) {
 
     if (data.blockchain) {
         if (sizeEl) {
-            sizeEl.textContent = `${data.blockchain.size_gb} GB`;
+            sizeEl.textContent = `${data.blockchain.size_gb}GB`;
         }
         if (typeEl) {
             typeEl.textContent = data.blockchain.pruned ? 'Pruned' : 'Full Node';
@@ -2495,8 +2538,8 @@ function updateInfoPanel(data) {
             const lookupOn = g.auto_lookup ? 'On' : 'Off';
             const updateOn = g.auto_update ? 'On' : 'Off';
             const dimClass = 'geodb-setting-off';
-            html += `<div class="geodb-detail-row"><span>Auto-lookup</span><span class="${g.auto_lookup ? '' : dimClass}">${lookupOn}</span></div>`;
-            html += `<div class="geodb-detail-row"><span>Auto-update</span><span class="${g.auto_update ? '' : dimClass}">${updateOn}</span></div>`;
+            html += `<div class="geodb-detail-row"><span>Auto-lookup</span><span style="color: ${g.auto_lookup ? 'var(--green)' : 'var(--text-dim)'}">${lookupOn}</span></div>`;
+            html += `<div class="geodb-detail-row"><span>Auto-update</span><span style="color: ${g.auto_update ? 'var(--green)' : 'var(--text-dim)'}">${updateOn}</span></div>`;
             geodbDropdownRows.innerHTML = html;
         }
     }
@@ -3140,6 +3183,32 @@ async function connectPeer(address) {
     }
 }
 
+// Fallback clipboard copy for non-HTTPS (HTTP) contexts
+function fallbackCopyText(text, el, originalTitle) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        if (el) {
+            el.setAttribute('title', 'Copied!');
+            el.style.color = 'var(--green)';
+            setTimeout(() => {
+                el.setAttribute('title', originalTitle || 'Click to copy');
+                el.style.color = '';
+            }, 2000);
+        }
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+    }
+    document.body.removeChild(textarea);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // INITIALIZE NEW FEATURES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3315,19 +3384,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // BTC address click-to-copy
+    // BTC address click-to-copy (with fallback for non-HTTPS contexts)
     document.querySelectorAll('.btc-copy').forEach(el => {
         el.style.cursor = 'pointer';
         el.addEventListener('click', () => {
-            const addr = el.textContent;
-            navigator.clipboard.writeText(addr).then(() => {
-                el.setAttribute('title', 'Copied!');
-                setTimeout(() => {
-                    el.setAttribute('title', 'Click to copy');
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy:', err);
-            });
+            const addr = el.textContent.trim();
+            const originalTitle = el.getAttribute('title');
+            // Try modern clipboard API first, then fallback
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(addr).then(() => {
+                    el.setAttribute('title', 'Copied!');
+                    el.style.color = 'var(--green)';
+                    setTimeout(() => {
+                        el.setAttribute('title', originalTitle);
+                        el.style.color = '';
+                    }, 2000);
+                }).catch(() => {
+                    // Fallback for non-secure contexts
+                    fallbackCopyText(addr, el, originalTitle);
+                });
+            } else {
+                fallbackCopyText(addr, el, originalTitle);
+            }
         });
     });
 
@@ -3354,13 +3432,16 @@ document.addEventListener('DOMContentLoaded', function() {
         geodbUpdateBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             geodbUpdateBtn.disabled = true;
-            geodbUpdateBtn.textContent = 'Updating...';
-            if (geodbUpdateMsg) geodbUpdateMsg.textContent = '';
+            geodbUpdateBtn.textContent = 'Working...';
+            if (geodbUpdateMsg) {
+                geodbUpdateMsg.textContent = 'Working...';
+                geodbUpdateMsg.className = 'geodb-update-msg';
+            }
             try {
                 const resp = await fetch(`${API_BASE}/api/geodb/update`, { method: 'POST' });
                 const data = await resp.json();
                 if (geodbUpdateMsg) {
-                    geodbUpdateMsg.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                    geodbUpdateMsg.textContent = data.message || (data.success ? 'Done!' : 'Failed');
                     geodbUpdateMsg.className = 'geodb-update-msg ' + (data.success ? 'geodb-msg-ok' : 'geodb-msg-err');
                 }
                 // Refresh info panel to pick up new stats

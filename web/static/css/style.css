@@ -85,28 +85,41 @@ html, body {
 
 .logo-text {
     font-family: var(--font-ui);
-    font-size: 18px;
+    font-size: 28px;
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: -0.3px;
     cursor: default;
 }
 
+.logo-m {
+    color: #7ec8e3;
+}
+
+.logo-btc {
+    color: #4a90d9;
+    font-weight: 700;
+}
+
+.logo-core {
+    color: #7ec8e3;
+}
+
 .logo-light {
     font-weight: 400;
     color: var(--text-secondary);
-    margin-left: 4px;
+    margin-left: 6px;
 }
 
 .version {
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 400;
     color: var(--text-dim);
     font-family: var(--font-data);
 }
 
 .header-author {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-dim);
 }
 
@@ -114,10 +127,10 @@ html, body {
     color: var(--text-secondary);
     text-decoration: none;
 }
-.author-link:hover { color: var(--text-primary); }
+.author-link:hover { color: var(--text-primary); text-decoration: underline; }
 
 .header-btc-line {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-dim);
 }
 
@@ -125,7 +138,7 @@ html, body {
     color: var(--text-dim);
     cursor: pointer;
     font-family: var(--font-data);
-    font-size: 10px;
+    font-size: 11px;
 }
 .btc-copy:hover { color: var(--accent); }
 
@@ -173,7 +186,7 @@ html, body {
     border-radius: 8px;
     padding: 12px;
     min-width: 200px;
-    z-index: 200;
+    z-index: 1000;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 .settings-dropdown.active, .node-config-dropdown.active { display: block; }
@@ -331,16 +344,17 @@ html, body {
 }
 
 .status-text {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
 .status-count {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
     margin-left: 2px;
+    cursor: help;
 }
 
 .protocol-status {
@@ -353,7 +367,16 @@ html, body {
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: 12px;
+}
+.protocol-hoverable {
+    cursor: help;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.protocol-hoverable:hover {
+    background: rgba(255,255,255,0.04);
 }
 .protocol-label {
     color: var(--text-dim);
@@ -362,10 +385,18 @@ html, body {
 .protocol-list {
     color: var(--text-secondary);
     font-family: var(--font-data);
-    font-size: 11px;
+    font-size: 12px;
 }
+/* Protocol network name colors */
+.proto-ipv4 { color: var(--net-ipv4); }
+.proto-ipv6 { color: var(--net-ipv6); }
+.proto-onion { color: var(--net-onion); }
+.proto-i2p { color: var(--net-i2p); }
+.proto-cjdns { color: var(--net-cjdns); }
+.proto-all-configured { color: var(--green); font-style: italic; }
+
 .protocol-hint {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-dim);
     font-style: italic;
 }
@@ -391,7 +422,7 @@ html, body {
 .network-col.not-configured { opacity: 0.35; }
 
 .net-name {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.3px;
 }
@@ -402,7 +433,7 @@ html, body {
 .net-cjdns { color: var(--net-cjdns); }
 
 .net-compact {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-secondary);
     font-family: var(--font-data);
 }
@@ -427,6 +458,8 @@ html, body {
     display: flex;
     flex-direction: column;
     min-height: 450px;
+    z-index: 0;
+    position: relative;
 }
 
 .map-header {
@@ -506,7 +539,8 @@ html, body {
 
 .map-container {
     flex: 1;
-    min-height: 400px;
+    min-height: 500px;
+    height: calc(100vh - 280px);
     background: var(--bg-primary);
 }
 
@@ -579,6 +613,9 @@ html, body {
     color: var(--text-primary);
     font-size: 12px;
     text-align: right;
+}
+.sidebar-value-hoverable {
+    cursor: help;
 }
 
 .sidebar-unit {
@@ -704,20 +741,21 @@ html, body {
 .geodb-dropdown.active { display: block; }
 
 .geodb-dropdown-title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--accent);
     margin-bottom: 8px;
 }
 .geodb-dropdown-rows { font-size: 11px; }
 .geodb-detail-row {
     display: flex;
     justify-content: space-between;
-    padding: 2px 0;
+    padding: 3px 0;
     color: var(--text-secondary);
 }
+.geodb-detail-row span:first-child { color: var(--text-dim); font-weight: 500; }
 .geodb-detail-row span:last-child { color: var(--text-primary); font-family: var(--font-data); font-size: 11px; }
-.geodb-path { font-size: 9px !important; word-break: break-all; max-width: 140px; text-align: right; }
+.geodb-path { font-size: 9px !important; word-break: break-all; max-width: 140px; text-align: right; color: var(--accent) !important; }
 .geodb-error-row span:last-child { color: var(--red); }
 .geodb-warn-row span:last-child { color: var(--yellow); }
 .geodb-detail-divider { border-top: 1px solid var(--border-primary); margin: 6px 0; }
@@ -731,19 +769,20 @@ html, body {
 }
 .geodb-update-btn {
     width: 100%;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-primary);
-    border-radius: 4px;
-    color: var(--text-secondary);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    color: #fff;
     font-family: var(--font-ui);
-    font-size: 11px;
-    padding: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
     cursor: pointer;
     transition: all 0.15s;
 }
-.geodb-update-btn:hover { background: var(--border-primary); color: var(--text-primary); }
-.geodb-update-btn:disabled { opacity: 0.5; cursor: default; }
-.geodb-update-msg { font-size: 10px; margin-top: 4px; text-align: center; }
+.geodb-update-btn:hover { background: #79b8ff; border-color: #79b8ff; }
+.geodb-update-btn:disabled { opacity: 0.6; cursor: default; background: var(--bg-tertiary); border-color: var(--border-primary); color: var(--text-dim); }
+.geodb-update-msg { font-size: 11px; margin-top: 6px; text-align: center; font-weight: 500; }
 .geodb-msg-ok { color: var(--green); }
 .geodb-msg-err { color: var(--red); }
 .geodb-status-badge { font-family: var(--font-data); font-size: 11px; }
@@ -779,7 +818,8 @@ html, body {
 }
 
 .sidebar-updates-list {
-    max-height: 100px;
+    height: 90px;
+    max-height: 90px;
     overflow-y: auto;
     padding: 0 12px 8px;
 }
@@ -789,6 +829,14 @@ html, body {
     color: var(--text-dim);
     font-style: italic;
     padding: 4px 0;
+}
+
+.update-clickable {
+    cursor: pointer;
+}
+.update-clickable:hover {
+    text-decoration: underline;
+    filter: brightness(1.3);
 }
 
 .sidebar-update-item {
@@ -882,7 +930,7 @@ html, body {
     white-space: nowrap;
 }
 .network-filter-btn:hover { color: var(--text-secondary); background: var(--bg-tertiary); }
-.network-filter-btn.active { color: var(--text-primary); background: var(--bg-tertiary); font-weight: 600; }
+.network-filter-btn.active { color: var(--text-primary); background: var(--bg-tertiary); font-weight: 700; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 .count-sep {
     color: var(--border-primary);
@@ -942,6 +990,7 @@ html, body {
 .table-container {
     overflow: auto;
     flex: 1;
+    max-height: 650px;
 }
 
 .peer-table {
@@ -971,8 +1020,10 @@ html, body {
     cursor: pointer;
     user-select: none;
     border-bottom: 1px solid var(--border-primary);
+    border-right: 1px solid var(--border-subtle);
     position: relative;
 }
+.peer-table th:last-child { border-right: none; }
 .peer-table th:hover { color: var(--text-primary); }
 
 .peer-table th.sort-asc::after { content: ' ▲'; font-size: 8px; color: var(--accent); }
@@ -1018,41 +1069,42 @@ html, body {
 }
 
 /* Direction badges */
-.badge-in {
+.direction-badge {
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+}
+.direction-badge.in, .badge-in {
     background: rgba(63, 185, 80, 0.15);
     color: var(--green);
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: 500;
 }
-.badge-out {
+.direction-badge.out, .badge-out {
     background: rgba(88, 166, 255, 0.15);
     color: var(--accent);
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: 500;
 }
 
-/* Connection type badges */
+/* Connection type badges - inbound green bg, outbound blue bg */
 .conn-type-badge {
-    padding: 1px 5px;
-    border-radius: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
     font-size: 10px;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.3px;
 }
-.conn-type-INB { background: rgba(63, 185, 80, 0.12); color: var(--green); }
-.conn-type-OFR { background: rgba(88, 166, 255, 0.12); color: var(--accent); }
-.conn-type-BLO { background: rgba(210, 168, 255, 0.12); color: var(--net-cjdns); }
-.conn-type-MAN { background: rgba(240, 136, 62, 0.12); color: var(--orange); }
-.conn-type-FET { background: rgba(227, 179, 65, 0.12); color: var(--net-ipv4); }
-.conn-type-FEL { background: rgba(248, 81, 73, 0.12); color: var(--red); }
+.conn-type-inbound { background: rgba(63, 185, 80, 0.25); color: var(--green); }
+.conn-type-outbound { background: rgba(88, 166, 255, 0.25); color: var(--accent); }
+.conn-type-text-yellow { color: var(--net-ipv4) !important; }
+.conn-type-text-lightblue { color: #79b8ff !important; }
 
 /* Addrman status */
-.addrman-yes { color: var(--green); }
-.addrman-no { color: var(--text-dim); }
+.addrman-yes { color: var(--green); font-weight: 600; }
+.addrman-no { color: var(--red); }
 .addrman-checking { color: var(--text-dim); font-style: italic; }
+
+/* Bytes sent/received colors */
+.bytes-sent { color: var(--accent); }
+.bytes-recv { color: var(--green); }
 
 /* Network text colors for table cells */
 .network-ipv4 { color: var(--net-ipv4); }
@@ -1118,7 +1170,7 @@ html, body {
     border-radius: 8px;
     padding: 14px;
     width: 320px;
-    z-index: 200;
+    z-index: 1000;
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .disconnect-dropdown.active { display: block; }
@@ -1227,7 +1279,7 @@ html, body {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.7);
-    z-index: 300;
+    z-index: 1000;
     align-items: center;
     justify-content: center;
 }
@@ -1605,6 +1657,7 @@ html, body {
 .leaflet-container {
     background: var(--bg-primary) !important;
     font-family: var(--font-ui) !important;
+    z-index: 1 !important;
 }
 .leaflet-control-zoom a {
     background: var(--bg-secondary) !important;

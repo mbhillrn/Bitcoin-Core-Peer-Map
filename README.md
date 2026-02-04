@@ -1,16 +1,20 @@
-# MBCore Dashboard - Live Bitcoin Core Peer Map
+# M₿Core Dashboard - Live Bitcoin Core Peer Map
 
 A lightweight real-time monitoring dashboard for Bitcoin Core nodes that visualizes peer connections on an interactive world map.
 
 - Interactive world map of YOUR node's actual connected peers
 - Zero config - just point at bitcoind
-- All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS)
+- All 5 protocols (IPv4, IPv6, Tor, I2P, CJDNS) with color-coded network indicators
 - Connect, disconnect, and ban peers directly from the dashboard
 - Mempool info with real-time stats
+- Live Bitcoin price with persistent green/red coloring
 - No accounts, no external services requiring signup, runs locally
 - Lightweight single script install
 - Real-time with SSE updates
-- Beautiful aesthetic
+- Two-column layout with sidebar, finite world map, and unified settings
+- Scrollable peer list with color-coded connection types and network text
+- Clickable recent updates to fly to peer locations on the map
+- GeoIP database with one-click update from GitHub
 
 **Requires:** Bitcoin Core (`bitcoind`) installed and running on your system.
 
@@ -68,27 +72,77 @@ Running a Bitcoin node is more enjoyable when you can see your peers across the 
 
 ## Features
 
-- **Interactive World Map** - Watch your peer connections in real-time on a Leaflet.js map
+### Dashboard Layout
+- **Two-Column Layout** - Sidebar with node info, system stats, price, and recent updates alongside the main map
+- **M₿Core Branding** - Color-coded header with light blue M/Core and darker blue ₿ symbol
+- **Unified Settings** - Single settings dropdown for refresh rates, visibility toggles, and panel configuration
+
+### Map
+- **Interactive World Map** - Leaflet.js dark map (CartoDB Dark Matter) with full vertical coverage from Russia to Antarctica
+- **Finite World** - No wrapping; single clean world view with bounded panning
+- **Network-Colored Markers** - Each peer dot is colored by its network type (IPv4 yellow, IPv6 orange, Tor red, I2P purple, CJDNS pink)
+- **Antarctica Clustering** - Private network peers (Tor, I2P, CJDNS) are placed at stable positions along the Antarctic coast
+- **Region Selector** - Quick-jump to World, North America, South America, Europe, Africa, Middle East, Asia, Oceania, or Antarctica
+- **New Peer Animations** - Green pulse that fades to network color when a new peer connects
+
+### Peer Table
+- **Scrollable Peer List** - Fixed-height table with scroll for large peer counts
+- **Network-Colored Text** - All columns use network-specific colors for quick visual identification
+- **Connection Type Badges** - Green-highlighted box for inbound (INB), blue-highlighted box for outbound types (OFR, BLO, MAN, FET, FEL)
+- **Bytes Sent/Received** - Sent in blue, received in green for easy differentiation
+- **Addrman Status** - Green for Yes, red for No
+- **Column Separators** - Visible borders between column headers for easier resizing
+- **Column Configuration** - Show/hide any of 38+ columns including extended geo fields
+- **Drag-and-Drop Reorder** - Rearrange columns by dragging headers
+- **Resizable Columns** - Drag column edges to resize
+- **3-State Sorting** - Click headers to cycle: unsorted → ascending → descending
+- **Network Filters** - Filter by all, IPv4, IPv6, Tor, I2P, or CJDNS with bold active state
+- **Click to Map** - Click any peer row to fly to its location on the map
+
+### Node Info Sidebar
+- **Peer Count** - Total connected peers with hover tooltip
+- **Blockchain Size** - Total size displayed without space (e.g., "817.5GB")
+- **Node Type** - Full vs Pruned with hover tooltip
+- **Indexed** - Whether txindex is enabled
+- **IBD Status** - Initial Block Download status on both label and value
+
+### System Information
+- **CPU & RAM** - Live percentages with detailed breakdown tooltips on both labels and values
+- **Network Traffic** - Real-time inbound/outbound traffic bars with adaptive scaling
+- **MBCore DB** - Click to see GeoIP database details with colored settings (green for On, blue for paths)
+- **Database Update** - Prominent blue update button that shows "Working..." feedback immediately
+
+### Bitcoin Price
+- **Live Price** - Real-time from Coinbase API with configurable update interval
+- **Persistent Coloring** - Green when price goes up, red when it goes down, stays colored
+- **10 Currencies** - USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, HKD, SGD
+
+### Node Status Bar
+- **Protocol Status** - Shows enabled and not-configured networks with color-coded names
+- **Hover Tooltips** - Full protocol line hover for configuration details
+- **Help Cursor** - Visual indicator that hovering reveals information
+- **Connected Count** - Total peers with "Total Connected Peers" tooltip
+- **Mempool & Last Block** - Click for detailed modal views
+
+### Recent Updates
+- **Fixed-Size Panel** - Scrollable list that doesn't push the map down
+- **Clickable Connections** - Click a green (connected) entry to fly to that peer on the map
+- **Configurable Window** - Show last 10s, 20s, 30s, 1m, 2m, or 5m of changes
+- **Detailed Panel** - Toggle a full changes table below the peer list
+
+### Peer Management
+- **Connect Peer** - Manually add peers with CLI command preview
+- **Disconnect/Ban** - Remove peers with optional 24-hour IP ban
+- **Ban List** - View and manage all active bans
+- **BTC Address Copy** - Click-to-copy with fallback for HTTP contexts
+
+### Other
 - **Auto-Detection** - Automatically finds your Bitcoin Core installation, datadir, and authentication
-- **Peer Geolocation** - Looks up geographic location for each peer using free APIs (no API key needed)
-- **Real-Time Updates** - Server-Sent Events push changes to your browser instantly
-- **Network Stats** - See connection counts by network type (IPv4, IPv6, Tor, I2P, CJDNS)
-- **Connection History** - Track recently connected and disconnected peers
-- **Web Dashboard** - Clean, responsive interface accessible from any device on your network
-- **Smart Caching** - Geo-location data is cached in a persistent SQLite database to minimize API calls
-- **Blockchain Info** - View detailed blockchain status including sync progress, difficulty, softforks, and pruning status
-- **Configurable Refresh Rate** - Set your preferred update frequency in seconds (default: 10s)
-- **Interactive Peer Selection** - Click any peer row to highlight it on the map
-- **Version Display** - Shows current version in the header
-- **Auto-Update** - Checks for updates from GitHub and offers one-click updates from the menu
-- **Antarctica Toggle** - Hide or show private network peers displayed in the Antarctica map area
-- **Live BTC Price** - Real-time Bitcoin price from Coinbase API with 10 currency options (USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, HKD, SGD)
-- **Blockchain Status** - View blockchain size, node type (full/pruned), index status, and sync state
-- **Network Scores** - Display local address scores for IPv4 and IPv6 from Bitcoin Core
-- **System Monitor** - Live CPU and memory usage percentages
-- **Collapsible Info Panel** - Configurable panel with show/hide options for each metric
-- **Mempool Info** - View detailed mempool statistics including pending transactions, fees, memory usage, and policy settings
-- **Peer Management** - Connect to new peers, disconnect existing peers, and manage IP bans directly from the dashboard
+- **Peer Geolocation** - Looks up geographic location using ip-api.com (no API key needed)
+- **Real-Time Updates** - Server-Sent Events push changes instantly
+- **Smart Caching** - GeoIP data cached in SQLite to minimize API calls
+- **Auto-Update** - One-click updates from the main menu
+- **Configurable Refresh** - Set update frequency in seconds (default: 10s)
 
 ## Quick Start
 
@@ -432,34 +486,30 @@ Additional options:
 
 ### Refresh Rate
 
-The map update frequency can be adjusted in the stats bar using the "Update Freq" text input. Enter any number of seconds (default: 10). Your preference is saved automatically.
+The peer update frequency can be adjusted in the settings dropdown (gear icon in the header). Enter any number of seconds (default: 10). Bitcoin price has its own independent update interval (also configurable, default: 10s).
 
-**Recommendation:** On a decently powered machine, a 10-second refresh rate provides a good balance between responsiveness and resource usage. Lower-powered systems may prefer 15 or 30 seconds.
+**Recommendation:** 10 seconds provides a good balance between responsiveness and resource usage.
 
 ### Peer Selection
 
-Click any row in the peer table to highlight that peer on the map. The map will pan to show the peer's location and display its information popup.
+Click any row in the peer table to highlight that peer on the map. The map will fly to the peer's location and display its information popup. You can also click connected entries in the Recent Updates sidebar to fly to newly connected peers.
 
 ### Private Networks on the Map
 
-Peers using private networks (Tor, I2P, CJDNS) and peers with unavailable geo-location don't have real geographic coordinates. These peers are still shown on the map, scattered across the northern coast of Antarctica. Each peer maintains a stable position during its connection, so dots won't jump around between refreshes. You can identify them by their network color in the popup.
+Peers using private networks (Tor, I2P, CJDNS) and peers with unavailable geo-location don't have real geographic coordinates. These peers are shown on the map, scattered across the northern coast of Antarctica. Each peer maintains a stable position during its connection. You can identify them by their network color.
 
-If you prefer not to see these Antarctica dots, click the "Hide" link in the map legend (next to "Private"). Click "Show" to bring them back. Your preference is saved automatically.
+Click "Hide"/"Show" in the map legend (next to "Private") to toggle Antarctica dots.
 
-### Info Panel
+### Sidebar
 
-The info panel displays live system and Bitcoin data including:
-- **BTC Price** - Current Bitcoin price (updates every 60 seconds by default)
-- **Last Block** - Date/time and height of the most recent block
-- **Blockchain** - Storage size and node status (Full/Pruned, Indexed, sync state)
-- **Network Scores** - Local address advertisement scores for IPv4 and IPv6
-- **System Stats** - Current CPU and memory usage
+The right sidebar displays live system and Bitcoin data in collapsible sections:
 
-Click the gear icon on the right to configure:
-- **Currency** - Choose from USD, EUR, GBP, JPY, CHF, CAD, AUD, CNY, HKD, or SGD
-- **Update Interval** - Set how often the panel refreshes (30s, 1m, 2m, or 5m)
-- **Show/Hide** - Toggle visibility of individual metrics
-- **Collapse Panel** - Minimize the panel to just the gear icon
+- **Node Info** - Peers, blockchain size, node type, indexed status, IBD status (all with hover tooltips on both labels and values)
+- **System Information** - CPU and RAM with detailed breakdown tooltips, network traffic bars, MBCore DB status
+- **Bitcoin Price** - Live price with persistent green/red coloring, click currency label to change
+- **Recent Updates** - Fixed-height scrollable list of peer connections/disconnections
+
+Use the settings dropdown to show/hide individual sections.
 
 ### Blockchain Info
 
@@ -530,31 +580,38 @@ From the Disconnect Peer dropdown:
 
 ### Dashboard Column Reference
 
-The peer table displays detailed information about each connected peer. Click the gear icon (⚙️) above the table to customize which columns are visible.
+The peer table displays detailed information about each connected peer. Click the gear icon above the table to customize which columns are visible. Columns always reset to defaults on page load.
 
 #### Connection Type Badges
 
-The **Type** column shows color-coded badges indicating how each peer is connected:
+The **Type** column shows highlighted badges indicating how each peer is connected:
 
-| Badge | Color | Description |
-|-------|-------|-------------|
-| **INB** | 🟢 Green | **Inbound** - They connected to us (full relay) |
-| **OFR** | 🔵 Blue | **Outbound Full Relay** - We connected to them (transactions + blocks) |
-| **BLO** | 🔵 Dark Blue | **Block Relay Only** - We connected, blocks only (no transactions - privacy feature) |
-| **MAN** | 🩷 Pink | **Manual** - Added via `addnode` command |
-| **FET** | 🩵 Cyan | **Address Fetch** - Temporary connection to get peer addresses |
-| **FEL** | 🩵 Cyan | **Feeler** - Temporary connection to test if a node is reachable |
+| Badge | Background | Text Color | Direction | Description |
+|-------|-----------|------------|-----------|-------------|
+| **INB** | Green | Green | Inbound | Peer initiated the connection to you |
+| **OFR** | Blue | Blue | Outbound | Normal outbound peer (transactions + blocks) |
+| **BLO** | Blue | Yellow | Outbound | Block relay only (no tx or addr relay) |
+| **MAN** | Blue | Blue | Outbound | Manually added via addnode RPC or config |
+| **FET** | Blue | Light Blue | Outbound | Short-lived connection to solicit addresses |
+| **FEL** | Blue | Light Blue | Outbound | Short-lived connection to test reachability |
 
 Hover over any badge to see its full description.
 
 #### Direction Badges (Optional Column)
 
-The **in/out** column (available via Configure) shows simple direction badges:
-
 | Badge | Color | Description |
 |-------|-------|-------------|
-| **IN** | 🟢 Green | Inbound - They connected to us |
-| **OUT** | 🔵 Blue | Outbound - We connected to them |
+| **IN** | Green | Inbound - They connected to us |
+| **OUT** | Blue | Outbound - We connected to them |
+
+#### Data Coloring
+
+| Column | Color Scheme |
+|--------|-------------|
+| **Network text** | All columns use network-specific colors (IPv4 yellow, IPv6 orange, Tor red, I2P purple, CJDNS pink) |
+| **Bytes Sent** | Blue |
+| **Bytes Received** | Green |
+| **In Addrman?** | Green for Yes, Red for No |
 
 #### Other Key Columns
 
@@ -609,4 +666,4 @@ If you find this useful, consider a small donation:
 
 ---
 
-*Created by mbhillrn*
+*Created by [@mbhillrn](https://github.com/mbhillrn/Bitcoin-Core-Peer-Map)*

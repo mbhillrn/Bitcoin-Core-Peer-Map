@@ -19,10 +19,10 @@
         <header class="header">
             <div class="header-left">
                 <div class="header-logo-row">
-                    <h1 class="logo-text" title="Peer info, map, and tools for Bitcoin Core">MBCore<span class="logo-light">Dashboard</span> <span class="version">v{{ version }}</span></h1>
-                    <span class="header-author">Created by <a href="https://github.com/mbhillrn" target="_blank" rel="noopener" class="author-link">@mbhillrn</a></span>
+                    <h1 class="logo-text" title="Peer info, map, and tools for Bitcoin Core"><span class="logo-m">M</span><span class="logo-btc">&#x20bf;</span><span class="logo-core">Core</span><span class="logo-light">Dashboard</span> <span class="version">v{{ version }}</span></h1>
+                    <span class="header-author"><a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="author-link" title="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map">Created by @mbhillrn</a></span>
                 </div>
-                <span class="header-btc-line">Support (btc): <span class="btc-copy" id="header-btc-copy" title="Click to copy">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
+                <span class="header-btc-line">Support (btc): <span class="btc-copy" id="header-btc-copy" title="Click to copy BTC address to clipboard">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
             </div>
             <div class="header-right">
                 <span class="header-time data-value" id="stat-localtime">--:--:--</span>
@@ -74,14 +74,14 @@
                     <div class="node-status-left">
                         <span class="status-indicator" id="status-indicator"></span>
                         <span class="status-text" id="connection-status">Connecting...</span>
-                        <span class="status-count data-value" id="stat-connected">-</span>
+                        <span class="status-count data-value" id="stat-connected" title="Total Connected Peers">-</span>
                         <div class="protocol-status" id="protocol-status">
-                            <div class="protocol-line">
-                                <span class="protocol-label" title="Networks enabled in your Bitcoin Core configuration">Enabled:</span>
+                            <div class="protocol-line protocol-hoverable" title="Networks enabled in your Bitcoin Core configuration">
+                                <span class="protocol-label">Enabled:</span>
                                 <span class="protocol-list" id="protocols-enabled">-</span>
                             </div>
-                            <div class="protocol-line">
-                                <span class="protocol-label" title="Networks not configured - add to bitcoin.conf to enable">Not Configured:</span>
+                            <div class="protocol-line protocol-hoverable" title="Networks not configured - add to bitcoin.conf to enable">
+                                <span class="protocol-label">Not Configured:</span>
                                 <span class="protocol-list" id="protocols-disabled">-</span>
                             </div>
                             <div class="protocol-hint" id="protocol-hint" style="display: none;">
@@ -179,24 +179,24 @@
                     </div>
                     <div class="sidebar-rows">
                         <div class="sidebar-row">
-                            <span class="sidebar-label">Peers</span>
-                            <span class="sidebar-value data-value" id="sidebar-peers">-</span>
+                            <span class="sidebar-label" title="Total Connected Peers">Peers</span>
+                            <span class="sidebar-value data-value" id="sidebar-peers" title="Total Connected Peers">-</span>
                         </div>
                         <div class="sidebar-row">
                             <span class="sidebar-label" title="Total size of Bitcoin Core including database, chain state, and indexes">Size</span>
-                            <span class="sidebar-value data-value" id="info-chain-size">-</span>
+                            <span class="sidebar-value data-value" id="info-chain-size" title="Total size of Bitcoin Core including database, chain state, and indexes">-</span>
                         </div>
                         <div class="sidebar-row">
-                            <span class="sidebar-label" title="Whether this node stores the full blockchain or is pruned to save disk space">Type</span>
-                            <span class="sidebar-value data-value" id="info-node-type">-</span>
+                            <span class="sidebar-label" title="Full vs Pruned Node">Type</span>
+                            <span class="sidebar-value data-value" id="info-node-type" title="Full vs Pruned Node">-</span>
                         </div>
                         <div class="sidebar-row">
-                            <span class="sidebar-label" title="Whether transaction index (txindex) is enabled for this node">Indexed</span>
-                            <span class="sidebar-value data-value" id="info-node-indexed">-</span>
+                            <span class="sidebar-label" title="Indexing Enabled?">Indexed</span>
+                            <span class="sidebar-value data-value" id="info-node-indexed" title="Indexing Enabled?">-</span>
                         </div>
                         <div class="sidebar-row">
-                            <span class="sidebar-label" title="Whether Initial Block Download (IBD) is complete">Up to date</span>
-                            <span class="sidebar-value data-value" id="info-sync-status">-</span>
+                            <span class="sidebar-label" title="IBD Status">Up to date</span>
+                            <span class="sidebar-value data-value" id="info-sync-status" title="IBD Status">-</span>
                         </div>
                         <div class="sidebar-row">
                             <span class="sidebar-label sidebar-link" id="mempool-info-btn" title="Click for mempool info">Mempool</span>
@@ -217,13 +217,13 @@
                     <div class="sidebar-rows">
                         <div class="sidebar-row">
                             <span class="sidebar-label" id="sidebar-cpu-label" title="Host CPU utilization (all cores averaged)">CPU</span>
-                            <span class="sidebar-value">
+                            <span class="sidebar-value sidebar-value-hoverable" id="sidebar-cpu-value" title="Host CPU utilization (all cores averaged)">
                                 <span class="data-value" id="info-cpu">-</span><span class="sidebar-unit">%</span>
                             </span>
                         </div>
                         <div class="sidebar-row">
                             <span class="sidebar-label" id="sidebar-mem-label" title="System memory usage">RAM</span>
-                            <span class="sidebar-value">
+                            <span class="sidebar-value sidebar-value-hoverable" id="sidebar-mem-value" title="System memory usage">
                                 <span class="data-value" id="info-mem">-</span><span class="sidebar-unit">%</span>
                             </span>
                         </div>
@@ -320,7 +320,7 @@
                                 <button class="dropdown-option" data-seconds="120">2m</button>
                                 <button class="dropdown-option" data-seconds="300">5m</button>
                             </div>
-                            <button class="sidebar-small-btn" id="toggle-changes-panel-btn" title="Show/hide detailed changes panel below">
+                            <button class="sidebar-small-btn" id="toggle-changes-panel-btn" title="Show Recent Updates Panel under the Peer List panel">
                                 <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
                                     <path d="M2 2.5A.5.5 0 0 1 2.5 2h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 2.5zm0 4A.5.5 0 0 1 2.5 6h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 6.5zm0 4A.5.5 0 0 1 2.5 10h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5zm0 4A.5.5 0 0 1 2.5 14h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
                                 </svg>
