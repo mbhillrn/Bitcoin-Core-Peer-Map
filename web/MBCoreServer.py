@@ -1038,30 +1038,44 @@ async def api_stats():
         pending = geo_pending_count
 
     # System stats (CPU via /proc/stat, memory via /proc/meminfo) - very fast
-    system_stats = {'cpu_pct': None, 'mem_pct': None}
+    system_stats = {'cpu_pct': None, 'mem_pct': None, 'cpu_breakdown': None, 'mem_used_mb': None, 'mem_total_mb': None}
     try:
         # CPU usage via /proc/stat (instant read, compare with previous sample)
         cpu_pct = None
+        cpu_breakdown = None
         try:
             with open('/proc/stat', 'r') as f:
                 line = f.readline()  # First line is aggregate CPU
                 parts = line.split()
                 if len(parts) >= 8:
                     # user, nice, system, idle, iowait, irq, softirq, steal
-                    idle = int(parts[4]) + int(parts[5])  # idle + iowait
-                    total = sum(int(x) for x in parts[1:9])  # user..steal (exclude guest/guest_nice which are already in user/nice)
+                    vals = [int(x) for x in parts[1:9]]
+                    user, nice, system, idle_val, iowait, irq, softirq, steal = vals
+                    idle = idle_val + iowait
+                    total = sum(vals)
                     if hasattr(api_stats, '_prev_cpu'):
-                        prev_idle, prev_total = api_stats._prev_cpu
+                        prev_idle, prev_total, prev_vals = api_stats._prev_cpu
                         d_idle = idle - prev_idle
                         d_total = total - prev_total
                         if d_total > 0:
                             cpu_pct = round(100 * (1 - d_idle / d_total), 0)
-                    api_stats._prev_cpu = (idle, total)
+                            # Per-field deltas for breakdown tooltip
+                            dv = [vals[i] - prev_vals[i] for i in range(8)]
+                            cpu_breakdown = {
+                                'user': round(100 * (dv[0] + dv[1]) / d_total, 1),  # user + nice
+                                'system': round(100 * (dv[2] + dv[5] + dv[6]) / d_total, 1),  # system + irq + softirq
+                                'iowait': round(100 * dv[4] / d_total, 1),
+                                'steal': round(100 * dv[7] / d_total, 1),
+                                'idle': round(100 * (dv[3] + dv[4]) / d_total, 1),  # idle + iowait
+                            }
+                    api_stats._prev_cpu = (idle, total, vals)
         except:
             pass
 
         # Memory usage via /proc/meminfo (instant)
         mem_pct = None
+        mem_used_mb = None
+        mem_total_mb = None
         try:
             with open('/proc/meminfo', 'r') as f:
                 mem_total = 0
@@ -1073,10 +1087,12 @@ async def api_stats():
                         mem_avail = int(line.split()[1])
                 if mem_total > 0:
                     mem_pct = round((1 - mem_avail / mem_total) * 100, 1)
+                    mem_total_mb = round(mem_total / 1024)
+                    mem_used_mb = round((mem_total - mem_avail) / 1024)
         except:
             pass
 
-        system_stats = {'cpu_pct': cpu_pct, 'mem_pct': mem_pct}
+        system_stats = {'cpu_pct': cpu_pct, 'mem_pct': mem_pct, 'cpu_breakdown': cpu_breakdown, 'mem_used_mb': mem_used_mb, 'mem_total_mb': mem_total_mb}
     except:
         pass
 
@@ -1150,6 +1166,9 @@ async def api_info(currency: str = "USD"):
         'blockchain': None,
         'network_scores': None,
         'geo_db_stats': None,
+        'connected': None,
+        'mempool_size': None,
+        'subversion': None,
     }
 
     # 1. Bitcoin price from Coinbase API
@@ -1221,6 +1240,8 @@ async def api_info(currency: str = "USD"):
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if r.returncode == 0:
             netinfo = json.loads(r.stdout)
+            result['subversion'] = netinfo.get('subversion', '')
+            result['connected'] = netinfo.get('connections', 0)
             local_addrs = netinfo.get('localaddresses', [])
             scores = {'ipv4': None, 'ipv6': None}
             for addr_info in local_addrs:
@@ -1243,7 +1264,17 @@ async def api_info(currency: str = "USD"):
     except Exception as e:
         print(f"Network scores fetch error: {e}")
 
-    # 5. Geo database stats (always returned so frontend can show status)
+    # 5. Mempool size (lightweight RPC)
+    try:
+        cmd = config.get_cli_command() + ['getmempoolinfo']
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            mempoolinfo = json.loads(r.stdout)
+            result['mempool_size'] = mempoolinfo.get('size', 0)
+    except Exception as e:
+        print(f"Mempool info fetch error: {e}")
+
+    # 6. Geo database stats (always returned so frontend can show status)
     try:
         stats = get_geo_db_stats()
         if stats.get('entries', 0) > 0:
