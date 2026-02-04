@@ -883,19 +883,15 @@ function setupMapRegionSelector() {
     });
 }
 
-// Antarctica research station coordinates (all on land, near coast)
-// These are real research stations - Peninsula excluded (too close to S. America)
+// Antarctica research station coordinates (northern coastline only)
+// Private networks are scattered along the coast, not deep south
 const ANTARCTICA_STATIONS = [
-    // Ross Sea region (Pacific side)
-    { lat: -77.8460, lon: 166.6670 },  // McMurdo Station
-    { lat: -77.8480, lon: 166.7600 },  // Scott Base
-    { lat: -77.8000, lon: 166.6000 },  // Hut Point Peninsula
     // East Antarctica coastal (Indian Ocean side)
     { lat: -67.6020, lon: 62.8730 },   // Mawson Station
     { lat: -68.5760, lon: 77.9670 },   // Davis Station
     { lat: -66.2810, lon: 110.5280 },  // Casey Station
     { lat: -66.6630, lon: 140.0010 },  // Dumont d'Urville Station
-    // Additional coastal stations (Atlantic side, excluding peninsula)
+    // Atlantic side coastal stations
     { lat: -69.0050, lon: 39.5800 },   // Syowa Station
     { lat: -70.6670, lon: 11.6330 },   // Novolazarevskaya
     { lat: -70.7500, lon: -8.2500 },   // Neumayer Station
