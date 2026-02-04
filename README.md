@@ -172,37 +172,29 @@ The script will:
 
 ## First Run
 
-On first run, the script automatically handles setup. Here's what you might see:
+On first run, the script automatically handles everything. Just answer `y` to the prompts and you're done.
 
-### Python Virtual Environment Setup
+### Step 1: Prerequisites & Virtual Environment
 
-The dashboard uses a Python virtual environment to keep its packages isolated. If you don't have one yet:
+The script checks for required system tools and sets up an isolated Python environment:
 
-```
-Checking your python...
-⚠ No virtual environment found
-? Setup virtual environment and install packages? [y/N] y
-```
+![Prerequisites and venv setup](docs/images/2.venv-prompt.png)
 
-### Ubuntu/Debian: Missing python3-venv
+Press `y` to install. If you're on Ubuntu/Debian and see a message about `python3-venv`, just press `y` again and enter your password - the script handles it.
 
-Ubuntu and Debian require an extra package for Python virtual environments. If it's not installed, you'll see:
+### Step 2: Package Installation
 
-```
-Python said:
+Once approved, packages install automatically:
 
-The virtual environment was not created successfully because ensurepip is not
-available...
+![Package installation](docs/images/3.install-success.png)
 
-We can fix this for you!
+### Step 3: Bitcoin Core Detection
 
-On Ubuntu/Debian systems, Python needs an extra package to create
-virtual environments. We can install it now.
+The script auto-detects your Bitcoin Core setup - this works for most common configurations and many uncommon ones too (custom paths, systemd services, non-standard datadirs):
 
-? Install python3.12-venv now? [y/N] y
-```
+![Bitcoin Core detection](docs/images/4.detection.png)
 
-Just press `y` and enter your password - the script handles the rest.
+Press `y` to accept the detected settings. If detection fails or finds the wrong paths, press `n` to enter them manually.
 
 ### Recovering from Incomplete Installation
 
@@ -220,24 +212,7 @@ Your other Python environments are not affected.
 ? Reset the MBCore Dashboard virtual environment? [y/N] y
 ```
 
-### Successful Setup
-
-Once everything is installed, you'll see:
-
-```
-✓ Virtual environment created
-✓ Pip upgraded
-✓ Installed rich
-✓ Installed requests
-✓ Installed fastapi
-✓ Installed uvicorn
-✓ Installed jinja2
-✓ Installed sse_starlette
-
-** All packages installed successfully!! **
-```
-
-After this, the script proceeds to detect your Bitcoin Core installation.
+After setup completes, you'll see the main menu.
 
 ---
 
