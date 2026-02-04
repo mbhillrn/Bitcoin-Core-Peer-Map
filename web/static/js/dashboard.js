@@ -842,9 +842,13 @@ function zoomToAllNodes() {
         return;
     }
 
-    // Fit to all markers with padding
+    // Fit to all markers with asymmetric padding (more top, less bottom for Mercator)
     const latLngBounds = L.latLngBounds(bounds);
-    map.fitBounds(latLngBounds, { padding: [30, 30], maxZoom: 10 });
+    map.fitBounds(latLngBounds, {
+        paddingTopLeft: [30, 50],     // [x, y] - more padding at top
+        paddingBottomRight: [30, 15], // [x, y] - less padding at bottom (Antarctica)
+        maxZoom: 10
+    });
 }
 
 // Setup "Fit All" button
@@ -997,9 +1001,17 @@ function updateMap() {
         let lat, lon;
         const network = peer.network || 'ipv4';
         const color = NETWORK_COLORS[network] || NETWORK_COLORS['ipv4'];
+        const isPrivateNetwork = peer.location_status === 'private' || peer.location_status === 'unavailable';
 
-        if (peer.location_status === 'private' || peer.location_status === 'unavailable') {
-            if (!showAntarcticaDots) return;
+        if (isPrivateNetwork) {
+            // If hiding Antarctica dots, remove existing marker and skip
+            if (!showAntarcticaDots) {
+                if (markers[peer.id]) {
+                    map.removeLayer(markers[peer.id]);
+                    delete markers[peer.id];
+                }
+                return;
+            }
             const pos = getStableAntarcticaPosition(peer.addr, network, peer.location_status);
             lat = pos.lat;
             lon = pos.lon;
