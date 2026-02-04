@@ -474,6 +474,14 @@ html, body {
     font-size: 11px;
     color: var(--text-dim);
 }
+.map-title {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    margin-right: 6px;
+}
 .map-countdown-label { color: var(--text-dim); }
 .map-countdown { color: var(--text-secondary); }
 .map-status-sep { color: var(--border-primary); }
@@ -543,6 +551,12 @@ html, body {
     height: calc(100vh - 320px);
     background: var(--bg-primary);
     width: 100%;
+}
+
+/* Stretched map mode - vertically stretches tiles to show more latitude range */
+.map-container.map-stretched {
+    transform: scaleY(1.4);
+    transform-origin: center center;
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -925,10 +939,11 @@ html, body {
     font-size: 11px;
     color: var(--text-dim);
     cursor: pointer;
-    padding: 2px 6px;
+    padding: 2px 28px 2px 6px;
     border-radius: 3px;
     transition: all 0.15s;
     white-space: nowrap;
+    position: relative;
 }
 .network-filter-btn:hover { color: var(--text-secondary); background: var(--bg-tertiary); }
 .network-filter-btn.active { color: var(--text-primary); background: var(--bg-tertiary); font-weight: 700; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
@@ -1650,13 +1665,14 @@ html, body {
 .price-pulse-up { animation: price-pulse-green 2s ease-out; }
 .price-pulse-down { animation: price-pulse-red 2s ease-out; }
 
-/* Delta indicators */
+/* Delta indicators - positioned absolutely within parent (network-filter-btn) */
 .delta-indicator {
     font-family: var(--font-data);
     font-size: 10px;
     font-weight: 600;
-    display: inline-block;
-    margin-left: 2px;
+    position: absolute;
+    right: 4px;
+    top: 50%;
     pointer-events: none;
     animation: delta-float 2.5s ease-out forwards;
 }
@@ -1664,9 +1680,9 @@ html, body {
 .delta-down { color: var(--red); }
 
 @keyframes delta-float {
-    0% { opacity: 1; transform: translateY(0); }
-    70% { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-16px); }
+    0% { opacity: 1; transform: translateY(-50%); }
+    70% { opacity: 1; transform: translateY(-50%); }
+    100% { opacity: 0; transform: translateY(calc(-50% - 16px)); }
 }
 
 /* Hidden utility */

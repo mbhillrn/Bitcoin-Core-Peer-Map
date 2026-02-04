@@ -771,20 +771,26 @@ function initMap(mode) {
         noWrap: !isWrap
     }).addTo(map);
 
-    // Initial view depends on mode
-    if (mode === 'stretched') {
-        map.fitBounds([[-65, -180], [75, 180]], { padding: [0, 0] });
-    } else {
-        map.fitBounds([[-65, -180], [75, 180]], { padding: [5, 20] });
+    // Apply stretched class for vertical stretch effect
+    const mapContainer = document.getElementById('map');
+    if (mapContainer) {
+        if (mode === 'stretched') {
+            mapContainer.classList.add('map-stretched');
+        } else {
+            mapContainer.classList.remove('map-stretched');
+        }
     }
 
+    // Initial view
+    map.fitBounds([[-65, -180], [75, 180]], { padding: [5, 20] });
+
     // Fix map size when container resizes
-    const mapContainer = document.getElementById('map-panel');
-    if (mapContainer) {
+    const mapPanelEl = document.getElementById('map-panel');
+    if (mapPanelEl) {
         const resizeObserver = new ResizeObserver(() => {
             if (map) map.invalidateSize();
         });
-        resizeObserver.observe(mapContainer);
+        resizeObserver.observe(mapPanelEl);
     }
 
     // Re-add all current peer markers
@@ -1886,7 +1892,7 @@ function renderPeers() {
                 <td colspan="23">${msg}</td>
             </tr>
         `;
-        peerCount.textContent = networkFilter === 'all' ? '0 peers' : `0/${currentPeers.length} peers`;
+        if (peerCount) peerCount.textContent = networkFilter === 'all' ? '0 peers' : `0/${currentPeers.length} peers`;
         return;
     }
 
@@ -2078,12 +2084,7 @@ function renderPeers() {
         fitColumnsToWindow();
         autoSizedColumns = true;
     }
-    // Show count with filter info
-    if (networkFilter === 'all') {
-        peerCount.textContent = `${filteredPeers.length} peers`;
-    } else {
-        peerCount.textContent = `${filteredPeers.length}/${currentPeers.length} peers`;
-    }
+    // Show count with filter info (removed - peer count element no longer exists)
 }
 
 // Truncate string
