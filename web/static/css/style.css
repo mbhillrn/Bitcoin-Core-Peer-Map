@@ -343,13 +343,6 @@ body {
     text-align: center;
 }
 
-.card-value-large {
-    font-size: 42px;
-    font-weight: 700;
-    color: var(--accent-green);
-    line-height: 1;
-}
-
 /* Networks Card */
 .card-networks {
     flex: 1;
@@ -515,6 +508,208 @@ body {
     height: 1px;
     background: var(--border-color);
     margin: 2px 0;
+}
+
+/* Network Traffic Bars (inline in peer table header) */
+.net-traffic-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 100px;
+    flex: 1;
+    max-width: 300px;
+}
+
+.net-traffic-row-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.net-traffic-dir-inline {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-dim);
+    width: 22px;
+    text-align: right;
+}
+
+.net-traffic-bar-wrap-inline {
+    flex: 1;
+    height: 4px;
+    background: var(--bg-primary);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 40px;
+}
+
+.net-traffic-bar {
+    height: 100%;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.8s ease, background-color 0.5s ease;
+}
+
+.net-traffic-bar-in {
+    background: var(--accent-green);
+}
+
+.net-traffic-bar-out {
+    background: var(--accent-red);
+}
+
+/* Adaptive color based on traffic level */
+.net-traffic-bar-in.traffic-low { background: #2ea043; }
+.net-traffic-bar-in.traffic-med { background: #3fb950; }
+.net-traffic-bar-in.traffic-high { background: #56d364; box-shadow: 0 0 4px rgba(63, 185, 80, 0.5); }
+
+.net-traffic-bar-out.traffic-low { background: #da3633; }
+.net-traffic-bar-out.traffic-med { background: #f85149; }
+.net-traffic-bar-out.traffic-high { background: #ff7b72; box-shadow: 0 0 4px rgba(248, 81, 73, 0.5); }
+
+.net-traffic-rate-inline {
+    font-size: 9px;
+    color: var(--text-dim);
+    min-width: 52px;
+    text-align: right;
+    font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.net-traffic-sep {
+    color: var(--text-dim);
+}
+
+/* Value Change Pulse Animations */
+@keyframes pulse-green {
+    0% { color: #56d364; text-shadow: 0 0 8px rgba(63, 185, 80, 0.8); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+@keyframes pulse-red {
+    0% { color: #ff7b72; text-shadow: 0 0 8px rgba(248, 81, 73, 0.8); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+@keyframes pulse-white {
+    0% { color: #ffffff; text-shadow: 0 0 6px rgba(255, 255, 255, 0.5); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+/* Score pulse holds longer (5s) */
+@keyframes pulse-green-long {
+    0%, 60% { color: #56d364; text-shadow: 0 0 8px rgba(63, 185, 80, 0.8); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+@keyframes pulse-red-long {
+    0%, 60% { color: #ff7b72; text-shadow: 0 0 8px rgba(248, 81, 73, 0.8); }
+    100% { color: inherit; text-shadow: none; }
+}
+
+.pulse-up {
+    animation: pulse-green 1.5s ease-out;
+}
+
+.pulse-down {
+    animation: pulse-red 1.5s ease-out;
+}
+
+.pulse-white {
+    animation: pulse-white 1.5s ease-out;
+}
+
+.pulse-up-long {
+    animation: pulse-green-long 5s ease-out;
+}
+
+.pulse-down-long {
+    animation: pulse-red-long 5s ease-out;
+}
+
+/* BTC price persistent coloring */
+.price-up {
+    color: var(--accent-green) !important;
+}
+
+.price-down {
+    color: var(--accent-red) !important;
+}
+
+/* CPU/Memory threshold colors */
+.system-value.threshold-warn {
+    color: var(--accent-yellow) !important;
+}
+
+.system-value.threshold-critical {
+    color: var(--accent-red) !important;
+}
+
+/* Connected card number - slightly off-white */
+.card-value-large {
+    font-size: 42px;
+    font-weight: 700;
+    color: #cdd9e5;
+    line-height: 1;
+}
+
+/* Countdown label styling */
+.countdown-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.2;
+}
+
+/* Countdown turns red at 3s or less */
+.time-item #stat-countdown.countdown-urgent {
+    color: var(--accent-red);
+}
+
+/* Dropdown hint text */
+.dropdown-hint {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    min-height: 12px;
+}
+
+.dropdown-hint.hint-warn {
+    color: var(--accent-yellow);
+}
+
+/* Delta indicator (+N / -N floating next to network counts) */
+.delta-indicator {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 3px;
+    opacity: 1;
+    animation: delta-fade 2.5s ease-out forwards;
+    vertical-align: middle;
+}
+
+.delta-indicator.delta-up {
+    color: var(--accent-green);
+}
+
+.delta-indicator.delta-down {
+    color: var(--accent-red);
+}
+
+@keyframes delta-fade {
+    0%, 40% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-8px); }
+}
+
+/* Map marker animations */
+@keyframes marker-appear {
+    0% { transform: scale(2); opacity: 0.3; }
+    50% { transform: scale(1.3); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes marker-disappear {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 /* Geo DB section in System card */
@@ -780,7 +975,7 @@ body {
 }
 
 .network-counts .count-total {
-    color: var(--text-primary);
+    color: #cdd9e5;
     font-weight: 600;
 }
 
