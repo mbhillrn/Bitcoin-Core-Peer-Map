@@ -477,9 +477,17 @@ Click any peer dot on the map to see detailed information:
 
 Peers using private networks (Tor, I2P, CJDNS) don't have real geographic coordinates. These peers are displayed along the northern coast of Antarctica for visualization. The popup shows "(Location Private) - Shown in Antarctica for display only."
 
-Toggle Antarctica dots on/off using the "Hide"/"Show" link in the map legend next to "Private".
+![Show/Hide Antarctica Toggle](docs/images/25.show.hide.penguin.png)
+
+Toggle Antarctica dots on/off using the "Hide"/"Show" link in the map legend, right next to the penguin!
 
 ### Peer Table
+
+![Peer Table](docs/images/24.peer.table.list.png)
+
+The peer table shows all connected peers with live data. The header displays network counts with delta indicators (+1, -2) as peers connect and disconnect.
+
+**Default columns:** ID, Net, Duration, Type, IP, Port, Node ver/name, Service, City, State/Region, Country, Continent, ISP, Ping, Sent, Received, In Addrman?
 
 #### Network Filters
 
