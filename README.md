@@ -666,7 +666,7 @@ MIT License - Free to use, modify, and distribute.
 
 ## Support
 
-If you find this useful, consider a small donation:
+If you find this useful, consider a donation:
 
 **Bitcoin:** `bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5`
 
