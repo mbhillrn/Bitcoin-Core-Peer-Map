@@ -234,124 +234,43 @@ After setup completes, you'll see the main menu.
 
 ## How To Access The Dashboard
 
-### Scenarios:
+When you select `1) Enter MBCore Dashboard` from the main menu, you'll see this screen:
 
-- **Scenario 1:** Bitcoin Core on a full GUI Linux/Ubuntu machine with desktop and browser (not headless)
-- **Scenario 2:** Bitcoin Core on a headless Linux machine (no desktop/browser)
-  - Option A: Expose on LAN
-  - Option B: SSH Tunnel
+![Dashboard Launch](docs/images/10.dashboard-launch.png)
 
----
+The dashboard runs as a local web server. Open the URL in any browser to access it.
 
-### Scenario 1: Full GUI Linux/Ubuntu Machine (Not Headless)
+### From the Same Machine
 
-This is the easiest case. On the machine running Bitcoin Core:
+Use either address - both work:
+- `http://127.0.0.1:58333` (localhost)
+- `http://[your-lan-ip]:58333` (shown on screen)
 
-```bash
-cd /path/to/Bitcoin-Core-Peer-Map
-./da.sh
+On GUI machines with a desktop, the browser opens automatically.
+
+### From Another Computer on Your Network
+
+Use the LAN IP shown on the dashboard launch screen:
+```
+http://192.168.x.x:58333
 ```
 
-The script will:
-1. Check prerequisites (jq, curl, sqlite3, python3, etc.)
-2. Detect your Bitcoin Core setup
-3. Create a Python virtual environment
-4. Start the web server on port 58333
-5. **Automatically open your browser** to `http://127.0.0.1:58333`
+Your actual IP will be displayed. If it won't connect, your firewall may be blocking port 58333 - see [Firewall Configuration](#firewall-configuration).
 
-You're done - the dashboard appears in your browser.
+### From Outside Your Network (SSH Tunnel)
 
----
+If you're accessing a remote/headless machine:
 
-### Scenario 2: Headless Linux Machine (No Desktop/Browser)
+1. From your local computer, SSH with port forwarding:
+   ```bash
+   ssh -L 58333:127.0.0.1:58333 user@remote-machine
+   ```
 
-A headless machine has no local browser, so you need to access the dashboard from another device.
+2. Start the dashboard on the remote machine via that SSH session
 
----
+3. Open `http://127.0.0.1:58333` in your local browser
 
-#### Scenario 2 Option A: Expose on LAN
-
-On the Bitcoin Core machine (either directly or via SSH), start the dashboard:
-
-```bash
-cd /path/to/Bitcoin-Core-Peer-Map
-./da.sh
-```
-
-The script will:
-1. Check prerequisites (jq, curl, sqlite3, python3, etc.)
-2. Detect your Bitcoin Core setup
-3. Create a Python virtual environment
-4. Start the web server on port 58333
-
-Select option `1) Enter MBCore Dashboard` from the main menu.
-
-When the dashboard starts, it displays the access URLs right on screen:
-
-```
-════════════════════════════════════════════════════════════════════════════════════
-  ** FOLLOW THESE INSTRUCTIONS TO GET TO THE DASHBOARD! **
-════════════════════════════════════════════════════════════════════════════════════
-
-  To enter the dashboard, visit (First run? See README/QUICKSTART)
-
-  Scenario 1 - Local Machine Only:
-      http://127.0.0.1:58333
-
-  Scenario 2 - From Another Device on Your Network:
-    Option A - Direct LAN Access (may need firewall configured - SEE README)
-      http://192.168.x.x:58333  <- Your node's detected IP
-
-    Option B - SSH Tunnel (SEE README - then visit)
-      http://127.0.0.1:58333
-
-────────────────────────────────────────────────────────────────────────────────────
-  TROUBLESHOOTING: SEE THE README
-────────────────────────────────────────────────────────────────────────────────────
-```
-
-**Your machine's IP address will be displayed on this screen.** From any other computer on your network, open a browser and go to that address:
-
-```
-(EXAMPLE) http://192.168.x.xxx:58333
-```
-
-The correct IP for your setup will be shown in the terminal output.
-
-**If it won't connect from another device:** Your firewall may be blocking port 58333. See [Firewall Configuration](#firewall-configuration) below.
-
----
-
-#### Scenario 2 Option B: SSH Tunnel
-
-From your **other computer** (the one with a browser):
-
-```bash
-# SSH into the headless machine with a tunnel
-ssh -L 58333:127.0.0.1:58333 user@headless-machine-ip
-```
-
-Then on the headless machine (via that SSH session):
-
-```bash
-cd /path/to/Bitcoin-Core-Peer-Map
-./da.sh
-```
-
-The script will:
-1. Check prerequisites (jq, curl, sqlite3, python3, etc.)
-2. Detect your Bitcoin Core setup
-3. Create a Python virtual environment
-4. Start the web server on port 58333
-
-Select option `1) Enter MBCore Dashboard` from the main menu.
-
-Now on your **local computer's browser**, go to:
-```
-http://127.0.0.1:58333
-```
-
-The tunnel forwards your local port 58333 to the headless machine's port 58333. No firewall changes needed.
+The tunnel forwards your local port to the remote machine. No firewall changes needed.
 
 ---
 
@@ -484,6 +403,12 @@ Additional options:
 - **m) Manual Settings** - Manually enter Bitcoin Core paths
 - **p) Port Settings** - Change the dashboard port (default: 58333). Useful if port 58333 is in use or you prefer a different port. This setting persists across reboots and updates.
 - **u) Update** - Update to the latest version (shown when an update is available)
+
+### Port Settings
+
+![Port Settings](docs/images/9.port-settings.png)
+
+Change the dashboard port if 58333 conflicts with another service or you prefer a different port. The setting persists across restarts and updates.
 
 ### Auto-Update
 
