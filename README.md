@@ -364,31 +364,32 @@ These are installed automatically into a local virtual environment (`./venv/`).
 
 On first run, MBCore Dashboard automatically detects your Bitcoin Core setup:
 
-1. **Process Detection** - Checks if `bitcoind` is running and extracts `-datadir` and `-conf` from process arguments
-2. **Systemd Detection** - If bitcoind isn't running, checks systemd service configurations
-3. **Config File Search** - Looks in common locations (`~/.bitcoin/`, `/etc/bitcoin/`, etc.)
-4. **Data Directory Search** - Locates the blockchain data directory
-5. **Authentication** - Finds cookie auth file or reads RPC credentials from config
+1. **Process Detection** - Checks first if `bitcoind` (or similar process) is running and extracts `-datadir` and `-conf` from process arguments
+2. **Systemd Detection** - If bitcoind isn't running, checks systemd service configurations and extracts from there.
+3. **Config File Search** - If still unfound, looks in common locations (`~/.bitcoin/`, `/etc/bitcoin/`, etc.)
+4. **Data Directory Search** - Unlikely, but if settings still ar not located, it searches for the blockchain data directory
+5. **Authentication** - Finds cookie auth file or reads RPC credentials
 6. **RPC Test** - Verifies connection to Bitcoin Core
 
 All detected settings are saved locally for fast startup on subsequent runs.
 
 ### Geo-Location
 
-- Uses ip-api.com (free tier, no API key required)
+- Uses MBCore database of geolocated bitcoin nodes, bitcoin-cli, and ip-api.com (free tier, no API key required)
 - Rate limited to 45 requests/minute (script uses 1.5s delay between calls)
-- Private networks (Tor, I2P, CJDNS) are marked as "Private Location"
-- Failed lookups retry with exponential backoff: 1 day, 3 days, 7 days, then weekly
+- Private networks (Tor, I2P, CJDNS) are marked as "Private Location" (and placed with the penguins in Antarctica - more on this later)
 
 ### Database
 
 **Geo/IP Database** (`./data/geo.db`):
-- Caches full API responses from ip-api.com to minimize API calls
+- Utilizes MBCore database full of geolocated Bitcoin Core nodes
+- Caches full API responses to minimize API calls
 - Stores: geographic location, ISP, AS info, timezone, currency, and more
 - Shared across sessions - data persists even after restart
-- Optionally downloads from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset) for instant lookups
+- Optionally (recommended/default) downloads from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset) for instant lookups
 - Check integrity, reset, and configure from the main menu (**g) Geo/IP Database**)
-- First-run prompts you to enable/disable database caching
+- First-run prompts you to enable/disable database caching (just enable it, theres no reason not to)
+- With database, you can block all traffic but bitcoin core traffic and still geolocate peers from offline data
 
 ## Main Menu Options
 
