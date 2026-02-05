@@ -194,7 +194,23 @@ The script auto-detects your Bitcoin Core setup - this works for most common con
 
 ![Bitcoin Core detection](docs/images/4.detection.png)
 
-Press `y` to accept the detected settings. If detection fails or finds the wrong paths, press `n` to enter them manually.
+Press `y` to accept the detected settings. If detection fails or finds the wrong paths, press `n` to enter them manually:
+
+![Manual configuration](docs/images/4a.manual.bitcoin.conf.entry.png)
+
+### Step 4: Geo/IP Database Setup
+
+On first run, you'll choose how to handle peer geolocation data:
+
+![GeoIP Database Setup](docs/images/4c.GeoIP.First.Run.png)
+
+- **Option 1: Enable and keep updated** (Recommended) - Downloads a shared database of known Bitcoin node locations for instant lookups. Auto-updates on each start.
+- **Option 2: Enable, self-managed** - Only caches peers you discover yourself. No external database.
+- **Option 3: Don't use a database** - Relies on live API lookups only (limited to 1 lookup per 1.5 seconds).
+
+If you choose Option 1, the database downloads in seconds:
+
+![GeoIP Database Download](docs/images/4d.GeoIP.dbdl.png)
 
 ### Recovering from Incomplete Installation
 
@@ -351,10 +367,15 @@ The tunnel forwards your local port 58333 to the headless machine's port 58333. 
 
 ## Firewall Configuration
 
-**The dashboard includes a built-in Firewall Helper!** From the main menu, select `4) Firewall Helper` to:
-- Auto-detect your IP and subnet
-- Check if UFW or firewalld is active
-- Optionally add the firewall rule for you
+**The dashboard includes a built-in Firewall Helper!** From the main menu, select `3) Firewall Helper`:
+
+![Firewall Helper](docs/images/6.firewall-helper.png)
+
+The Firewall Helper automatically:
+- Detects your IP address and subnet
+- Checks if UFW or firewalld is active
+- Shows your current firewall rules for the dashboard port
+- Provides ready-to-use commands to reverse any changes
 
 **Using a different port?** Use `p) Port Settings` from the main menu to change the dashboard port before running the Firewall Helper. The helper will automatically use your configured port.
 
@@ -451,8 +472,10 @@ All detected settings are saved locally for fast startup on subsequent runs.
 
 ## Main Menu Options
 
+![Main Menu](docs/images/5.main-menu.png)
+
 1. **Enter MBCore Web Dashboard** - Launch the web-based dashboard with interactive map
-2. **Reset Config** - Clear saved Bitcoin Core configuration
+2. **Reset MBCore Config** - Clear saved Bitcoin Core configuration
 3. **Firewall Helper** - Configure firewall for network access
 
 Additional options:
@@ -461,6 +484,20 @@ Additional options:
 - **m) Manual Settings** - Manually enter Bitcoin Core paths
 - **p) Port Settings** - Change the dashboard port (default: 58333). Useful if port 58333 is in use or you prefer a different port. This setting persists across reboots and updates.
 - **u) Update** - Update to the latest version (shown when an update is available)
+
+### Auto-Update
+
+When a new version is available, you'll see the update prompt:
+
+![Auto Update](docs/images/8.Auto.Update.png)
+
+Press `y` to update - your configuration and database are preserved.
+
+### Geo/IP Database Settings
+
+Access advanced database options from the main menu with `g`:
+
+![Geo/IP Database Settings](docs/images/7.geo-database.png)
 
 ## Usage Tips
 
