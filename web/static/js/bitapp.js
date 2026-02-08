@@ -1,14 +1,14 @@
 /* ============================================================
    MBCore vNext — Canvas World Map with Real Bitcoin Peers
-   Phase 2.2: Visual semantics for peer stability and activity
+   Phase 2.3: Peer semantics + hover inspection
    ============================================================
    - Fetches real peers from the existing MBCoreServer backend
    - Renders them on a canvas world map (no Leaflet)
    - Private/overlay networks (Tor, I2P, CJDNS) placed in Antarctica
-   - Polls every 10s with fade-in for new peers, fade-out for gone peers
-   - Pan, zoom, hover tooltips all preserved from Phase 1
-   - Node brightness correlates with connection age (stability)
+   - Visual peer lifecycle: arrival bloom → age brightness → fade-out
    - Inbound vs outbound peers have distinct pulse rhythms
+   - Long-lived peers glow bright & steady; fresh peers dim & nervous
+   - Rich hover tooltip with identity, location, network, performance
    ============================================================ */
 
 (function () {
@@ -23,8 +23,7 @@
         infoPollInterval: 15000,   // ms between /api/info fetches
         nodeRadius: 3,             // base circle radius in px
         glowRadius: 14,            // outer glow radius in px
-        pulseSpeed: 0.0018,        // glow pulse speed (radians per ms)
-        fadeInDuration: 800,       // ms for new node spawn animation
+        fadeInDuration: 800,       // ms for opacity fade-in
         fadeOutDuration: 1500,     // ms for disconnected node fade-out
         minZoom: 1,
         maxZoom: 18,
@@ -33,20 +32,29 @@
         gridSpacing: 30,           // degrees between grid lines
         coastlineWidth: 1.0,
 
-        // ── Visual semantics ──
-        // Connection age -> brightness mapping
+        // ── Arrival bloom (first ~5 seconds) ──
+        arrivalDuration: 5000,     // ms — how long the arrival phase lasts
+        arrivalRingMaxRadius: 28,  // px — expanding ring max radius
+        arrivalRingDuration: 1200, // ms — how long the ring expansion takes
+        arrivalPulseSpeed: 0.006,  // fast energetic pulse during arrival
+
+        // ── Connection age -> brightness & steadiness ──
         ageBrightnessMin: 0.35,    // floor opacity for brand-new peers
         ageBrightnessMax: 1.0,     // ceiling opacity for veteran peers
         ageRampSeconds: 3600,      // seconds to go from min to max brightness (1 hour)
 
-        // Pulse behaviour by direction
+        // ── Pulse behaviour by direction ──
+        // Base rates — new peers get additional "nervousness" on top
         pulseSpeedInbound: 0.0012,   // slower, calm breathing for inbound
         pulseSpeedOutbound: 0.0024,  // faster, sharper pulse for outbound
         pulseDepthInbound: 0.25,     // subtle amplitude for inbound
         pulseDepthOutbound: 0.45,    // more pronounced for outbound
+        // Nervousness: young peers pulse faster, veterans are steady
+        nervousnessMax: 0.003,     // extra pulse speed added to young peers
+        nervousnessRampSec: 1800,  // seconds for nervousness to decay to zero (30 min)
 
-        // Fade-out easing
-        fadeOutEase: 2.0,          // exponent for ease-out curve (higher = faster initial fade)
+        // ── Fade-out ──
+        fadeOutEase: 2.0,          // exponent for ease-out curve
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -432,17 +440,21 @@
 
                 if (existing) {
                     // ── Update in place (peer still connected) ──
-                    // Update data that might change (ping, bytes, etc)
                     existing.lat = lat;
                     existing.lon = lon;
                     existing.ping = peer.ping_ms || 0;
                     existing.city = peer.city || '';
+                    existing.regionName = peer.regionName || '';
                     existing.country = peer.country || peer.countryCode || '';
                     existing.subver = peer.subver || '';
                     existing.direction = peer.direction || '';
                     existing.conntime = peer.conntime || 0;
                     existing.conntime_fmt = peer.conntime_fmt || '';
                     existing.isp = peer.isp || '';
+                    existing.connection_type = peer.connection_type || '';
+                    existing.in_addrman = peer.in_addrman || false;
+                    existing.ip = peer.ip || '';
+                    existing.port = peer.port || '';
                     existing.isPrivate = isPrivate;
                     existing.location_status = peer.location_status;
                 } else {
@@ -454,6 +466,7 @@
                         net: netKey,
                         color,
                         city: peer.city || '',
+                        regionName: peer.regionName || '',
                         country: peer.country || peer.countryCode || '',
                         subver: peer.subver || '',
                         direction: peer.direction || '',
@@ -461,9 +474,13 @@
                         conntime: peer.conntime || 0,
                         conntime_fmt: peer.conntime_fmt || '',
                         isp: peer.isp || '',
+                        connection_type: peer.connection_type || '',
+                        in_addrman: peer.in_addrman || false,
                         isPrivate,
                         location_status: peer.location_status,
                         addr: peer.addr || '',
+                        ip: peer.ip || '',
+                        port: peer.port || '',
                         // Animation state
                         phase: Math.random() * Math.PI * 2,  // random pulse phase
                         spawnTime: now,                       // triggers fade-in animation
@@ -794,10 +811,7 @@
 
     /**
      * Draw a single node at a specific screen position.
-     * Shared by drawNode() for each wrap offset.
-     *
-     * @param {number} brightness - connection-age brightness multiplier (0..1)
-     *   Controls glow intensity and core opacity — veteran peers are brighter.
+     * @param {number} brightness - connection-age brightness (0..1)
      */
     function drawNodeAt(sx, sy, c, r, gr, pulse, opacity, brightness) {
         // Outer glow (radial gradient) — modulated by brightness
@@ -824,7 +838,42 @@
     }
 
     /**
-     * Compute connection-age brightness.
+     * Draw the arrival bloom effect — an expanding ring + brief energetic glow.
+     * Runs during the first CFG.arrivalDuration ms after a node spawns.
+     * This is visually distinct from the steady-state glow: a one-time event
+     * that says "a new peer just appeared here."
+     */
+    function drawArrivalBloom(sx, sy, c, ageMs, opacity) {
+        // ── Expanding ring (first arrivalRingDuration ms) ──
+        if (ageMs < CFG.arrivalRingDuration) {
+            const t = ageMs / CFG.arrivalRingDuration;
+            const ringR = CFG.nodeRadius + (CFG.arrivalRingMaxRadius - CFG.nodeRadius) * t;
+            const ringAlpha = (1 - t) * 0.6 * opacity;
+            ctx.strokeStyle = rgba(c, ringAlpha);
+            ctx.lineWidth = Math.max(0.5, 2 * (1 - t));
+            ctx.beginPath();
+            ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // ── Soft bloom glow (entire arrival phase, fading out) ──
+        const bloomT = ageMs / CFG.arrivalDuration;
+        const bloomAlpha = (1 - bloomT) * 0.3 * opacity;
+        if (bloomAlpha > 0.005) {
+            const bloomR = CFG.glowRadius * 1.8;
+            const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, bloomR);
+            grad.addColorStop(0, rgba(c, bloomAlpha));
+            grad.addColorStop(0.4, rgba(c, bloomAlpha * 0.4));
+            grad.addColorStop(1, rgba(c, 0));
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(sx, sy, bloomR, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    /**
+     * Connection-age brightness.
      * New peers start dim, veteran peers glow fully.
      * Uses conntime (Unix timestamp from Bitcoin Core) to compute real age.
      */
@@ -833,26 +882,29 @@
         const ageSec = nowSec - node.conntime;
         if (ageSec <= 0) return CFG.ageBrightnessMin;
         const t = clamp(ageSec / CFG.ageRampSeconds, 0, 1);
-        // Ease-in curve so brightness ramps quickly at first, then settles
         const eased = 1 - Math.pow(1 - t, 2);
         return CFG.ageBrightnessMin + (CFG.ageBrightnessMax - CFG.ageBrightnessMin) * eased;
     }
 
     /**
-     * Compute direction-aware pulse factor.
-     * Inbound:  slow, gentle sinusoidal breathing
-     * Outbound: faster pulse with a sharper attack (abs-sin shape)
+     * Direction-aware pulse with nervousness decay.
+     * - Inbound:  slow, gentle sinusoidal breathing
+     * - Outbound: faster pulse with sharper abs-sin shape
+     * - Young peers get extra "nervous" speed that decays with age
      */
-    function getDirectionPulse(node, ageMs) {
+    function getDirectionPulse(node, ageMs, connAgeSec) {
         const isInbound = node.direction === 'IN';
-        const speed = isInbound ? CFG.pulseSpeedInbound : CFG.pulseSpeedOutbound;
+        const baseSpeed = isInbound ? CFG.pulseSpeedInbound : CFG.pulseSpeedOutbound;
         const depth = isInbound ? CFG.pulseDepthInbound : CFG.pulseDepthOutbound;
 
+        // Nervousness: young peers pulse faster, decays over time
+        const nervT = clamp(connAgeSec / CFG.nervousnessRampSec, 0, 1);
+        const nervousness = CFG.nervousnessMax * (1 - nervT);
+        const speed = baseSpeed + nervousness;
+
         if (isInbound) {
-            // Smooth sinusoidal breathing
             return (1 - depth) + depth * (0.5 + 0.5 * Math.sin(node.phase + ageMs * speed));
         } else {
-            // Sharper "ping" pulse — abs(sin) gives a quicker rise and fall
             const raw = Math.abs(Math.sin(node.phase + ageMs * speed));
             return (1 - depth) + depth * raw;
         }
@@ -860,24 +912,28 @@
 
     /**
      * Draw a single node on the canvas at all visible wrap positions.
-     * Handles fade-in, fade-out, connection-age brightness, and
-     * direction-aware pulse behaviour.
+     * Lifecycle phases:
+     *   1. Arrival bloom (first ~5s) — expanding ring + energetic glow
+     *   2. Connected state — brightness ramps with age, nervousness decays
+     *   3. Fade-out — eased dissolve when peer disconnects
      */
     function drawNode(node, now, wrapOffsets) {
         if (now < node.spawnTime) return;
 
         const c = node.color;
         const ageMs = now - node.spawnTime;
+        const nowSec = Math.floor(now / 1000);
+        const connAgeSec = (node.conntime > 0) ? Math.max(0, nowSec - node.conntime) : 0;
+        const inArrival = ageMs < CFG.arrivalDuration;
 
         // ── Connection-age brightness (dim newcomers, bright veterans) ──
-        const nowSec = Math.floor(now / 1000);
         const brightness = getAgeBrightness(node, nowSec);
 
         // ── Fade-in: ease-out curve for smooth materialization ──
         let opacity = 1;
         if (ageMs < CFG.fadeInDuration) {
             const t = ageMs / CFG.fadeInDuration;
-            opacity = 1 - Math.pow(1 - t, 2);   // ease-out
+            opacity = 1 - Math.pow(1 - t, 2);
         }
 
         // ── Fade-out: eased curve so nodes dissolve gracefully ──
@@ -888,8 +944,14 @@
             if (opacity <= 0.001) return;
         }
 
-        // ── Direction-aware pulse (inbound = calm, outbound = sharp) ──
-        const pulse = getDirectionPulse(node, ageMs);
+        // ── Pulse (direction-aware + nervousness for young peers) ──
+        let pulse;
+        if (inArrival) {
+            // During arrival: fast energetic pulse
+            pulse = 0.55 + 0.45 * Math.abs(Math.sin(node.phase + ageMs * CFG.arrivalPulseSpeed));
+        } else {
+            pulse = getDirectionPulse(node, ageMs, connAgeSec);
+        }
 
         // Spawn "pop" scale effect (first 600ms)
         let scale = 1;
@@ -904,8 +966,15 @@
         // Draw at each wrap offset
         for (const off of wrapOffsets) {
             const s = worldToScreen(node.lon + off, node.lat);
-            // Skip if well off screen (with glow margin)
-            if (s.x < -gr || s.x > W + gr || s.y < -gr || s.y > H + gr) continue;
+            // Skip if well off screen (with bloom margin)
+            const margin = inArrival ? CFG.arrivalRingMaxRadius : gr;
+            if (s.x < -margin || s.x > W + margin || s.y < -margin || s.y > H + margin) continue;
+
+            // Arrival bloom effect (ring + glow) — drawn behind the node
+            if (inArrival && node.alive) {
+                drawArrivalBloom(s.x, s.y, c, ageMs, opacity);
+            }
+
             drawNodeAt(s.x, s.y, c, r, gr, pulse, opacity, brightness);
         }
     }
@@ -989,11 +1058,10 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // TOOLTIP — Shows peer info on hover
+    // TOOLTIP — Rich peer inspection on hover
     // ═══════════════════════════════════════════════════════════
 
-    /** Find the nearest alive node within hit radius of screen coords.
-     *  Checks all wrap offsets so hovering works on wrapped copies too. */
+    /** Find the nearest alive node within hit radius of screen coords. */
     function findNodeAtScreen(sx, sy) {
         const hitRadius = 12;
         const offsets = getWrapOffsets();
@@ -1011,32 +1079,84 @@
         return null;
     }
 
-    /** Display tooltip near the cursor with peer details */
+    /** Build a tooltip row: label + value, skipping empty values */
+    function ttRow(label, value) {
+        if (!value && value !== 0 && value !== false) return '';
+        return `<div class="tt-row"><span class="tt-label">${label}</span><span class="tt-val">${value}</span></div>`;
+    }
+
+    /** Display comprehensive tooltip near cursor with peer details */
     function showTooltip(node, mx, my) {
-        // Location display: real city or "Private Network"
-        const locationText = node.isPrivate
-            ? '<span style="color:#4a5568;">Private Network</span>'
-            : `${node.city}${node.country ? ', ' + node.country : ''}`;
-
-        // Network label with colour
         const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
+        const netColor = rgba(node.color, 0.9);
 
-        tooltipEl.innerHTML =
-            `<div class="tt-label">PEER ${node.peerId}</div>` +
-            `<div class="tt-value">${locationText}</div>` +
-            `<div style="color:${rgba(node.color, 0.9)};margin-top:2px;">${netLabel} &middot; ${node.direction}</div>` +
-            (node.subver ? `<div style="color:#7a8494;font-size:10px;margin-top:2px;">${node.subver}</div>` : '') +
-            `<div class="tt-label" style="margin-top:4px;">PING</div>` +
-            `<div class="tt-value">${node.ping}ms</div>` +
-            (node.conntime_fmt ? `<div class="tt-label" style="margin-top:2px;">UPTIME</div><div class="tt-value">${node.conntime_fmt}</div>` : '');
+        // Direction + connection type
+        const dirLabel = node.direction === 'IN' ? 'Inbound' : 'Outbound';
+        const typeStr = node.connection_type
+            ? `${dirLabel} / ${node.connection_type}`
+            : dirLabel;
 
+        // Address display
+        const addrDisplay = (node.ip && node.port)
+            ? `${node.ip}:${node.port}`
+            : node.addr || '—';
+
+        // Location: build from parts, skip empties
+        let locationParts = [];
+        if (!node.isPrivate) {
+            if (node.city) locationParts.push(node.city);
+            if (node.regionName) locationParts.push(node.regionName);
+            if (node.country) locationParts.push(node.country);
+        }
+        const locationStr = locationParts.length > 0
+            ? locationParts.join(', ')
+            : '<span class="tt-muted">Private Network</span>';
+
+        // Addrman
+        const addrmanStr = node.isPrivate ? '—' : (node.in_addrman ? 'Yes' : 'No');
+
+        // Build tooltip HTML — grouped sections
+        let html = '';
+
+        // ── Header: Peer ID with network color accent ──
+        html += `<div class="tt-header">`;
+        html += `<span class="tt-peer-id">Peer ${node.peerId}</span>`;
+        html += `<span class="tt-net" style="color:${netColor}">${netLabel}</span>`;
+        html += `</div>`;
+
+        // ── Identity / Connection ──
+        html += `<div class="tt-section">`;
+        html += ttRow('Address', addrDisplay);
+        html += ttRow('Type', typeStr);
+        if (node.subver) html += ttRow('Software', node.subver);
+        html += `</div>`;
+
+        // ── Location ──
+        html += `<div class="tt-section">`;
+        html += `<div class="tt-row"><span class="tt-label">Location</span><span class="tt-val">${locationStr}</span></div>`;
+        if (!node.isPrivate && node.isp) html += ttRow('ISP', node.isp);
+        html += ttRow('Addrman', addrmanStr);
+        html += `</div>`;
+
+        // ── Performance ──
+        html += `<div class="tt-section">`;
+        html += ttRow('Ping', node.ping + 'ms');
+        if (node.conntime_fmt) html += ttRow('Uptime', node.conntime_fmt);
+        html += `</div>`;
+
+        tooltipEl.innerHTML = html;
         tooltipEl.classList.remove('hidden');
 
-        // Position tooltip near cursor, clamped to viewport
-        const tx = mx + 16;
-        const ty = my - 10;
-        tooltipEl.style.left = Math.min(tx, W - 200) + 'px';
-        tooltipEl.style.top = Math.max(ty, 48) + 'px';
+        // Position: prefer right of cursor, flip left if near right edge
+        const ttWidth = 260;
+        const ttPad = 16;
+        let tx = mx + ttPad;
+        if (tx + ttWidth > W - 10) {
+            tx = mx - ttPad - ttWidth;
+        }
+        let ty = my - 10;
+        tooltipEl.style.left = Math.max(10, tx) + 'px';
+        tooltipEl.style.top = Math.max(48, ty) + 'px';
     }
 
     function hideTooltip() {

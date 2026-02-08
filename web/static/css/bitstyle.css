@@ -230,30 +230,79 @@ html, body {
 .tooltip {
     position: fixed;
     z-index: 200;
-    padding: 8px 12px;
-    background: rgba(17, 24, 32, 0.95);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(88, 166, 255, 0.2);
+    width: 260px;
+    padding: 0;
+    background: rgba(10, 14, 20, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(88, 166, 255, 0.18);
     border-radius: var(--radius);
     font-size: 11px;
     color: var(--text-primary);
     pointer-events: none;
     white-space: nowrap;
-    transition: opacity 0.12s ease;
+    transition: opacity 0.1s ease;
+    overflow: hidden;
 }
 .tooltip.hidden {
     opacity: 0;
 }
-.tooltip .tt-label {
+
+/* Tooltip header — peer ID + network badge */
+.tt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    background: rgba(88, 166, 255, 0.06);
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+}
+.tt-peer-id {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-primary);
+}
+.tt-net {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Tooltip sections — separated by subtle dividers */
+.tt-section {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.tt-section:last-child {
+    border-bottom: none;
+}
+
+/* Each row: label on left, value on right */
+.tt-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 1px 0;
+    gap: 8px;
+}
+.tt-label {
     color: var(--text-muted);
     font-size: 9px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
+    flex-shrink: 0;
 }
-.tooltip .tt-value {
-    color: var(--text-primary);
-    font-weight: 600;
+.tt-val {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tt-muted {
+    color: var(--text-muted);
+    font-style: italic;
 }
 
 /* ---------- Animations ---------- */
