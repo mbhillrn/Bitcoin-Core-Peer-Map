@@ -33,15 +33,24 @@
         <div class="hud-value" id="hud-block">---</div>
     </div>
 
-    <div id="hud-bottom-left" class="hud-panel">
+    <div id="hud-bottom-left" class="hud-panel hud-interactive">
         <div class="hud-label">NETWORKS</div>
         <div class="hud-nets">
-            <span class="net-badge net-ipv4">IPv4</span>
-            <span class="net-badge net-ipv6">IPv6</span>
-            <span class="net-badge net-tor">Tor</span>
-            <span class="net-badge net-i2p">I2P</span>
-            <span class="net-badge net-cjdns">CJDNS</span>
+            <span class="net-badge net-all active" data-net="all">All</span>
+            <span class="net-badge net-ipv4" data-net="ipv4">IPv4</span>
+            <span class="net-badge net-ipv6" data-net="ipv6">IPv6</span>
+            <span class="net-badge net-tor" data-net="onion">Tor</span>
+            <span class="net-badge net-i2p" data-net="i2p">I2P</span>
+            <span class="net-badge net-cjdns" data-net="cjdns">CJDNS</span>
         </div>
+        <div id="net-popover" class="net-popover hidden"></div>
+    </div>
+
+    <!-- Antarctica annotation (toggleable) -->
+    <div id="antarctica-note" class="antarctica-note hidden">
+        <span class="ant-icon">&#9432;</span>
+        <span class="ant-text">Tor, I2P &amp; CJDNS peers are placed at Antarctic research stations for visualization — their real locations are hidden by design.</span>
+        <button id="ant-close" class="ant-close">&times;</button>
     </div>
 
     <!-- Full-screen canvas map -->
@@ -56,6 +65,29 @@
 
     <!-- Tooltip for hovering over nodes -->
     <div id="node-tooltip" class="tooltip hidden"></div>
+
+    <!-- Bottom peer panel (collapsible) -->
+    <div id="peer-panel" class="peer-panel collapsed">
+        <div id="peer-panel-handle" class="peer-panel-handle">
+            <span class="handle-arrow" id="handle-arrow">&#9650;</span>
+            <span class="handle-label">Peer Table</span>
+            <span class="handle-count" id="handle-count">0</span>
+        </div>
+        <div class="peer-panel-body">
+            <div class="peer-panel-toolbar">
+                <button class="toolbar-btn" id="btn-autofit" title="Toggle auto-fit columns">Auto-fit</button>
+                <button class="toolbar-btn" id="btn-bans" title="View banned IPs">Bans</button>
+                <div class="toolbar-spacer"></div>
+                <div class="peer-action-zone" id="peer-action-zone"></div>
+            </div>
+            <div class="peer-table-wrap">
+                <table class="peer-table" id="peer-table">
+                    <thead id="peer-thead"></thead>
+                    <tbody id="peer-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <script src="/static/js/bitapp.js"></script>
 </body>

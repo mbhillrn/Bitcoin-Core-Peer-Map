@@ -169,7 +169,7 @@ html, body {
 
 #hud-top-left    { top: 56px; left: 16px; }
 #hud-top-right   { top: 56px; right: 16px; text-align: right; }
-#hud-bottom-left { bottom: 20px; left: 16px; }
+#hud-bottom-left { bottom: 44px; left: 16px; transition: bottom 0.3s ease; }
 
 .hud-nets {
     display: flex;
@@ -189,6 +189,117 @@ html, body {
 .net-tor   { color: var(--net-tor);   background: rgba(74,158,255,0.12);  border: 1px solid rgba(74,158,255,0.25); }
 .net-i2p   { color: var(--net-i2p);   background: rgba(139,92,246,0.12);  border: 1px solid rgba(139,92,246,0.25); }
 .net-cjdns { color: var(--net-cjdns); background: rgba(210,168,255,0.12); border: 1px solid rgba(210,168,255,0.25); }
+
+/* "All" badge — accent-coloured */
+.net-all   { color: var(--accent);   background: rgba(88,166,255,0.12);   border: 1px solid rgba(88,166,255,0.25); }
+
+/* Interactive HUD panel for network badges */
+.hud-interactive { pointer-events: auto; }
+.hud-interactive .net-badge {
+    cursor: pointer;
+    transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+    position: relative;
+}
+.hud-interactive .net-badge:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+}
+/* Dimmed when a filter is active and this badge is NOT selected */
+.hud-interactive .net-badge.dimmed {
+    opacity: 0.35;
+}
+/* Active / selected badge gets a brighter border glow */
+.hud-interactive .net-badge.active {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(88, 166, 255, 0.25);
+}
+
+/* Network stats popover on badge hover */
+.net-popover {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 180px;
+    padding: 8px 10px;
+    background: rgba(10, 14, 20, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(88, 166, 255, 0.18);
+    border-radius: var(--radius);
+    font-size: 10px;
+    color: var(--text-secondary);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 60;
+}
+.net-popover.hidden { display: none; }
+.net-popover .pop-title {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.net-popover .pop-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+    gap: 12px;
+}
+.net-popover .pop-label {
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.net-popover .pop-val {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* Antarctica annotation */
+.antarctica-note {
+    position: fixed;
+    bottom: 110px;
+    left: 16px;
+    max-width: 340px;
+    padding: 8px 12px;
+    background: rgba(10, 14, 20, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(88, 166, 255, 0.12);
+    border-radius: var(--radius);
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    z-index: 55;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    transition: opacity 0.2s ease;
+}
+.antarctica-note.hidden { display: none; }
+.ant-icon {
+    font-size: 14px;
+    color: var(--accent);
+    flex-shrink: 0;
+    line-height: 1;
+}
+.ant-text {
+    flex: 1;
+}
+.ant-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.ant-close:hover {
+    color: var(--text-secondary);
+}
 
 /* ---------- Zoom Controls ---------- */
 #zoom-controls {
@@ -230,30 +341,383 @@ html, body {
 .tooltip {
     position: fixed;
     z-index: 200;
-    padding: 8px 12px;
-    background: rgba(17, 24, 32, 0.95);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(88, 166, 255, 0.2);
+    width: 260px;
+    padding: 0;
+    background: rgba(10, 14, 20, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(88, 166, 255, 0.18);
     border-radius: var(--radius);
     font-size: 11px;
     color: var(--text-primary);
     pointer-events: none;
     white-space: nowrap;
-    transition: opacity 0.12s ease;
+    transition: opacity 0.1s ease;
+    overflow: hidden;
 }
 .tooltip.hidden {
     opacity: 0;
 }
-.tooltip .tt-label {
+
+/* Tooltip header — peer ID + network badge */
+.tt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    background: rgba(88, 166, 255, 0.06);
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+}
+.tt-peer-id {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-primary);
+}
+.tt-net {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Tooltip sections — separated by subtle dividers */
+.tt-section {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.tt-section:last-child {
+    border-bottom: none;
+}
+
+/* Each row: label on left, value on right */
+.tt-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 1px 0;
+    gap: 8px;
+}
+.tt-label {
     color: var(--text-muted);
     font-size: 9px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
+    flex-shrink: 0;
 }
-.tooltip .tt-value {
-    color: var(--text-primary);
+.tt-val {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tt-muted {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ---------- Bottom Peer Panel ---------- */
+.peer-panel {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    max-height: 340px;  /* ~10 rows (25px each) + header/toolbar */
+    transition: max-height 0.3s ease, transform 0.3s ease;
+    pointer-events: auto;
+}
+.peer-panel.collapsed {
+    max-height: 32px;
+}
+.peer-panel.collapsed .peer-panel-body {
+    display: none;
+}
+
+/* Handle / toggle bar */
+.peer-panel-handle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 16px;
+    background: rgba(10, 14, 20, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(88, 166, 255, 0.12);
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+}
+.peer-panel-handle:hover {
+    background: rgba(17, 24, 32, 0.95);
+}
+.handle-arrow {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.3s ease;
+}
+.peer-panel.collapsed .handle-arrow {
+    transform: rotate(0deg);
+}
+.peer-panel:not(.collapsed) .handle-arrow {
+    transform: rotate(180deg);
+}
+.handle-label {
+    font-size: 10px;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+}
+.handle-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg-raised);
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+/* Panel body */
+.peer-panel-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: rgba(10, 14, 20, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* Toolbar */
+.peer-panel-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+    flex-shrink: 0;
+    min-height: 28px;
+    gap: 6px;
+}
+.toolbar-btn {
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+}
+.toolbar-btn:hover {
+    color: var(--text-secondary);
+    border-color: rgba(88, 166, 255, 0.4);
+    background: rgba(88, 166, 255, 0.06);
+}
+.toolbar-btn.active {
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    background: rgba(88, 166, 255, 0.1);
+}
+.toolbar-spacer { flex: 1; }
+.peer-action-zone {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+}
+.peer-action-zone .action-result {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+.peer-action-zone .action-result.ok {
+    color: var(--ok);
+    background: rgba(63, 185, 80, 0.1);
+}
+.peer-action-zone .action-result.err {
+    color: var(--err);
+    background: rgba(248, 81, 73, 0.1);
+}
+
+/* Table scroll container */
+.peer-table-wrap {
+    flex: 1;
+    overflow: auto;
+}
+
+/* Table */
+.peer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.peer-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+.peer-table th {
+    padding: 4px 8px;
+    text-align: left;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    background: rgba(17, 24, 32, 0.98);
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.peer-table th:hover {
+    color: var(--text-secondary);
+}
+.peer-table th .sort-arrow {
+    font-size: 8px;
+    margin-left: 2px;
+    opacity: 0.5;
+}
+.peer-table th .sort-arrow.active {
+    opacity: 1;
+    color: var(--accent);
+}
+/* Resize handle on header cells */
+.peer-table th { position: relative; }
+.peer-table th .th-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.peer-table th .th-resize {
+    position: absolute;
+    top: 0; right: 0;
+    width: 5px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 3;
+}
+.peer-table th .th-resize:hover {
+    background: rgba(88, 166, 255, 0.2);
+}
+
+.peer-table td {
+    padding: 3px 8px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid rgba(88, 166, 255, 0.03);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.peer-table tbody tr {
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+.peer-table tbody tr:hover {
+    background: rgba(88, 166, 255, 0.06);
+}
+.peer-table tbody tr.row-highlight {
+    background: rgba(88, 166, 255, 0.1);
+}
+.peer-table tbody tr.row-selected {
+    background: rgba(88, 166, 255, 0.15);
+}
+
+/* Network-coloured left border on rows */
+.peer-table tbody tr[data-net="ipv4"]  { border-left: 2px solid var(--net-ipv4); }
+.peer-table tbody tr[data-net="ipv6"]  { border-left: 2px solid var(--net-ipv6); }
+.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor); }
+.peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p); }
+.peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns); }
+
+/* Peer action buttons in rows */
+.peer-table .peer-action-btn {
+    padding: 1px 6px;
+    font-size: 9px;
+    font-weight: 600;
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--err);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+}
+.peer-table .peer-action-btn:hover {
+    background: rgba(248, 81, 73, 0.15);
+    border-color: var(--err);
+}
+.peer-table .peer-action-btn.ban {
+    color: var(--warn);
+    border-color: rgba(210, 153, 34, 0.3);
+}
+.peer-table .peer-action-btn.ban:hover {
+    background: rgba(210, 153, 34, 0.15);
+    border-color: var(--warn);
+}
+
+/* Ban list view (inside peer panel) */
+.ban-list { padding: 0; }
+.ban-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.ban-list-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+}
+.ban-clear-all {
+    color: var(--err) !important;
+    border-color: rgba(248, 81, 73, 0.3) !important;
+}
+.ban-clear-all:hover {
+    background: rgba(248, 81, 73, 0.1) !important;
+    border-color: var(--err) !important;
+}
+.ban-list-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+.ban-list-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+.ban-table .ban-unban {
+    color: var(--accent);
+    border-color: rgba(88, 166, 255, 0.3);
+}
+.ban-table .ban-unban:hover {
+    background: rgba(88, 166, 255, 0.1);
+    border-color: var(--accent);
+}
+
+/* Adjust HUD/zoom when panel is open — keep them above the panel */
+.peer-panel:not(.collapsed) ~ #hud-bottom-left {
+    bottom: 352px;
+}
+.peer-panel:not(.collapsed) ~ .antarctica-note {
+    bottom: 352px;
+    transition: bottom 0.3s ease;
+}
+.peer-panel:not(.collapsed) ~ #zoom-controls {
+    bottom: 352px;
+    transition: bottom 0.3s ease;
 }
 
 /* ---------- Animations ---------- */
