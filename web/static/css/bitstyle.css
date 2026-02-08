@@ -168,14 +168,19 @@ html, body {
 }
 
 #hud-top-left    { top: 56px; left: 16px; }
-#hud-top-right   { top: 56px; right: 16px; text-align: right; }
-#hud-bottom-left { bottom: 44px; left: 16px; transition: bottom 0.3s ease; }
+#hud-top-right   { top: 56px; right: 16px; text-align: right; min-width: 180px; }
 
-.hud-nets {
-    display: flex;
-    gap: 6px;
+/* BTC price below block height */
+.hud-price {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--net-ipv4);
     margin-top: 4px;
+    letter-spacing: 0.3px;
 }
+.hud-price:empty { display: none; }
+
+/* Network badge colours (shared by handle-nets and tooltips) */
 .net-badge {
     font-size: 10px;
     font-weight: 600;
@@ -193,32 +198,11 @@ html, body {
 /* "All" badge — accent-coloured */
 .net-all   { color: var(--accent);   background: rgba(88,166,255,0.12);   border: 1px solid rgba(88,166,255,0.25); }
 
-/* Interactive HUD panel for network badges */
-.hud-interactive { pointer-events: auto; }
-.hud-interactive .net-badge {
-    cursor: pointer;
-    transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
-    position: relative;
-}
-.hud-interactive .net-badge:hover {
-    opacity: 1;
-    transform: translateY(-1px);
-}
-/* Dimmed when a filter is active and this badge is NOT selected */
-.hud-interactive .net-badge.dimmed {
-    opacity: 0.35;
-}
-/* Active / selected badge gets a brighter border glow */
-.hud-interactive .net-badge.active {
-    opacity: 1;
-    box-shadow: 0 0 6px rgba(88, 166, 255, 0.25);
-}
-
 /* Network stats popover on badge hover */
 .net-popover {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
+    position: fixed;
+    bottom: auto;
+    left: auto;
     min-width: 180px;
     padding: 8px 10px;
     background: rgba(10, 14, 20, 0.94);
@@ -230,7 +214,7 @@ html, body {
     color: var(--text-secondary);
     pointer-events: none;
     white-space: nowrap;
-    z-index: 60;
+    z-index: 90;
 }
 .net-popover.hidden { display: none; }
 .net-popover .pop-title {
@@ -256,11 +240,9 @@ html, body {
     font-weight: 600;
 }
 
-/* Antarctica annotation */
+/* Antarctica annotation — positioned dynamically on the map landmass */
 .antarctica-note {
     position: fixed;
-    bottom: 110px;
-    left: 16px;
     max-width: 340px;
     padding: 8px 12px;
     background: rgba(10, 14, 20, 0.92);
@@ -275,6 +257,7 @@ html, body {
     display: flex;
     align-items: flex-start;
     gap: 6px;
+    pointer-events: auto;
     transition: opacity 0.2s ease;
 }
 .antarctica-note.hidden { display: none; }
@@ -299,6 +282,182 @@ html, body {
 }
 .ant-close:hover {
     color: var(--text-secondary);
+}
+
+/* ---------- Sidebar Cards (compact docked tabs) ---------- */
+.sidebar-cards {
+    position: fixed;
+    top: 126px;
+    right: 12px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-end;
+    pointer-events: auto;
+}
+.info-card {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    user-select: none;
+}
+/* ── Tab button (always visible) ── */
+.info-card-tab {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(10, 14, 20, 0.88);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.info-card-tab:hover {
+    background: rgba(88, 166, 255, 0.12);
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+/* When expanded, tab gets active style */
+.info-card:not(.collapsed) .info-card-tab {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: var(--accent);
+    color: var(--text-primary);
+    border-radius: 4px 0 0 4px;
+}
+/* ── Panel (expanded content) ── */
+.info-card-panel {
+    min-width: 190px;
+    background: rgba(10, 14, 20, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(88, 166, 255, 0.15);
+    border-left: none;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    overflow: hidden;
+    max-width: 240px;
+    transition: max-width 0.2s ease, opacity 0.15s ease;
+    opacity: 1;
+}
+.info-card.collapsed .info-card-panel {
+    max-width: 0;
+    opacity: 0;
+    border-width: 0;
+    overflow: hidden;
+}
+.info-card-header {
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.info-card-header:hover {
+    background: rgba(88, 166, 255, 0.06);
+}
+.info-card-title {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.info-card-body {
+    padding: 4px 10px 6px;
+}
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    gap: 12px;
+}
+.info-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.info-val {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.info-val-ok { color: var(--ok); }
+.info-val-warn { color: var(--warn); }
+
+/* Changes feed entries */
+.changes-empty {
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
+.change-entry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    font-size: 10px;
+}
+.change-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.change-dot.connected { background: var(--ok); box-shadow: 0 0 4px var(--ok); }
+.change-dot.disconnected { background: var(--err); box-shadow: 0 0 4px var(--err); }
+.change-ip {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+.change-time {
+    color: var(--text-muted);
+    font-size: 9px;
+    flex-shrink: 0;
+}
+
+/* CPU / RAM bar */
+.info-bar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 80px;
+    height: 14px;
+    background: rgba(88, 166, 255, 0.06);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.info-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(88, 166, 255, 0.25);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+.info-bar-text {
+    position: relative;
+    z-index: 1;
+    padding: 0 6px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
 }
 
 /* ---------- Zoom Controls ---------- */
@@ -415,6 +574,38 @@ html, body {
     color: var(--text-muted);
     font-style: italic;
 }
+/* Pinned tooltip — interactive, has action buttons */
+.tooltip.pinned {
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    border-color: rgba(88, 166, 255, 0.3);
+}
+.tt-actions {
+    padding: 6px 10px;
+    border-top: 1px solid rgba(88, 166, 255, 0.1);
+    display: flex;
+    gap: 6px;
+}
+.tt-action-btn {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    border-radius: 3px;
+    border: 1px solid;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+    text-align: center;
+}
+.tt-disconnect {
+    color: var(--err);
+    border-color: rgba(248, 81, 73, 0.3);
+    background: rgba(248, 81, 73, 0.06);
+}
+.tt-disconnect:hover {
+    background: rgba(248, 81, 73, 0.15);
+    border-color: var(--err);
+}
 
 /* ---------- Bottom Peer Panel ---------- */
 .peer-panel {
@@ -463,12 +654,34 @@ html, body {
 .peer-panel:not(.collapsed) .handle-arrow {
     transform: rotate(180deg);
 }
-.handle-label {
-    font-size: 10px;
+.handle-nets {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex: 1;
+    pointer-events: auto;
+}
+.handle-nets .net-badge {
+    font-size: 9px;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--text-secondary);
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    opacity: 0.85;
+    cursor: pointer;
+    transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+    position: relative;
+}
+.handle-nets .net-badge:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+}
+.handle-nets .net-badge.dimmed {
+    opacity: 0.35;
+}
+.handle-nets .net-badge.active {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(88, 166, 255, 0.25);
 }
 .handle-count {
     font-size: 10px;
@@ -548,6 +761,16 @@ html, body {
 .peer-table-wrap {
     flex: 1;
     overflow: auto;
+}
+/* Horizontal scrollbar affordance — subtle blue tint */
+.peer-table-wrap::-webkit-scrollbar { height: 6px; }
+.peer-table-wrap::-webkit-scrollbar-track { background: var(--bg-deep); }
+.peer-table-wrap::-webkit-scrollbar-thumb {
+    background: var(--accent-dim);
+    border-radius: 3px;
+}
+.peer-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
 }
 
 /* Table */
@@ -629,12 +852,18 @@ html, body {
     background: rgba(88, 166, 255, 0.15);
 }
 
-/* Network-coloured left border on rows */
-.peer-table tbody tr[data-net="ipv4"]  { border-left: 2px solid var(--net-ipv4); }
-.peer-table tbody tr[data-net="ipv6"]  { border-left: 2px solid var(--net-ipv6); }
-.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor); }
-.peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p); }
-.peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns); }
+/* Network-coloured left border + subtle text tint on rows */
+.peer-table tbody tr[data-net="ipv4"]  { border-left: 2px solid var(--net-ipv4); color: rgba(227,179,65,0.85); }
+.peer-table tbody tr[data-net="ipv6"]  { border-left: 2px solid var(--net-ipv6); color: rgba(240,113,120,0.85); }
+.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor);  color: rgba(74,158,255,0.85); }
+.peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p);  color: rgba(139,92,246,0.85); }
+.peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns);color: rgba(210,168,255,0.85); }
+/* Network tint intensifies on hover */
+.peer-table tbody tr[data-net="ipv4"]:hover  { border-left: 3px solid var(--net-ipv4);  background: rgba(227,179,65,0.06);  color: rgba(227,179,65,1); }
+.peer-table tbody tr[data-net="ipv6"]:hover  { border-left: 3px solid var(--net-ipv6);  background: rgba(240,113,120,0.06); color: rgba(240,113,120,1); }
+.peer-table tbody tr[data-net="onion"]:hover { border-left: 3px solid var(--net-tor);   background: rgba(74,158,255,0.06);  color: rgba(74,158,255,1); }
+.peer-table tbody tr[data-net="i2p"]:hover   { border-left: 3px solid var(--net-i2p);   background: rgba(139,92,246,0.06);  color: rgba(139,92,246,1); }
+.peer-table tbody tr[data-net="cjdns"]:hover { border-left: 3px solid var(--net-cjdns); background: rgba(210,168,255,0.06); color: rgba(210,168,255,1); }
 
 /* Peer action buttons in rows */
 .peer-table .peer-action-btn {
@@ -653,15 +882,6 @@ html, body {
     background: rgba(248, 81, 73, 0.15);
     border-color: var(--err);
 }
-.peer-table .peer-action-btn.ban {
-    color: var(--warn);
-    border-color: rgba(210, 153, 34, 0.3);
-}
-.peer-table .peer-action-btn.ban:hover {
-    background: rgba(210, 153, 34, 0.15);
-    border-color: var(--warn);
-}
-
 /* Ban list view (inside peer panel) */
 .ban-list { padding: 0; }
 .ban-list-header {
@@ -707,14 +927,7 @@ html, body {
     border-color: var(--accent);
 }
 
-/* Adjust HUD/zoom when panel is open — keep them above the panel */
-.peer-panel:not(.collapsed) ~ #hud-bottom-left {
-    bottom: 352px;
-}
-.peer-panel:not(.collapsed) ~ .antarctica-note {
-    bottom: 352px;
-    transition: bottom 0.3s ease;
-}
+/* Adjust zoom controls when panel is open — keep them above the panel */
 .peer-panel:not(.collapsed) ~ #zoom-controls {
     bottom: 352px;
     transition: bottom 0.3s ease;
@@ -730,6 +943,144 @@ html, body {
     0%   { transform: scale(0); opacity: 0; }
     60%  { transform: scale(1.4); opacity: 1; }
     100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- Disconnect Confirmation Dialog ---------- */
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.dialog-box {
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    padding: 20px 24px;
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialog-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.dialog-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+.dialog-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.dialog-btn {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+    text-align: center;
+}
+.dialog-btn-disconnect {
+    color: var(--err);
+    border-color: rgba(248, 81, 73, 0.4);
+    background: rgba(248, 81, 73, 0.08);
+}
+.dialog-btn-disconnect:hover {
+    background: rgba(248, 81, 73, 0.18);
+    border-color: var(--err);
+}
+.dialog-btn-ban {
+    color: var(--warn);
+    border-color: rgba(210, 153, 34, 0.4);
+    background: rgba(210, 153, 34, 0.08);
+}
+.dialog-btn-ban:hover {
+    background: rgba(210, 153, 34, 0.18);
+    border-color: var(--warn);
+}
+.dialog-btn-cancel {
+    color: var(--text-muted);
+    border-color: rgba(88, 166, 255, 0.15);
+    background: transparent;
+}
+.dialog-btn-cancel:hover {
+    color: var(--text-secondary);
+    border-color: rgba(88, 166, 255, 0.3);
+    background: rgba(88, 166, 255, 0.04);
+}
+
+/* ---------- Ban List Modal ---------- */
+.ban-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.ban-modal-box {
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 680px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+.ban-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.ban-modal-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+.ban-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color var(--transition);
+}
+.ban-modal-close:hover {
+    color: var(--text-primary);
+}
+.ban-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+.ban-modal-table-wrap {
+    overflow-x: auto;
 }
 
 /* ---------- Scrollbar (if ever needed) ---------- */

@@ -184,7 +184,9 @@
     // DOM references
     const clockEl = document.getElementById('clock');
     const tooltipEl = document.getElementById('node-tooltip');
+    const antNote = document.getElementById('antarctica-note');
     let hoveredNode = null;
+    let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
     // ═══════════════════════════════════════════════════════════
     // HELPERS
@@ -470,6 +472,8 @@
                     // ── Update in place (peer still connected) ──
                     existing.lat = lat;
                     existing.lon = lon;
+                    existing.net = netKey;      // always use authoritative API value
+                    existing.color = color;     // keep colour in sync with network
                     existing.ping = peer.ping_ms || 0;
                     existing.city = peer.city || '';
                     existing.regionName = peer.regionName || '';
@@ -543,6 +547,7 @@
     // ═══════════════════════════════════════════════════════════
 
     let lastBlockHeight = null;
+    let lastNodeInfo = null;  // Full /api/info response for Node Info card
 
     async function fetchInfo() {
         try {
@@ -550,13 +555,71 @@
             if (!resp.ok) return;
             const info = await resp.json();
 
+            lastNodeInfo = info;
+
             // Update block height HUD
             if (info.last_block && info.last_block.height) {
                 lastBlockHeight = info.last_block.height;
             }
+
+            // Update Node Info card
+            renderNodeInfoCard(info);
+
+            // Update BTC price ticker
+            const priceEl = document.getElementById('hud-price');
+            if (priceEl && info.btc_price) {
+                const price = parseFloat(info.btc_price);
+                priceEl.textContent = `BTC $${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${info.btc_currency || 'USD'}`;
+            }
         } catch (err) {
             console.error('[vNext] Failed to fetch info:', err);
         }
+    }
+
+    /** Render the Node Info sidebar card from /api/info data */
+    function renderNodeInfoCard(info) {
+        const card = document.getElementById('node-info-card');
+        if (!card) return;
+
+        const body = card.querySelector('.info-card-body');
+        if (!body) return;
+
+        let html = '';
+
+        // Bitcoin Core version
+        const ver = info.subversion || '—';
+        html += `<div class="info-row"><span class="info-label">Version</span><span class="info-val">${ver}</span></div>`;
+
+        // Peer count
+        const peers = info.connected != null ? info.connected : '—';
+        html += `<div class="info-row"><span class="info-label">Peers</span><span class="info-val">${peers}</span></div>`;
+
+        // Blockchain size
+        if (info.blockchain) {
+            html += `<div class="info-row"><span class="info-label" title="On-disk blockchain storage usage">Blockchain Size (Disk)</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
+
+            // Node type (Full / Pruned)
+            const nodeType = info.blockchain.pruned ? 'Pruned' : 'Full';
+            html += `<div class="info-row"><span class="info-label">Node Type</span><span class="info-val">${nodeType}</span></div>`;
+
+            // Indexed status
+            const indexed = info.blockchain.indexed ? 'Yes' : 'No';
+            html += `<div class="info-row"><span class="info-label">TX Index</span><span class="info-val">${indexed}</span></div>`;
+
+            // Sync / IBD status
+            if (info.blockchain.ibd) {
+                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-warn">Syncing (IBD)</span></div>`;
+            } else {
+                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-ok">Synced</span></div>`;
+            }
+        }
+
+        // Mempool
+        if (info.mempool_size != null) {
+            html += `<div class="info-row"><span class="info-label">Mempool</span><span class="info-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+        }
+
+        body.innerHTML = html;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1114,6 +1177,18 @@
         }
     }
 
+    /** Position the Antarctica annotation on the map landmass */
+    function updateAntarcticaNote() {
+        if (!antNote || antNote.classList.contains('hidden')) return;
+        // Place at central Antarctica (~-72°lat, 30°lon — near Novolazarevskaya)
+        const s = worldToScreen(30, -72);
+        // Offset so the note sits centered above the point
+        const noteW = antNote.offsetWidth || 340;
+        const noteH = antNote.offsetHeight || 40;
+        antNote.style.left = Math.max(8, Math.min(W - noteW - 8, s.x - noteW / 2)) + 'px';
+        antNote.style.top = Math.max(48, Math.min(H - noteH - 40, s.y - noteH - 12)) + 'px';
+    }
+
     /** Update the clock display in the topbar */
     function updateClock() {
         const now = new Date();
@@ -1151,8 +1226,9 @@
         return `<div class="tt-row"><span class="tt-label">${label}</span><span class="tt-val">${value}</span></div>`;
     }
 
-    /** Display comprehensive tooltip near cursor with peer details */
-    function showTooltip(node, mx, my) {
+    /** Display comprehensive tooltip near cursor with peer details.
+     *  When pinned=true, tooltip gets pointer-events and a disconnect button. */
+    function showTooltip(node, mx, my, pinned) {
         const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
         const netColor = rgba(node.color, 0.9);
 
@@ -1210,8 +1286,32 @@
         if (node.conntime_fmt) html += ttRow('Uptime', node.conntime_fmt);
         html += `</div>`;
 
+        // ── Actions (only when pinned) ──
+        if (pinned) {
+            html += `<div class="tt-actions">`;
+            html += `<button class="tt-action-btn tt-disconnect" data-id="${node.peerId}" data-net="${node.net}">Disconnect</button>`;
+            html += `</div>`;
+        }
+
         tooltipEl.innerHTML = html;
         tooltipEl.classList.remove('hidden');
+
+        // Pinned tooltips are interactive (clickable buttons)
+        if (pinned) {
+            tooltipEl.classList.add('pinned');
+            tooltipEl.style.pointerEvents = 'auto';
+            // Bind disconnect button
+            const dcBtn = tooltipEl.querySelector('.tt-disconnect');
+            if (dcBtn) {
+                dcBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showDisconnectDialog(parseInt(dcBtn.dataset.id), dcBtn.dataset.net);
+                });
+            }
+        } else {
+            tooltipEl.classList.remove('pinned');
+            tooltipEl.style.pointerEvents = 'none';
+        }
 
         // Position: prefer right of cursor, flip left if near right edge
         const ttWidth = 260;
@@ -1227,23 +1327,26 @@
 
     function hideTooltip() {
         tooltipEl.classList.add('hidden');
+        tooltipEl.classList.remove('pinned');
+        tooltipEl.style.pointerEvents = 'none';
         hoveredNode = null;
+        pinnedNode = null;
     }
 
-    /** Highlight a table row by peer ID (map node hover → table row) */
-    function highlightTableRow(peerId) {
+    /** Highlight a table row by peer ID (map node hover → table row).
+     *  Visual highlight only — never scrolls the table on hover.
+     *  Pass scrollIntoView=true for click-driven selection. */
+    function highlightTableRow(peerId, scrollIntoView) {
         // Remove previous highlight
         const prev = tbodyEl.querySelector('.row-highlight');
         if (prev) prev.classList.remove('row-highlight');
 
         if (peerId === null) return;
 
-        // Add highlight to matching row and scroll it into view
         const row = tbodyEl.querySelector(`tr[data-id="${peerId}"]`);
         if (row) {
             row.classList.add('row-highlight');
-            // Scroll row into view if panel is open
-            if (!panelEl.classList.contains('collapsed')) {
+            if (scrollIntoView && !panelEl.classList.contains('collapsed')) {
                 row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             }
         }
@@ -1291,11 +1394,11 @@
         { key: 'network',         label: 'Net',      get: p => (NET_DISPLAY[p.network] || p.network),     full: null,  vis: true,  w: 45  },
         { key: 'conntime_fmt',    label: 'Duration', get: p => p.conntime_fmt || '—',                     full: null,  vis: true,  w: 75  },
         { key: 'connection_type', label: 'Type',     get: p => peerTypeShort(p),                           full: p => peerTypeFull(p), vis: true, w: 70 },
-        { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 160 },
-        { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 120 },
+        { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 130 },
+        { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 90  },
         { key: 'services_abbrev', label: 'Services', get: p => p.services_abbrev || '—',                   full: null,  vis: true,  w: 70  },
-        { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 80  },
-        { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 80  },
+        { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 60  },
+        { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 55  },
         { key: 'country',         label: 'Country',  get: p => p.country || '—',                           full: null,  vis: true,  w: 70  },
         { key: 'continent',       label: 'Cont.',    get: p => p.continent || '—',                         full: null,  vis: true,  w: 60  },
         { key: 'isp',             label: 'ISP',      get: p => p.isp || '—',                               full: null,  vis: true,  w: 110 },
@@ -1346,10 +1449,12 @@
         panelEl.classList.toggle('collapsed');
     });
 
-    /** Get sorted copy of lastPeers based on current sort state */
+    /** Get sorted copy of lastPeers based on current sort state.
+     *  sortKey=null means unsorted (original peer order). */
     function getSortedPeers() {
+        if (!sortKey) return [...lastPeers];  // unsorted — original order
         const col = COLUMNS.find(c => c.key === sortKey);
-        if (!col) return lastPeers;
+        if (!col) return [...lastPeers];
         return [...lastPeers].sort((a, b) => {
             let va = col.get(a);
             let vb = col.get(b);
@@ -1369,7 +1474,10 @@
         });
     }
 
-    /** Build colgroup with column widths (only when auto-fit is OFF) */
+    /** Build colgroup with column widths.
+     *  Auto-fit ON: compute widths from data distribution (~95th percentile of value lengths),
+     *  then scale proportionally to fill the viewport.
+     *  Auto-fit OFF: use reasonable default widths from column definitions. */
     function renderColgroup() {
         const table = document.getElementById('peer-table');
         // Remove old colgroup if present
@@ -1377,10 +1485,61 @@
         if (old) old.remove();
 
         if (autoFitColumns) {
-            table.style.tableLayout = 'auto';
+            // ── Auto-fit: size columns to fit viewport based on data ──
+            table.style.tableLayout = 'fixed';
+            const cg = document.createElement('colgroup');
+            const charPx = 7;  // approximate px per character at font-size 11px
+            const headerPad = 28; // padding + sort arrow
+            const colPad = 16;   // cell padding (8px each side)
+            const actionsW = 80; // fixed actions column
+
+            // Measure available width
+            const tableWrap = table.closest('.peer-table-wrap');
+            const availW = (tableWrap ? tableWrap.clientWidth : W) - actionsW;
+
+            const widths = [];
+            for (const key of visibleColumns) {
+                const col = COLUMNS.find(c => c.key === key);
+                if (!col) { widths.push(60); continue; }
+
+                // Minimum: header label width
+                const headerW = col.label.length * charPx + headerPad;
+
+                if (lastPeers.length === 0) {
+                    widths.push(Math.max(headerW, col.w));
+                    continue;
+                }
+
+                // Gather string lengths for all values
+                const lens = lastPeers.map(p => String(col.get(p)).length);
+                lens.sort((a, b) => a - b);
+
+                // Use ~95th percentile to ignore extreme outliers (e.g. Tor/I2P addresses)
+                const p95Idx = Math.min(Math.floor(lens.length * 0.95), lens.length - 1);
+                const p95Len = lens[p95Idx];
+                const dataW = p95Len * charPx + colPad;
+
+                widths.push(Math.max(headerW, Math.min(dataW, 250)));
+            }
+
+            // Scale proportionally to fill available width
+            const totalNatural = widths.reduce((s, w) => s + w, 0);
+            const scale = totalNatural > 0 ? Math.max(availW / totalNatural, 0.5) : 1;
+
+            for (const w of widths) {
+                const colEl = document.createElement('col');
+                colEl.style.width = Math.round(w * scale) + 'px';
+                cg.appendChild(colEl);
+            }
+            // Actions column
+            const actCol = document.createElement('col');
+            actCol.style.width = actionsW + 'px';
+            cg.appendChild(actCol);
+            table.insertBefore(cg, table.firstChild);
             return;
         }
 
+        // ── Auto-fit OFF: use reasonable default widths from column definitions ──
         table.style.tableLayout = 'fixed';
         const cg = document.createElement('colgroup');
         for (const key of visibleColumns) {
@@ -1390,9 +1549,9 @@
             colEl.style.width = w + 'px';
             cg.appendChild(colEl);
         }
-        // Actions column
+        // Actions column (single Disconnect button)
         const actCol = document.createElement('col');
-        actCol.style.width = '100px';
+        actCol.style.width = '80px';
         cg.appendChild(actCol);
         table.insertBefore(cg, table.firstChild);
     }
@@ -1404,7 +1563,8 @@
             const col = COLUMNS.find(c => c.key === key);
             if (!col) continue;
             const isActive = sortKey === key;
-            const arrow = isActive ? (sortAsc ? '&#9650;' : '&#9660;') : '&#9650;';
+            // 3-state: no sortKey = unsorted (dim arrow), asc = ▲, desc = ▼
+            const arrow = isActive ? (sortAsc ? '&#9650;' : '&#9660;') : '';
             const cls = isActive ? 'sort-arrow active' : 'sort-arrow';
             html += `<th data-sort="${key}"><span class="th-text">${col.label} <span class="${cls}">${arrow}</span></span><span class="th-resize" data-col="${key}"></span></th>`;
         }
@@ -1439,13 +1599,9 @@
                 const hoverVal = col.full ? col.full(peer) : val;
                 html += `<td title="${String(hoverVal).replace(/"/g, '&quot;')}">${val}</td>`;
             }
-            // Action buttons
-            const canBan = (net === 'ipv4' || net === 'ipv6');
+            // Action buttons — single Disconnect button opens confirmation dialog
             html += '<td>';
-            html += `<button class="peer-action-btn" data-action="disconnect" data-id="${peer.id}">Disconnect</button> `;
-            if (canBan) {
-                html += `<button class="peer-action-btn ban" data-action="ban" data-id="${peer.id}">Ban 24h</button>`;
-            }
+            html += `<button class="peer-action-btn" data-action="disconnect" data-id="${peer.id}" data-net="${net}">Disconnect</button>`;
             html += '</td>';
             html += '</tr>';
         }
@@ -1457,15 +1613,30 @@
 
     // ── Named event handlers (for reattachment after ban list close) ──
 
+    let resizingColumn = false;  // suppress sort click when resize drag occurred
+
     function handleTheadClick(e) {
+        // Suppress sort if this click followed a column resize drag
+        if (resizingColumn) {
+            resizingColumn = false;
+            return;
+        }
+        // Ignore clicks on resize handles
+        if (e.target.closest('.th-resize')) return;
         const th = e.target.closest('th[data-sort]');
         if (!th) return;
         const key = th.dataset.sort;
+        // 3-state sort cycle: unsorted → ascending → descending → unsorted
         if (sortKey === key) {
-            sortAsc = !sortAsc;
+            if (sortAsc) {
+                sortAsc = false;  // asc → desc
+            } else {
+                sortKey = null;   // desc → unsorted
+                sortAsc = true;
+            }
         } else {
             sortKey = key;
-            sortAsc = true;
+            sortAsc = true;       // new column → ascending
         }
         renderPeerTableHead();
         renderPeerTable();
@@ -1486,6 +1657,7 @@
 
         const onMove = (me) => {
             if (!resizeState) return;
+            resizingColumn = true;  // flag to suppress subsequent sort click
             const delta = me.clientX - resizeState.startX;
             const newW = Math.max(30, resizeState.startW + delta);
             if (autoFitColumns) {
@@ -1527,59 +1699,77 @@
         renderColgroup();
     });
 
-    // ── Ban list view (replaces table content temporarily) ──
+    // ── Ban list modal (overlay — peer table stays visible underneath) ──
     const bansBtn = document.getElementById('btn-bans');
-    let banListOpen = false;
-    const tableWrapEl = document.querySelector('.peer-table-wrap');
+    let banModalOpen = false;
 
     bansBtn.addEventListener('click', () => {
-        if (banListOpen) {
-            closeBanList();
+        if (banModalOpen) {
+            closeBanModal();
         } else {
-            openBanList();
+            openBanModal();
         }
     });
 
-    function openBanList() {
-        banListOpen = true;
+    function openBanModal() {
+        banModalOpen = true;
         bansBtn.classList.add('active');
-        tableWrapEl.dataset.prevHtml = tableWrapEl.innerHTML;
-        tableWrapEl.innerHTML = '<div class="ban-list-loading">Loading ban list...</div>';
+
+        // Remove any existing modal
+        const existing = document.getElementById('ban-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'ban-modal';
+        modal.className = 'ban-modal-overlay';
+        modal.innerHTML = `
+            <div class="ban-modal-box">
+                <div class="ban-modal-header">
+                    <span class="ban-modal-title">Banned IPs</span>
+                    <button class="ban-modal-close" id="ban-modal-close">&times;</button>
+                </div>
+                <div class="ban-modal-body" id="ban-modal-body">
+                    <div class="ban-list-loading">Loading ban list...</div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        // Close button
+        document.getElementById('ban-modal-close').addEventListener('click', closeBanModal);
+        // Close on overlay background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeBanModal();
+        });
+
         fetchBanList();
     }
 
-    function closeBanList() {
-        banListOpen = false;
+    function closeBanModal() {
+        banModalOpen = false;
         bansBtn.classList.remove('active');
-        // Rebuild the table element fresh
-        tableWrapEl.innerHTML = '<table class="peer-table" id="peer-table"><thead id="peer-thead"></thead><tbody id="peer-tbody"></tbody></table>';
-        // Re-bind DOM refs (they were replaced)
-        theadEl = document.getElementById('peer-thead');
-        tbodyEl = document.getElementById('peer-tbody');
-        renderPeerTableHead();
-        renderPeerTable();
-        // Re-attach sort + resize handlers (delegated to theadEl)
-        theadEl.addEventListener('click', handleTheadClick);
-        theadEl.addEventListener('mousedown', handleTheadResize);
-        // Re-attach row handlers
-        tbodyEl.addEventListener('click', handleTbodyClick);
-        tbodyEl.addEventListener('mouseover', handleTbodyHover);
-        tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
+        const modal = document.getElementById('ban-modal');
+        if (modal) modal.remove();
     }
 
     async function fetchBanList() {
+        const body = document.getElementById('ban-modal-body');
+        if (!body) return;
         try {
             const resp = await fetch('/api/bans');
             const data = await resp.json();
             const bans = data.bans || [];
             renderBanList(bans);
         } catch (err) {
-            tableWrapEl.innerHTML = `<div class="ban-list-loading" style="color:var(--err)">Failed to load bans: ${err.message}</div>`;
+            body.innerHTML = `<div class="ban-list-loading" style="color:var(--err)">Failed to load bans: ${err.message}</div>`;
         }
     }
 
     function renderBanList(bans) {
-        let html = '<div class="ban-list">';
+        const body = document.getElementById('ban-modal-body');
+        if (!body) return;
+
+        let html = '';
+        // Header with count + clear all
         html += '<div class="ban-list-header">';
         html += `<span class="ban-list-title">Banned IPs (${bans.length})</span>`;
         if (bans.length > 0) {
@@ -1590,30 +1780,28 @@
         if (bans.length === 0) {
             html += '<div class="ban-list-empty">No banned IPs</div>';
         } else {
-            html += '<table class="peer-table ban-table"><thead><tr>';
+            html += '<div class="ban-modal-table-wrap"><table class="peer-table ban-table"><thead><tr>';
             html += '<th>Address</th><th>Ban Created</th><th>Ban Until</th><th>Actions</th>';
             html += '</tr></thead><tbody>';
             for (const ban of bans) {
                 const addr = ban.address || '—';
                 const created = ban.ban_created ? new Date(ban.ban_created * 1000).toLocaleString() : '—';
                 const until = ban.banned_until ? new Date(ban.banned_until * 1000).toLocaleString() : '—';
-                html += `<tr>`;
+                html += '<tr>';
                 html += `<td title="${addr}">${addr}</td>`;
                 html += `<td>${created}</td>`;
                 html += `<td>${until}</td>`;
                 html += `<td><button class="peer-action-btn ban-unban" data-addr="${addr}">Unban</button></td>`;
                 html += '</tr>';
             }
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
         }
-        html += '</div>';
-        tableWrapEl.innerHTML = html;
+        body.innerHTML = html;
 
         // Bind unban buttons
-        tableWrapEl.querySelectorAll('.ban-unban').forEach(btn => {
+        body.querySelectorAll('.ban-unban').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const addr = btn.dataset.addr;
-                if (!confirm(`Unban ${addr}?`)) return;
                 try {
                     const resp = await fetch('/api/peer/unban', {
                         method: 'POST',
@@ -1623,7 +1811,7 @@
                     const data = await resp.json();
                     if (data.success) {
                         showActionResult(`Unbanned ${addr}`, true);
-                        fetchBanList(); // refresh
+                        fetchBanList();
                     } else {
                         showActionResult(`Unban failed: ${data.error}`, false);
                     }
@@ -1643,7 +1831,7 @@
                     const data = await resp.json();
                     if (data.success) {
                         showActionResult('All bans cleared', true);
-                        fetchBanList(); // refresh
+                        fetchBanList();
                     } else {
                         showActionResult(`Clear failed: ${data.error}`, false);
                     }
@@ -1659,7 +1847,7 @@
         const btn = e.target.closest('.peer-action-btn');
         if (btn) {
             e.stopPropagation();
-            handlePeerAction(btn.dataset.action, parseInt(btn.dataset.id));
+            handlePeerAction(btn.dataset.action, parseInt(btn.dataset.id), btn.dataset.net);
             return;
         }
 
@@ -1668,25 +1856,73 @@
         const peerId = parseInt(row.dataset.id);
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
-            // Center and zoom map on this peer
+            // Select this peer: reset map to world view, then zoom into the peer.
+            // Peer lands at ~30% from top of visible map area.
             const p = project(node.lon, node.lat);
-            targetView.x = (p.x - 0.5) * W;
-            targetView.y = (p.y - 0.5) * H;
-            if (targetView.zoom < 3) targetView.zoom = 3;
 
-            // Open the inspection tooltip at the node's screen position (once view settles)
+            // For southern peers (lat < -30), auto-collapse the panel so they're visible
+            if (node.lat < -30 && !panelEl.classList.contains('collapsed')) {
+                panelEl.classList.add('collapsed');
+            }
+
+            // Calculate visible map area
+            const topbarH = 40;
+            const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
+            const visibleTop = topbarH;
+            const visibleBot = H - panelH;
+            const visibleH = visibleBot - visibleTop;
+            const targetScreenY = visibleTop + visibleH * 0.30;
+
+            // Mercator world bounds for vertical clamping
+            const yTop = project(0, 85).y;
+            const yBot = project(0, -85).y;
+
+            // Find minimum zoom that allows correct peer positioning.
+            // Start at zoom 3 (standard); escalate for edge-case peers
+            // near world bounds (e.g. Australia, Antarctica).
+            let z = 3;
+            for (; z <= CFG.maxZoom; z += 0.2) {
+                const offsetFromCenter = (H / 2 - targetScreenY) / z;
+                const candidateY = (p.y - 0.5) * H - offsetFromCenter;
+                const minPanY = (yTop - 0.5) * H + H / (2 * z);
+                const maxPanY = (yBot - 0.5) * H - H / (2 * z);
+                if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
+                    break;
+                }
+            }
+            z = Math.min(z, CFG.maxZoom);
+
+            const offsetFromCenter = (H / 2 - targetScreenY) / z;
+            const finalX = (p.x - 0.5) * W;
+            const finalY = (p.y - 0.5) * H - offsetFromCenter;
+
+            // Reset view state to world baseline first (zoom 1, centered on peer longitude)
+            // so we always zoom IN fresh, never pan from a previous peer's position.
+            view.x = finalX;
+            view.y = 0;
+            view.zoom = 1;
+            // Then set the target to animate smoothly into the peer
+            targetView.x = finalX;
+            targetView.y = finalY;
+            targetView.zoom = z;
+
+            // Set selection state + highlight row
             highlightedPeerId = peerId;
+            pinnedNode = node;
+            highlightTableRow(peerId, true);  // scroll into view on click
+
+            // Open pinned tooltip at the node's screen position (once view settles)
             setTimeout(() => {
                 const offsets = getWrapOffsets();
                 for (const off of offsets) {
                     const s = worldToScreen(node.lon + off, node.lat);
                     if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
-                        showTooltip(node, s.x, s.y);
+                        showTooltip(node, s.x, s.y, true);
                         hoveredNode = node;
                         break;
                     }
                 }
-            }, 400);
+            }, 500);
 
             row.classList.add('row-selected');
             setTimeout(() => row.classList.remove('row-selected'), 1500);
@@ -1708,56 +1944,89 @@
     tbodyEl.addEventListener('mouseover', handleTbodyHover);
     tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
 
-    /** Handle disconnect/ban actions */
-    async function handlePeerAction(action, peerId) {
-        const confirmMsg = action === 'ban'
-            ? `Ban peer ${peerId} for 24 hours and disconnect?`
-            : `Disconnect peer ${peerId}?`;
-        if (!confirm(confirmMsg)) return;
+    /** Show a confirmation dialog for disconnect with optional ban */
+    function showDisconnectDialog(peerId, net) {
+        const canBan = (net === 'ipv4' || net === 'ipv6');
+        // Remove any existing dialog
+        const existing = document.getElementById('disconnect-dialog');
+        if (existing) existing.remove();
 
-        try {
-            if (action === 'ban') {
-                // Ban first, then disconnect
-                const banResp = await fetch('/api/peer/ban', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ peer_id: peerId }),
-                });
-                const banData = await banResp.json();
-                if (!banData.success) {
-                    showActionResult(`Ban failed: ${banData.error}`, false);
-                    return;
-                }
-                // Now disconnect
-                const dcResp = await fetch('/api/peer/disconnect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ peer_id: peerId }),
-                });
-                const dcData = await dcResp.json();
-                if (dcData.success) {
-                    showActionResult(`Banned ${banData.banned_ip} and disconnected peer ${peerId}`, true);
+        const overlay = document.createElement('div');
+        overlay.id = 'disconnect-dialog';
+        overlay.className = 'dialog-overlay';
+        overlay.innerHTML = `
+            <div class="dialog-box">
+                <div class="dialog-title">Disconnect Peer ${peerId}</div>
+                <div class="dialog-text">Choose an action for this peer:</div>
+                <div class="dialog-actions">
+                    <button class="dialog-btn dialog-btn-disconnect" data-choice="disconnect">Disconnect Only</button>
+                    ${canBan ? `<button class="dialog-btn dialog-btn-ban" data-choice="ban">Disconnect + Ban 24h</button>` : ''}
+                    <button class="dialog-btn dialog-btn-cancel" data-choice="cancel">Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        // Handle button clicks
+        overlay.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.dialog-btn');
+            if (!btn) return;
+            const choice = btn.dataset.choice;
+            overlay.remove();
+
+            if (choice === 'cancel') return;
+
+            try {
+                if (choice === 'ban') {
+                    // Ban first, then disconnect
+                    const banResp = await fetch('/api/peer/ban', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId }),
+                    });
+                    const banData = await banResp.json();
+                    if (!banData.success) {
+                        showActionResult(`Ban failed: ${banData.error}`, false);
+                        return;
+                    }
+                    const dcResp = await fetch('/api/peer/disconnect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId }),
+                    });
+                    const dcData = await dcResp.json();
+                    if (dcData.success) {
+                        showActionResult(`Banned ${banData.banned_ip} and disconnected peer ${peerId}`, true);
+                    } else {
+                        showActionResult(`Banned but disconnect failed: ${dcData.error}`, false);
+                    }
                 } else {
-                    showActionResult(`Banned but disconnect failed: ${dcData.error}`, false);
+                    const resp = await fetch('/api/peer/disconnect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId }),
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showActionResult(`Disconnected peer ${peerId}`, true);
+                    } else {
+                        showActionResult(`Failed: ${data.error}`, false);
+                    }
                 }
-            } else {
-                const resp = await fetch('/api/peer/disconnect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ peer_id: peerId }),
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    showActionResult(`Disconnected peer ${peerId}`, true);
-                } else {
-                    showActionResult(`Failed: ${data.error}`, false);
-                }
+                setTimeout(fetchPeers, 1000);
+            } catch (err) {
+                showActionResult(`Error: ${err.message}`, false);
             }
-            // Refresh peers after action
-            setTimeout(fetchPeers, 1000);
-        } catch (err) {
-            showActionResult(`Error: ${err.message}`, false);
-        }
+        });
+
+        // Close on overlay background click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+    }
+
+    /** Handle disconnect action from table row button */
+    function handlePeerAction(action, peerId, net) {
+        showDisconnectDialog(peerId, net || 'ipv4');
     }
 
     /** Show a temporary result message in the toolbar */
@@ -1774,19 +2043,43 @@
     // NODE HIGHLIGHT RING — Draw highlight for map↔table interaction
     // ═══════════════════════════════════════════════════════════
 
-    /** Draw a highlight ring around a node when it's highlighted via table hover */
+    /** Draw a highlight ring around a node when it's highlighted via table hover.
+     *  When pinned (selected), draws a brighter pulsing halo so it's
+     *  unambiguous which peer is selected even in dense clusters. */
     function drawHighlightRing(node, now, wrapOffsets) {
         if (!node.alive) return;
+        const isPinned = pinnedNode && pinnedNode.peerId === node.peerId;
         const pulse = 0.7 + 0.3 * Math.sin(now * 0.005);
         const r = CFG.nodeRadius * 2.5;
         for (const off of wrapOffsets) {
             const s = worldToScreen(node.lon + off, node.lat);
-            if (s.x < -r || s.x > W + r || s.y < -r || s.y > H + r) continue;
-            ctx.strokeStyle = rgba({ r: 255, g: 255, b: 255 }, 0.5 * pulse);
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-            ctx.stroke();
+            if (s.x < -r * 3 || s.x > W + r * 3 || s.y < -r * 3 || s.y > H + r * 3) continue;
+
+            if (isPinned) {
+                // Outer soft glow halo
+                const glowR = r * 2.2;
+                const grad = ctx.createRadialGradient(s.x, s.y, r, s.x, s.y, glowR);
+                grad.addColorStop(0, rgba(node.color, 0.3 * pulse));
+                grad.addColorStop(1, rgba(node.color, 0));
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, glowR, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Inner bright ring
+                ctx.strokeStyle = rgba(node.color, 0.8 * pulse);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                // Hover: subtle white ring
+                ctx.strokeStyle = rgba({ r: 255, g: 255, b: 255 }, 0.5 * pulse);
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
     }
 
@@ -1885,7 +2178,11 @@
         }
 
         // 11. Highlight ring for map↔table cross-highlighting
-        if (highlightedPeerId !== null) {
+        //     Draw for pinned node (selection) and/or hovered node
+        if (pinnedNode && pinnedNode.alive) {
+            drawHighlightRing(pinnedNode, now, wrapOffsets);
+        }
+        if (highlightedPeerId !== null && (!pinnedNode || highlightedPeerId !== pinnedNode.peerId)) {
             const hlNode = nodes.find(n => n.peerId === highlightedPeerId && n.alive);
             if (hlNode) drawHighlightRing(hlNode, now, wrapOffsets);
         }
@@ -1893,6 +2190,7 @@
         // Update HUD overlays
         updateHUD();
         updateClock();
+        updateAntarcticaNote();
 
         requestAnimationFrame(frame);
     }
@@ -1903,8 +2201,10 @@
 
     // ── Mouse pan ──
     let dragZoom = 1;  // zoom level when drag started
+    let dragMoved = false;  // track if mouse moved during drag (vs click)
     canvas.addEventListener('mousedown', (e) => {
         dragging = true;
+        dragMoved = false;
         dragStart.x = e.clientX;
         dragStart.y = e.clientY;
         dragViewStart.x = targetView.x;
@@ -1917,29 +2217,57 @@
             // Pan the view by drag delta, scaled by zoom so drag feels 1:1 with the map
             const dx = e.clientX - dragStart.x;
             const dy = e.clientY - dragStart.y;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
             targetView.x = dragViewStart.x - dx / dragZoom;
             // At zoom 1, vertical panning is locked (clampView enforces it)
             if (dragZoom > 1.001) {
                 targetView.y = dragViewStart.y - dy / dragZoom;
             }
-            hideTooltip();
+            if (dragMoved) hideTooltip();
         } else {
             // Hover detection for tooltip + table highlight
             const node = findNodeAtScreen(e.clientX, e.clientY);
             if (node) {
-                showTooltip(node, e.clientX, e.clientY);
+                // Don't override a pinned tooltip with hover
+                if (!pinnedNode) {
+                    showTooltip(node, e.clientX, e.clientY, false);
+                }
                 hoveredNode = node;
                 highlightTableRow(node.peerId);
                 canvas.style.cursor = 'pointer';
-            } else if (hoveredNode) {
+            } else if (hoveredNode && !pinnedNode) {
                 hideTooltip();
                 highlightTableRow(null);
+                canvas.style.cursor = 'grab';
+            } else if (!pinnedNode) {
                 canvas.style.cursor = 'grab';
             }
         }
     });
 
-    window.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', (e) => {
+        if (dragging && !dragMoved) {
+            // This was a click, not a drag
+            const node = findNodeAtScreen(e.clientX, e.clientY);
+            if (node) {
+                // Pin tooltip on this node
+                pinnedNode = node;
+                highlightedPeerId = node.peerId;
+                showTooltip(node, e.clientX, e.clientY, true);
+                // Scroll peer table to this row (expand panel if collapsed)
+                if (panelEl.classList.contains('collapsed')) {
+                    panelEl.classList.remove('collapsed');
+                    // Wait for panel to expand before scrolling
+                    setTimeout(() => highlightTableRow(node.peerId, true), 350);
+                } else {
+                    highlightTableRow(node.peerId, true);
+                }
+            } else if (pinnedNode) {
+                // Clicked empty space — unpin
+                hideTooltip();
+                highlightTableRow(null);
+            }
+        }
         dragging = false;
     });
 
@@ -2008,10 +2336,10 @@
     // NETWORK BADGE CONTROLS — Click to filter, hover for stats
     // ═══════════════════════════════════════════════════════════
 
-    const netBadges = document.querySelectorAll('#hud-bottom-left .net-badge');
+    const netBadges = document.querySelectorAll('.handle-nets .net-badge');
     const netPopover = document.getElementById('net-popover');
-    const antNote = document.getElementById('antarctica-note');
     const antCloseBtn = document.getElementById('ant-close');
+    let antNoteDismissed = false;  // tracks if user dismissed the annotation this session
 
     /** Update badge visual states to reflect the current multi-select filter */
     function updateBadgeStates() {
@@ -2027,10 +2355,10 @@
             }
         });
 
-        // Show Antarctica annotation when any private network is exclusively shown
+        // Show Antarctica annotation when any private network is in the enabled set
+        // (unless the user has manually dismissed it this session)
         const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
-        const hasClearnet = enabledNets.has('ipv4') || enabledNets.has('ipv6');
-        if (hasPrivate && !hasClearnet) {
+        if (hasPrivate && !antNoteDismissed) {
             antNote.classList.remove('hidden');
         } else {
             antNote.classList.add('hidden');
@@ -2038,8 +2366,10 @@
     }
 
     // Click to toggle network badges (multi-select)
+    // stopPropagation prevents the peer-panel-handle click from toggling the panel
     netBadges.forEach(badge => {
-        badge.addEventListener('click', () => {
+        badge.addEventListener('click', (e) => {
+            e.stopPropagation();
             const net = badge.dataset.net;
             if (net === 'all') {
                 // "All" → select everything
@@ -2056,27 +2386,33 @@
                     enabledNets.add(net);
                 }
             }
+            antNoteDismissed = false;  // reset dismiss on filter change
             updateBadgeStates();
             renderPeerTable();
         });
 
-        // Hover to show network stats popover
+        // Hover to show network stats popover (positioned above the badge)
         badge.addEventListener('mouseenter', () => {
             const net = badge.dataset.net;
             const stats = getNetworkStats(net);
             if (!stats) return;
             netPopover.innerHTML = stats;
             netPopover.classList.remove('hidden');
+            // Position popover above the hovered badge
+            const rect = badge.getBoundingClientRect();
+            netPopover.style.left = rect.left + 'px';
+            netPopover.style.top = (rect.top - netPopover.offsetHeight - 6) + 'px';
         });
         badge.addEventListener('mouseleave', () => {
             netPopover.classList.add('hidden');
         });
     });
 
-    // Close Antarctica annotation
+    // Close Antarctica annotation (dismisses until network filter changes)
     if (antCloseBtn) {
         antCloseBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            antNoteDismissed = true;
             antNote.classList.add('hidden');
         });
     }
@@ -2125,6 +2461,145 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // SIDEBAR CARDS — Collapsible tab system
+    // ═══════════════════════════════════════════════════════════
+
+    // Tab click → expand; Header click → collapse
+    document.querySelectorAll('[data-toggle]').forEach(el => {
+        el.addEventListener('click', () => {
+            const card = el.closest('.info-card');
+            if (!card) return;
+            card.classList.toggle('collapsed');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // SYSTEM INFO CARD — CPU/RAM from /api/stats
+    // ═══════════════════════════════════════════════════════════
+
+    async function fetchSystemStats() {
+        try {
+            const resp = await fetch('/api/stats');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            renderSystemInfoCard(data.system_stats || {});
+        } catch (err) {
+            console.error('[vNext] Failed to fetch system stats:', err);
+        }
+    }
+
+    function renderSystemInfoCard(stats) {
+        const card = document.getElementById('system-info-card');
+        if (!card) return;
+        const body = card.querySelector('.info-card-body');
+        if (!body) return;
+
+        const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
+        const memPct = stats.mem_pct != null ? Math.round(stats.mem_pct) : null;
+        const memUsed = stats.mem_used_mb;
+        const memTotal = stats.mem_total_mb;
+
+        let html = '';
+
+        // CPU bar
+        html += '<div class="info-row">';
+        html += '<span class="info-label">CPU</span>';
+        if (cpuPct != null) {
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
+        } else {
+            html += '<span class="info-val">&mdash;</span>';
+        }
+        html += '</div>';
+
+        // RAM bar
+        html += '<div class="info-row">';
+        html += '<span class="info-label">RAM</span>';
+        if (memPct != null) {
+            const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text">${memStr}</span></span>`;
+        } else {
+            html += '<span class="info-val">&mdash;</span>';
+        }
+        html += '</div>';
+
+        // Network traffic bars (from /api/netspeed)
+        if (lastNetTraffic) {
+            const rx = lastNetTraffic.rx_bps || 0;
+            const tx = lastNetTraffic.tx_bps || 0;
+            html += `<div class="info-row"><span class="info-label">NET &darr;</span><span class="info-val" style="color:var(--ok)">${formatBps(rx)}</span></div>`;
+            html += `<div class="info-row"><span class="info-label">NET &uarr;</span><span class="info-val" style="color:var(--net-ipv6)">${formatBps(tx)}</span></div>`;
+        }
+
+        body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // RECENT CHANGES FEED — from /api/changes
+    // ═══════════════════════════════════════════════════════════
+
+    async function fetchChanges() {
+        try {
+            const resp = await fetch('/api/changes');
+            if (!resp.ok) return;
+            const changes = await resp.json();
+            renderChangesCard(changes);
+        } catch (err) {
+            console.error('[vNext] Failed to fetch changes:', err);
+        }
+    }
+
+    function renderChangesCard(changes) {
+        const card = document.getElementById('changes-card');
+        if (!card) return;
+        const body = card.querySelector('.info-card-body');
+        if (!body) return;
+
+        if (!changes || changes.length === 0) {
+            body.innerHTML = '<div class="changes-empty">No recent changes</div>';
+            return;
+        }
+
+        // Show most recent 8 changes
+        const recent = changes.slice(-8).reverse();
+        let html = '';
+        for (const c of recent) {
+            const isConnect = c.type === 'connected';
+            const dotClass = isConnect ? 'connected' : 'disconnected';
+            const ip = c.peer ? (c.peer.ip || '') : '';
+            const port = c.peer ? (c.peer.port || '') : '';
+            const label = ip ? `${ip}:${port}` : '—';
+            // Format time as HH:MM:SS
+            const d = new Date(c.time * 1000);
+            const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            html += `<div class="change-entry"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
+        }
+        body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // NETWORK TRAFFIC — from /api/netspeed
+    // ═══════════════════════════════════════════════════════════
+
+    let lastNetTraffic = null;
+
+    async function fetchNetSpeed() {
+        try {
+            const resp = await fetch('/api/netspeed');
+            if (!resp.ok) return;
+            lastNetTraffic = await resp.json();
+        } catch (err) {
+            console.error('[vNext] Failed to fetch netspeed:', err);
+        }
+    }
+
+    /** Format bytes/sec to human-readable string */
+    function formatBps(bps) {
+        if (bps < 1024) return `${Math.round(bps)} B/s`;
+        if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
+        return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
 
@@ -2149,6 +2624,18 @@
         // Fetch node info (block height etc) immediately, then poll every 15s
         fetchInfo();
         setInterval(fetchInfo, CFG.infoPollInterval);
+
+        // Fetch system stats (CPU/RAM) immediately, then poll every 10s
+        fetchSystemStats();
+        setInterval(fetchSystemStats, CFG.pollInterval);
+
+        // Fetch recent changes immediately, then poll every 10s
+        fetchChanges();
+        setInterval(fetchChanges, CFG.pollInterval);
+
+        // Fetch network traffic speed immediately, then poll every 5s
+        fetchNetSpeed();
+        setInterval(fetchNetSpeed, 5000);
 
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)
