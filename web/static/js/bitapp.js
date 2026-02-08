@@ -98,12 +98,14 @@
     let knownPeerIds = {};   // id -> true, tracks which peers we've seen
 
     // ═══════════════════════════════════════════════════════════
-    // WORLD GEOMETRY (simplified continent outlines)
-    // Low-res hand-traced polygons for visual effect only.
+    // WORLD GEOMETRY STATE
+    // Land polygons and lake polygons loaded from static assets.
     // ═══════════════════════════════════════════════════════════
 
     let worldPolygons = [];
+    let lakePolygons = [];
     let worldReady = false;
+    let lakesReady = false;
 
     // DOM references
     const clockEl = document.getElementById('clock');
@@ -223,6 +225,26 @@
                 [[[115,-15],[120,-14],[130,-12],[135,-14],[140,-16],[148,-20],[152,-25],[153,-28],[150,-33],[145,-38],[137,-35],[130,-32],[122,-33],[116,-32],[114,-28],[114,-22],[118,-20],[120,-18],[115,-15]]],
             ];
             worldReady = true;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LAKES GEOMETRY — Natural Earth 50m major lakes
+    // Loaded from /static/assets/lakes-50m.json on startup.
+    // Rendered on top of land using the ocean background colour
+    // to "carve out" Great Lakes, Caspian Sea, Lake Victoria, etc.
+    // ═══════════════════════════════════════════════════════════
+
+    async function loadLakeGeometry() {
+        try {
+            const resp = await fetch('/static/assets/lakes-50m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            lakePolygons = await resp.json();
+            lakesReady = true;
+            console.log(`[vNext] Loaded ${lakePolygons.length} lake polygons`);
+        } catch (err) {
+            // Lakes are non-critical — map still works without them
+            console.warn('[vNext] Failed to load lake geometry:', err);
         }
     }
 
@@ -396,97 +418,156 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // DRAWING — Grid, landmasses, nodes, connections
+    // DRAWING — Grid, landmasses, lakes, nodes, connections
+    // All geometry is drawn at 3 horizontal offsets (-360, 0, +360)
+    // to create seamless world wrap when panning left/right.
     // ═══════════════════════════════════════════════════════════
 
-    /** Draw subtle lat/lon grid lines */
+    /**
+     * Compute which world-wrap copies are needed for the current view.
+     * Returns an array of longitude offsets (e.g. [-360, 0, 360]) where
+     * at least part of that copy would be visible on screen.
+     */
+    function getWrapOffsets() {
+        // Figure out which longitude range is currently visible
+        const left = screenToWorld(0, H / 2);
+        const right = screenToWorld(W, H / 2);
+        const offsets = [];
+        // Check -360, 0, +360 — any copy whose lon range overlaps the screen
+        for (const off of [-360, 0, 360]) {
+            const copyLeft = -180 + off;
+            const copyRight = 180 + off;
+            if (copyRight >= left.lon && copyLeft <= right.lon) {
+                offsets.push(off);
+            }
+        }
+        // Always include at least the centre copy
+        if (offsets.length === 0) offsets.push(0);
+        return offsets;
+    }
+
+    /** Draw subtle lat/lon grid lines (with wrap) */
     function drawGrid() {
         ctx.strokeStyle = 'rgba(88,166,255,0.04)';
         ctx.lineWidth = 0.5;
+        const offsets = getWrapOffsets();
 
-        // Longitude lines (vertical on map)
-        for (let lon = -180; lon <= 180; lon += CFG.gridSpacing) {
-            ctx.beginPath();
-            for (let lat = -85; lat <= 85; lat += 2) {
-                const s = worldToScreen(lon, lat);
-                if (lat === -85) ctx.moveTo(s.x, s.y);
-                else ctx.lineTo(s.x, s.y);
+        for (const off of offsets) {
+            // Longitude lines (vertical on map)
+            for (let lon = -180; lon <= 180; lon += CFG.gridSpacing) {
+                ctx.beginPath();
+                for (let lat = -85; lat <= 85; lat += 2) {
+                    const s = worldToScreen(lon + off, lat);
+                    if (lat === -85) ctx.moveTo(s.x, s.y);
+                    else ctx.lineTo(s.x, s.y);
+                }
+                ctx.stroke();
             }
-            ctx.stroke();
-        }
 
-        // Latitude lines (horizontal on map)
-        for (let lat = -60; lat <= 80; lat += CFG.gridSpacing) {
-            ctx.beginPath();
-            for (let lon = -180; lon <= 180; lon += 2) {
-                const s = worldToScreen(lon, lat);
-                if (lon === -180) ctx.moveTo(s.x, s.y);
-                else ctx.lineTo(s.x, s.y);
+            // Latitude lines (horizontal on map)
+            for (let lat = -60; lat <= 80; lat += CFG.gridSpacing) {
+                ctx.beginPath();
+                for (let lon = -180; lon <= 180; lon += 2) {
+                    const s = worldToScreen(lon + off, lat);
+                    if (lon === -180) ctx.moveTo(s.x, s.y);
+                    else ctx.lineTo(s.x, s.y);
+                }
+                ctx.stroke();
             }
-            ctx.stroke();
         }
     }
 
     /**
-     * Draw real Natural Earth landmasses on the canvas.
-     * Each polygon has one or more rings: ring[0] is the outer boundary,
-     * ring[1+] are holes (lakes, inland seas). We use the evenodd fill
-     * rule so holes are cut out automatically.
+     * Draw a set of polygons (land or lakes) at a given longitude offset.
+     * Each polygon has one or more rings: ring[0] = outer boundary,
+     * ring[1+] = holes. Uses evenodd fill rule to cut out holes.
      */
-    function drawLandmasses() {
-        if (!worldReady) return;
-
-        ctx.fillStyle = '#151d28';
-        ctx.strokeStyle = '#253040';
+    function drawPolygonSet(polygons, fillStyle, strokeStyle, lonOffset) {
+        ctx.fillStyle = fillStyle;
+        ctx.strokeStyle = strokeStyle;
         ctx.lineWidth = CFG.coastlineWidth;
 
-        for (const poly of worldPolygons) {
+        for (const poly of polygons) {
             ctx.beginPath();
-
-            // Draw each ring (outer boundary + holes)
             for (const ring of poly) {
                 for (let i = 0; i < ring.length; i++) {
-                    const s = worldToScreen(ring[i][0], ring[i][1]);
+                    const s = worldToScreen(ring[i][0] + lonOffset, ring[i][1]);
                     if (i === 0) ctx.moveTo(s.x, s.y);
                     else ctx.lineTo(s.x, s.y);
                 }
                 ctx.closePath();
             }
-
-            // evenodd ensures holes are cut out of filled land
             ctx.fill('evenodd');
             ctx.stroke();
         }
     }
 
+    /** Draw landmasses at all visible wrap positions */
+    function drawLandmasses() {
+        if (!worldReady) return;
+        const offsets = getWrapOffsets();
+        for (const off of offsets) {
+            drawPolygonSet(worldPolygons, '#151d28', '#253040', off);
+        }
+    }
+
+    /** Draw lakes on top of land using ocean colour to "carve" them out */
+    function drawLakes() {
+        if (!lakesReady) return;
+        const offsets = getWrapOffsets();
+        for (const off of offsets) {
+            // Lakes filled with ocean colour, subtle darker stroke
+            drawPolygonSet(lakePolygons, '#06080c', '#1a2230', off);
+        }
+    }
+
     /**
-     * Draw a single node on the canvas.
-     * Handles:
-     *   - Fade-in animation (first CFG.fadeInDuration ms after spawnTime)
-     *   - Pulsing glow effect (continuous, using node.phase)
-     *   - Fade-out animation (when node.alive=false, after fadeOutStart)
+     * Draw a single node at a specific screen position.
+     * Shared by drawNode() for each wrap offset.
      */
-    function drawNode(node, now) {
-        // Not yet spawned (shouldn't happen with real data, but safety check)
+    function drawNodeAt(sx, sy, c, r, gr, pulse, opacity) {
+        // Outer glow (radial gradient)
+        const grad = ctx.createRadialGradient(sx, sy, r, sx, sy, gr);
+        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity));
+        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity));
+        grad.addColorStop(1, rgba(c, 0));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, gr, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core dot
+        ctx.fillStyle = rgba(c, 0.9 * opacity);
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright white centre highlight
+        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity);
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    /**
+     * Draw a single node on the canvas at all visible wrap positions.
+     * Handles fade-in, pulse glow, fade-out animations.
+     */
+    function drawNode(node, now, wrapOffsets) {
         if (now < node.spawnTime) return;
 
-        const s = worldToScreen(node.lon, node.lat);
         const c = node.color;
 
         // ── Calculate overall opacity (handles fade-in and fade-out) ──
         let opacity = 1;
-
-        // Fade-in: ramp from 0 to 1 over fadeInDuration
         const age = now - node.spawnTime;
         if (age < CFG.fadeInDuration) {
             opacity = age / CFG.fadeInDuration;
         }
-
-        // Fade-out: ramp from 1 to 0 over fadeOutDuration
         if (!node.alive && node.fadeOutStart) {
             const fadeAge = now - node.fadeOutStart;
             opacity = Math.max(0, 1 - fadeAge / CFG.fadeOutDuration);
-            if (opacity <= 0) return;  // fully faded, skip drawing
+            if (opacity <= 0) return;
         }
 
         // Pulsing factor (continuous sine wave)
@@ -502,57 +583,43 @@
         const r = CFG.nodeRadius * scale;
         const gr = CFG.glowRadius * scale * pulse;
 
-        // ── Outer glow (radial gradient) ──
-        const grad = ctx.createRadialGradient(s.x, s.y, r, s.x, s.y, gr);
-        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity));
-        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity));
-        grad.addColorStop(1, rgba(c, 0));
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, gr, 0, Math.PI * 2);
-        ctx.fill();
-
-        // ── Core dot ──
-        ctx.fillStyle = rgba(c, 0.9 * opacity);
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // ── Bright white centre highlight ──
-        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity);
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, r * 0.4, 0, Math.PI * 2);
-        ctx.fill();
+        // Draw at each wrap offset
+        for (const off of wrapOffsets) {
+            const s = worldToScreen(node.lon + off, node.lat);
+            // Skip if well off screen (with glow margin)
+            if (s.x < -gr || s.x > W + gr || s.y < -gr || s.y > H + gr) continue;
+            drawNodeAt(s.x, s.y, c, r, gr, pulse, opacity);
+        }
     }
 
     /**
      * Draw subtle connection lines between nearby nodes.
      * Only draws between nodes that are close on screen (< 250px apart)
      * and skips fading-out nodes to avoid visual clutter.
+     * Uses wrap offsets so connections work across the date line.
      */
-    function drawConnectionLines(now) {
+    function drawConnectionLines(now, wrapOffsets) {
         ctx.lineWidth = 0.5;
         const aliveNodes = nodes.filter(n => n.alive);
 
-        for (let i = 0; i < aliveNodes.length; i++) {
-            // Connect to the next node in the array (creates a mesh feel)
-            const j = (i + 1) % aliveNodes.length;
-            const a = worldToScreen(aliveNodes[i].lon, aliveNodes[i].lat);
-            const b = worldToScreen(aliveNodes[j].lon, aliveNodes[j].lat);
+        for (const off of wrapOffsets) {
+            for (let i = 0; i < aliveNodes.length; i++) {
+                const j = (i + 1) % aliveNodes.length;
+                const a = worldToScreen(aliveNodes[i].lon + off, aliveNodes[i].lat);
+                const b = worldToScreen(aliveNodes[j].lon + off, aliveNodes[j].lat);
 
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 250 || dist < 20) continue;
 
-            // Only draw if reasonably close on screen
-            if (dist > 250 || dist < 20) continue;
-
-            const alpha = 0.08 * (1 - dist / 250);
-            ctx.strokeStyle = rgba(aliveNodes[i].color, alpha);
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
+                const alpha = 0.08 * (1 - dist / 250);
+                ctx.strokeStyle = rgba(aliveNodes[i].color, alpha);
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            }
         }
     }
 
@@ -607,17 +674,20 @@
     // TOOLTIP — Shows peer info on hover
     // ═══════════════════════════════════════════════════════════
 
-    /** Find the nearest alive node within hit radius of screen coords */
+    /** Find the nearest alive node within hit radius of screen coords.
+     *  Checks all wrap offsets so hovering works on wrapped copies too. */
     function findNodeAtScreen(sx, sy) {
         const hitRadius = 12;
-        // Search backwards so top-drawn nodes are found first
+        const offsets = getWrapOffsets();
         for (let i = nodes.length - 1; i >= 0; i--) {
             if (!nodes[i].alive) continue;
-            const s = worldToScreen(nodes[i].lon, nodes[i].lat);
-            const dx = s.x - sx;
-            const dy = s.y - sy;
-            if (dx * dx + dy * dy < hitRadius * hitRadius) {
-                return nodes[i];
+            for (const off of offsets) {
+                const s = worldToScreen(nodes[i].lon + off, nodes[i].lat);
+                const dx = s.x - sx;
+                const dy = s.y - sy;
+                if (dx * dx + dy * dy < hitRadius * hitRadius) {
+                    return nodes[i];
+                }
             }
         }
         return null;
@@ -669,18 +739,26 @@
         view.y = lerp(view.y, targetView.y, CFG.panSmooth);
         view.zoom = lerp(view.zoom, targetView.zoom, CFG.panSmooth);
 
-        // Clear canvas
+        // Clear canvas with ocean colour
         ctx.fillStyle = '#06080c';
         ctx.fillRect(0, 0, W, H);
 
-        // Draw layers bottom-to-top
-        drawGrid();
-        drawLandmasses();
-        drawConnectionLines(now);
+        // Compute wrap offsets once per frame
+        const wrapOffsets = getWrapOffsets();
 
-        // Draw all nodes (alive + fading out)
+        // Draw layers bottom-to-top:
+        // 1. Grid lines
+        drawGrid();
+        // 2. Land polygons (filled darker than ocean)
+        drawLandmasses();
+        // 3. Lakes carved out on top of land (filled with ocean colour)
+        drawLakes();
+        // 4. Connection mesh lines between nearby peers
+        drawConnectionLines(now, wrapOffsets);
+
+        // 5. Peer nodes (alive + fading out) at all wrap positions
         for (const node of nodes) {
-            drawNode(node, now);
+            drawNode(node, now, wrapOffsets);
         }
 
         // Update HUD overlays
@@ -796,6 +874,7 @@
 
         // Load real Natural Earth world geometry (async, renders once loaded)
         loadWorldGeometry();
+        loadLakeGeometry();
 
         // Fetch real peer data immediately, then poll every 10s
         fetchPeers();
@@ -806,7 +885,7 @@
         setInterval(fetchInfo, CFG.infoPollInterval);
 
         // Start the render loop (grid + nodes render immediately,
-        // landmasses appear once world-110m.json finishes loading)
+        // landmasses + lakes appear once JSON assets finish loading)
         requestAnimationFrame(frame);
     }
 
