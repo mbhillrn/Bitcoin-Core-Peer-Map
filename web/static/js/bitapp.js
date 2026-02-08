@@ -1311,20 +1311,20 @@
         pinnedNode = null;
     }
 
-    /** Highlight a table row by peer ID (map node hover → table row) */
-    function highlightTableRow(peerId) {
+    /** Highlight a table row by peer ID (map node hover → table row).
+     *  Visual highlight only — never scrolls the table on hover.
+     *  Pass scrollIntoView=true for click-driven selection. */
+    function highlightTableRow(peerId, scrollIntoView) {
         // Remove previous highlight
         const prev = tbodyEl.querySelector('.row-highlight');
         if (prev) prev.classList.remove('row-highlight');
 
         if (peerId === null) return;
 
-        // Add highlight to matching row and scroll it into view
         const row = tbodyEl.querySelector(`tr[data-id="${peerId}"]`);
         if (row) {
             row.classList.add('row-highlight');
-            // Scroll row into view if panel is open
-            if (!panelEl.classList.contains('collapsed')) {
+            if (scrollIntoView && !panelEl.classList.contains('collapsed')) {
                 row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             }
         }
@@ -1427,10 +1427,12 @@
         panelEl.classList.toggle('collapsed');
     });
 
-    /** Get sorted copy of lastPeers based on current sort state */
+    /** Get sorted copy of lastPeers based on current sort state.
+     *  sortKey=null means unsorted (original peer order). */
     function getSortedPeers() {
+        if (!sortKey) return [...lastPeers];  // unsorted — original order
         const col = COLUMNS.find(c => c.key === sortKey);
-        if (!col) return lastPeers;
+        if (!col) return [...lastPeers];
         return [...lastPeers].sort((a, b) => {
             let va = col.get(a);
             let vb = col.get(b);
@@ -1539,7 +1541,8 @@
             const col = COLUMNS.find(c => c.key === key);
             if (!col) continue;
             const isActive = sortKey === key;
-            const arrow = isActive ? (sortAsc ? '&#9650;' : '&#9660;') : '&#9650;';
+            // 3-state: no sortKey = unsorted (dim arrow), asc = ▲, desc = ▼
+            const arrow = isActive ? (sortAsc ? '&#9650;' : '&#9660;') : '';
             const cls = isActive ? 'sort-arrow active' : 'sort-arrow';
             html += `<th data-sort="${key}"><span class="th-text">${col.label} <span class="${cls}">${arrow}</span></span><span class="th-resize" data-col="${key}"></span></th>`;
         }
@@ -1588,15 +1591,30 @@
 
     // ── Named event handlers (for reattachment after ban list close) ──
 
+    let resizingColumn = false;  // suppress sort click when resize drag occurred
+
     function handleTheadClick(e) {
+        // Suppress sort if this click followed a column resize drag
+        if (resizingColumn) {
+            resizingColumn = false;
+            return;
+        }
+        // Ignore clicks on resize handles
+        if (e.target.closest('.th-resize')) return;
         const th = e.target.closest('th[data-sort]');
         if (!th) return;
         const key = th.dataset.sort;
+        // 3-state sort cycle: unsorted → ascending → descending → unsorted
         if (sortKey === key) {
-            sortAsc = !sortAsc;
+            if (sortAsc) {
+                sortAsc = false;  // asc → desc
+            } else {
+                sortKey = null;   // desc → unsorted
+                sortAsc = true;
+            }
         } else {
             sortKey = key;
-            sortAsc = true;
+            sortAsc = true;       // new column → ascending
         }
         renderPeerTableHead();
         renderPeerTable();
@@ -1617,6 +1635,7 @@
 
         const onMove = (me) => {
             if (!resizeState) return;
+            resizingColumn = true;  // flag to suppress subsequent sort click
             const delta = me.clientX - resizeState.startX;
             const newW = Math.max(30, resizeState.startW + delta);
             if (autoFitColumns) {
@@ -1815,9 +1834,8 @@
         const peerId = parseInt(row.dataset.id);
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
-            // Center and zoom map on this peer, placing it in the upper-middle
-            // portion of the visible map area (accounting for HUD panels and peer panel).
-            // Always reset to a baseline zoom and zoom in fresh (don't pan from previous peer).
+            // Select this peer: reset map to world view, then zoom into the peer.
+            // Peer lands at ~30% from top of visible map area.
             const p = project(node.lon, node.lat);
 
             // Calculate visible map area
@@ -1826,37 +1844,47 @@
             const visibleTop = topbarH;
             const visibleBot = H - panelH;
             const visibleH = visibleBot - visibleTop;
-            // Place peer at ~30% from top of visible area (upper-middle)
             const targetScreenY = visibleTop + visibleH * 0.30;
 
             // Mercator world bounds for vertical clamping
             const yTop = project(0, 85).y;
             const yBot = project(0, -85).y;
 
-            // Start at zoom 3 (standard peer zoom), but for peers near world edges
-            // (e.g. Australia, Antarctica) that can't be positioned at 30% from top
-            // without violating vertical bounds, escalate zoom until it works.
+            // Find minimum zoom that allows correct peer positioning.
+            // Start at zoom 3 (standard); escalate for edge-case peers
+            // near world bounds (e.g. Australia, Antarctica).
             let z = 3;
             for (; z <= CFG.maxZoom; z += 0.2) {
                 const offsetFromCenter = (H / 2 - targetScreenY) / z;
                 const candidateY = (p.y - 0.5) * H - offsetFromCenter;
-                // Check if this Y violates the vertical clamp bounds at this zoom
                 const minPanY = (yTop - 0.5) * H + H / (2 * z);
                 const maxPanY = (yBot - 0.5) * H - H / (2 * z);
                 if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
-                    break;  // This zoom level works
+                    break;
                 }
             }
             z = Math.min(z, CFG.maxZoom);
+
+            const offsetFromCenter = (H / 2 - targetScreenY) / z;
+            const finalX = (p.x - 0.5) * W;
+            const finalY = (p.y - 0.5) * H - offsetFromCenter;
+
+            // Reset view state to world baseline first (zoom 1, centered on peer longitude)
+            // so we always zoom IN fresh, never pan from a previous peer's position.
+            view.x = finalX;
+            view.y = 0;
+            view.zoom = 1;
+            // Then set the target to animate smoothly into the peer
+            targetView.x = finalX;
+            targetView.y = finalY;
             targetView.zoom = z;
 
-            const offsetFromCenter = (H / 2 - targetScreenY) / targetView.zoom;
-            targetView.x = (p.x - 0.5) * W;
-            targetView.y = (p.y - 0.5) * H - offsetFromCenter;
-
-            // Open pinned inspection tooltip at the node's screen position (once view settles)
+            // Set selection state + highlight row
             highlightedPeerId = peerId;
             pinnedNode = node;
+            highlightTableRow(peerId, true);  // scroll into view on click
+
+            // Open pinned tooltip at the node's screen position (once view settles)
             setTimeout(() => {
                 const offsets = getWrapOffsets();
                 for (const off of offsets) {
@@ -1867,7 +1895,7 @@
                         break;
                     }
                 }
-            }, 400);
+            }, 500);
 
             row.classList.add('row-selected');
             setTimeout(() => row.classList.remove('row-selected'), 1500);
@@ -1988,19 +2016,43 @@
     // NODE HIGHLIGHT RING — Draw highlight for map↔table interaction
     // ═══════════════════════════════════════════════════════════
 
-    /** Draw a highlight ring around a node when it's highlighted via table hover */
+    /** Draw a highlight ring around a node when it's highlighted via table hover.
+     *  When pinned (selected), draws a brighter pulsing halo so it's
+     *  unambiguous which peer is selected even in dense clusters. */
     function drawHighlightRing(node, now, wrapOffsets) {
         if (!node.alive) return;
+        const isPinned = pinnedNode && pinnedNode.peerId === node.peerId;
         const pulse = 0.7 + 0.3 * Math.sin(now * 0.005);
         const r = CFG.nodeRadius * 2.5;
         for (const off of wrapOffsets) {
             const s = worldToScreen(node.lon + off, node.lat);
-            if (s.x < -r || s.x > W + r || s.y < -r || s.y > H + r) continue;
-            ctx.strokeStyle = rgba({ r: 255, g: 255, b: 255 }, 0.5 * pulse);
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-            ctx.stroke();
+            if (s.x < -r * 3 || s.x > W + r * 3 || s.y < -r * 3 || s.y > H + r * 3) continue;
+
+            if (isPinned) {
+                // Outer soft glow halo
+                const glowR = r * 2.2;
+                const grad = ctx.createRadialGradient(s.x, s.y, r, s.x, s.y, glowR);
+                grad.addColorStop(0, rgba(node.color, 0.3 * pulse));
+                grad.addColorStop(1, rgba(node.color, 0));
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, glowR, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Inner bright ring
+                ctx.strokeStyle = rgba(node.color, 0.8 * pulse);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                // Hover: subtle white ring
+                ctx.strokeStyle = rgba({ r: 255, g: 255, b: 255 }, 0.5 * pulse);
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
     }
 
@@ -2099,7 +2151,11 @@
         }
 
         // 11. Highlight ring for map↔table cross-highlighting
-        if (highlightedPeerId !== null) {
+        //     Draw for pinned node (selection) and/or hovered node
+        if (pinnedNode && pinnedNode.alive) {
+            drawHighlightRing(pinnedNode, now, wrapOffsets);
+        }
+        if (highlightedPeerId !== null && (!pinnedNode || highlightedPeerId !== pinnedNode.peerId)) {
             const hlNode = nodes.find(n => n.peerId === highlightedPeerId && n.alive);
             if (hlNode) drawHighlightRing(hlNode, now, wrapOffsets);
         }

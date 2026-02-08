@@ -310,36 +310,48 @@ html, body {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    align-items: flex-end;
     pointer-events: auto;
 }
 .info-card {
     min-width: 200px;
-    background: rgba(10, 14, 20, 0.88);
+    background: rgba(10, 14, 20, 0.90);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(88, 166, 255, 0.12);
+    border: 1px solid rgba(88, 166, 255, 0.15);
     border-radius: var(--radius);
     user-select: none;
     overflow: hidden;
     transition: all 0.2s ease;
 }
+/* Collapsed state: compact tab */
+.info-card.collapsed {
+    min-width: 0;
+    width: auto;
+    border-color: rgba(88, 166, 255, 0.2);
+}
 .info-card-header {
-    padding: 8px 12px;
+    padding: 6px 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 6px;
     cursor: pointer;
     transition: background 0.15s ease;
 }
 .info-card-header:hover {
-    background: rgba(88, 166, 255, 0.04);
+    background: rgba(88, 166, 255, 0.08);
 }
 .info-card-title {
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 1.2px;
+    letter-spacing: 1px;
     font-weight: 600;
     color: var(--text-secondary);
+    white-space: nowrap;
+}
+.info-card.collapsed .info-card-title {
+    color: var(--accent);
 }
 .info-card-arrow {
     font-size: 8px;
@@ -788,18 +800,18 @@ html, body {
     background: rgba(88, 166, 255, 0.15);
 }
 
-/* Network-coloured left border on rows */
-.peer-table tbody tr[data-net="ipv4"]  { border-left: 2px solid var(--net-ipv4); }
-.peer-table tbody tr[data-net="ipv6"]  { border-left: 2px solid var(--net-ipv6); }
-.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor); }
-.peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p); }
-.peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns); }
+/* Network-coloured left border + subtle text tint on rows */
+.peer-table tbody tr[data-net="ipv4"]  { border-left: 2px solid var(--net-ipv4); color: rgba(227,179,65,0.85); }
+.peer-table tbody tr[data-net="ipv6"]  { border-left: 2px solid var(--net-ipv6); color: rgba(240,113,120,0.85); }
+.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor);  color: rgba(74,158,255,0.85); }
+.peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p);  color: rgba(139,92,246,0.85); }
+.peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns);color: rgba(210,168,255,0.85); }
 /* Network tint intensifies on hover */
-.peer-table tbody tr[data-net="ipv4"]:hover  { border-left: 3px solid var(--net-ipv4);  background: rgba(227,179,65,0.06); }
-.peer-table tbody tr[data-net="ipv6"]:hover  { border-left: 3px solid var(--net-ipv6);  background: rgba(240,113,120,0.06); }
-.peer-table tbody tr[data-net="onion"]:hover { border-left: 3px solid var(--net-tor);   background: rgba(74,158,255,0.06); }
-.peer-table tbody tr[data-net="i2p"]:hover   { border-left: 3px solid var(--net-i2p);   background: rgba(139,92,246,0.06); }
-.peer-table tbody tr[data-net="cjdns"]:hover { border-left: 3px solid var(--net-cjdns); background: rgba(210,168,255,0.06); }
+.peer-table tbody tr[data-net="ipv4"]:hover  { border-left: 3px solid var(--net-ipv4);  background: rgba(227,179,65,0.06);  color: rgba(227,179,65,1); }
+.peer-table tbody tr[data-net="ipv6"]:hover  { border-left: 3px solid var(--net-ipv6);  background: rgba(240,113,120,0.06); color: rgba(240,113,120,1); }
+.peer-table tbody tr[data-net="onion"]:hover { border-left: 3px solid var(--net-tor);   background: rgba(74,158,255,0.06);  color: rgba(74,158,255,1); }
+.peer-table tbody tr[data-net="i2p"]:hover   { border-left: 3px solid var(--net-i2p);   background: rgba(139,92,246,0.06);  color: rgba(139,92,246,1); }
+.peer-table tbody tr[data-net="cjdns"]:hover { border-left: 3px solid var(--net-cjdns); background: rgba(210,168,255,0.06); color: rgba(210,168,255,1); }
 
 /* Peer action buttons in rows */
 .peer-table .peer-action-btn {
