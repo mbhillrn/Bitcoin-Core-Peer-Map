@@ -57,6 +57,26 @@
     <!-- Tooltip for hovering over nodes -->
     <div id="node-tooltip" class="tooltip hidden"></div>
 
+    <!-- Bottom peer panel (collapsible) -->
+    <div id="peer-panel" class="peer-panel collapsed">
+        <div id="peer-panel-handle" class="peer-panel-handle">
+            <span class="handle-arrow" id="handle-arrow">&#9650;</span>
+            <span class="handle-label">Peer Table</span>
+            <span class="handle-count" id="handle-count">0</span>
+        </div>
+        <div class="peer-panel-body">
+            <div class="peer-panel-toolbar">
+                <div class="peer-action-zone" id="peer-action-zone"></div>
+            </div>
+            <div class="peer-table-wrap">
+                <table class="peer-table" id="peer-table">
+                    <thead id="peer-thead"></thead>
+                    <tbody id="peer-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/bitapp.js"></script>
 </body>
 </html>

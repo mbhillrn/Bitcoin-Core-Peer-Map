@@ -1,6 +1,6 @@
 /* ============================================================
    MBCore vNext — Canvas World Map with Real Bitcoin Peers
-   Phase 2.3: Peer semantics + hover inspection
+   Phase 2.4: Bottom peer panel + cross-highlighting
    ============================================================
    - Fetches real peers from the existing MBCoreServer backend
    - Renders them on a canvas world map (no Leaflet)
@@ -9,6 +9,10 @@
    - Inbound vs outbound peers have distinct pulse rhythms
    - Long-lived peers glow bright & steady; fresh peers dim & nervous
    - Rich hover tooltip with identity, location, network, performance
+   - Collapsible bottom panel with full peer table
+   - Bidirectional highlight: hover map node ↔ table row
+   - Click table row → center map on that peer
+   - Peer actions: disconnect, ban (24h)
    ============================================================ */
 
 (function () {
@@ -121,6 +125,8 @@
 
     let nodes = [];          // currently visible + fading-out nodes
     let knownPeerIds = {};   // id -> true, tracks which peers we've seen
+    let lastPeers = [];      // raw API response for table rendering
+    let highlightedPeerId = null;  // peer ID highlighted via map↔table interaction
 
     // ═══════════════════════════════════════════════════════════
     // WORLD GEOMETRY STATE
@@ -396,6 +402,7 @@
             const resp = await fetch('/api/peers');
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const peers = await resp.json();
+            lastPeers = peers;
 
             const now = Date.now();
 
@@ -500,6 +507,9 @@
 
             // Update connection status in the topbar
             updateConnectionStatus(peers.length > 0);
+
+            // Refresh the peer table panel
+            renderPeerTable();
 
         } catch (err) {
             console.error('[vNext] Failed to fetch peers:', err);
@@ -1164,6 +1174,296 @@
         hoveredNode = null;
     }
 
+    /** Highlight a table row by peer ID (map node hover → table row) */
+    function highlightTableRow(peerId) {
+        // Remove previous highlight
+        const prev = tbodyEl.querySelector('.row-highlight');
+        if (prev) prev.classList.remove('row-highlight');
+
+        if (peerId === null) return;
+
+        // Add highlight to matching row and scroll it into view
+        const row = tbodyEl.querySelector(`tr[data-id="${peerId}"]`);
+        if (row) {
+            row.classList.add('row-highlight');
+            // Scroll row into view if panel is open
+            if (!panelEl.classList.contains('collapsed')) {
+                row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BOTTOM PEER PANEL — Full peer table with all columns
+    // ═══════════════════════════════════════════════════════════
+
+    // Column definitions: { key, label, getter, defaultVisible }
+    const COLUMNS = [
+        { key: 'id',               label: 'ID',        get: p => p.id,                        vis: true  },
+        { key: 'network',          label: 'Net',       get: p => p.network,                   vis: true  },
+        { key: 'conntime_fmt',     label: 'Duration',  get: p => p.conntime_fmt || '—',       vis: true  },
+        { key: 'connection_type',  label: 'Type',      get: p => {
+            const dir = p.direction === 'IN' ? 'Inbound' : 'Outbound';
+            return p.connection_type ? `${dir} / ${p.connection_type}` : dir;
+        }, vis: true },
+        { key: 'addr',             label: 'IP:Port',   get: p => p.addr || `${p.ip}:${p.port}`, vis: true },
+        { key: 'subver',           label: 'Software',  get: p => p.subver || '—',             vis: true  },
+        { key: 'services_abbrev',  label: 'Services',  get: p => p.services_abbrev || '—',    vis: true  },
+        { key: 'city',             label: 'City',      get: p => p.city || '—',               vis: true  },
+        { key: 'regionName',       label: 'State/Region', get: p => p.regionName || '—',      vis: true  },
+        { key: 'country',          label: 'Country',   get: p => p.country || '—',            vis: true  },
+        { key: 'continent',        label: 'Continent', get: p => p.continent || '—',          vis: true  },
+        { key: 'isp',              label: 'ISP',       get: p => p.isp || '—',                vis: true  },
+        { key: 'ping_ms',          label: 'Ping',      get: p => p.ping_ms != null ? p.ping_ms + 'ms' : '—', vis: true },
+        { key: 'bytessent_fmt',    label: 'Sent',      get: p => p.bytessent_fmt || '—',      vis: true  },
+        { key: 'bytesrecv_fmt',    label: 'Received',  get: p => p.bytesrecv_fmt || '—',      vis: true  },
+        { key: 'in_addrman',       label: 'Addrman',   get: p => p.in_addrman ? 'Yes' : 'No', vis: true },
+        // Advanced columns (hidden by default)
+        { key: 'direction',        label: 'In/Out',    get: p => p.direction,                 vis: false },
+        { key: 'countryCode',      label: 'CC',        get: p => p.countryCode || '—',        vis: false },
+        { key: 'continentCode',    label: 'Cont. Code', get: p => p.continentCode || '—',     vis: false },
+        { key: 'lat',              label: 'Lat',       get: p => p.lat != null ? p.lat.toFixed(2) : '—', vis: false },
+        { key: 'lon',              label: 'Lon',       get: p => p.lon != null ? p.lon.toFixed(2) : '—', vis: false },
+        { key: 'region',           label: 'Region (short)', get: p => p.region || '—',        vis: false },
+        { key: 'as',               label: 'AS',        get: p => p.as || '—',                 vis: false },
+        { key: 'asname',           label: 'AS Name',   get: p => p.asname || '—',             vis: false },
+        { key: 'district',         label: 'District',  get: p => p.district || '—',           vis: false },
+        { key: 'mobile',           label: 'Mobile',    get: p => p.mobile ? 'Yes' : 'No',     vis: false },
+        { key: 'org',              label: 'Org',       get: p => p.org || '—',                vis: false },
+        { key: 'timezone',         label: 'Timezone',  get: p => p.timezone || '—',           vis: false },
+        { key: 'currency',         label: 'Currency',  get: p => p.currency || '—',           vis: false },
+        { key: 'hosting',          label: 'Hosting',   get: p => p.hosting ? 'Yes' : 'No',    vis: false },
+        { key: 'offset',           label: 'UTC Offset', get: p => p.offset != null ? p.offset : '—', vis: false },
+        { key: 'proxy',            label: 'Proxy',     get: p => p.proxy ? 'Yes' : 'No',      vis: false },
+        { key: 'zip',              label: 'ZIP',       get: p => p.zip || '—',                vis: false },
+    ];
+
+    // Visible column keys (start with defaults, can be toggled later)
+    let visibleColumns = COLUMNS.filter(c => c.vis).map(c => c.key);
+
+    // Sort state
+    let sortKey = 'id';
+    let sortAsc = true;
+
+    // Panel DOM
+    const panelEl = document.getElementById('peer-panel');
+    const theadEl = document.getElementById('peer-thead');
+    const tbodyEl = document.getElementById('peer-tbody');
+    const handleCountEl = document.getElementById('handle-count');
+    const actionZoneEl = document.getElementById('peer-action-zone');
+
+    // Panel toggle
+    document.getElementById('peer-panel-handle').addEventListener('click', () => {
+        panelEl.classList.toggle('collapsed');
+    });
+
+    /** Get sorted copy of lastPeers based on current sort state */
+    function getSortedPeers() {
+        const col = COLUMNS.find(c => c.key === sortKey);
+        if (!col) return lastPeers;
+        return [...lastPeers].sort((a, b) => {
+            let va = col.get(a);
+            let vb = col.get(b);
+            // Numeric-aware sort for known numeric fields
+            if (typeof va === 'number' && typeof vb === 'number') {
+                return sortAsc ? va - vb : vb - va;
+            }
+            // Strip 'ms' for ping column
+            if (sortKey === 'ping_ms') {
+                va = parseInt(va) || 0;
+                vb = parseInt(vb) || 0;
+                return sortAsc ? va - vb : vb - va;
+            }
+            va = String(va);
+            vb = String(vb);
+            return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+    }
+
+    /** Build table header row */
+    function renderPeerTableHead() {
+        let html = '<tr>';
+        for (const key of visibleColumns) {
+            const col = COLUMNS.find(c => c.key === key);
+            if (!col) continue;
+            const isActive = sortKey === key;
+            const arrow = isActive ? (sortAsc ? '&#9650;' : '&#9660;') : '&#9650;';
+            const cls = isActive ? 'sort-arrow active' : 'sort-arrow';
+            html += `<th data-sort="${key}">${col.label} <span class="${cls}">${arrow}</span></th>`;
+        }
+        html += '<th>Actions</th>';
+        html += '</tr>';
+        theadEl.innerHTML = html;
+    }
+
+    /** Build table body from lastPeers */
+    function renderPeerTable() {
+        if (!tbodyEl) return;
+        const sorted = getSortedPeers();
+        handleCountEl.textContent = sorted.length;
+
+        let html = '';
+        for (const peer of sorted) {
+            const isHighlighted = highlightedPeerId === peer.id;
+            const cls = isHighlighted ? ' class="row-highlight"' : '';
+            const net = peer.network || 'ipv4';
+            html += `<tr data-id="${peer.id}" data-net="${net}"${cls}>`;
+            for (const key of visibleColumns) {
+                const col = COLUMNS.find(c => c.key === key);
+                if (!col) continue;
+                html += `<td>${col.get(peer)}</td>`;
+            }
+            // Action buttons
+            const canBan = (net === 'ipv4' || net === 'ipv6');
+            html += '<td>';
+            html += `<button class="peer-action-btn" data-action="disconnect" data-id="${peer.id}">Disconnect</button> `;
+            if (canBan) {
+                html += `<button class="peer-action-btn ban" data-action="ban" data-id="${peer.id}">Ban 24h</button>`;
+            }
+            html += '</td>';
+            html += '</tr>';
+        }
+        tbodyEl.innerHTML = html;
+    }
+
+    // Initial header render
+    renderPeerTableHead();
+
+    // Sort on column header click
+    theadEl.addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+        const key = th.dataset.sort;
+        if (sortKey === key) {
+            sortAsc = !sortAsc;
+        } else {
+            sortKey = key;
+            sortAsc = true;
+        }
+        renderPeerTableHead();
+        renderPeerTable();
+    });
+
+    // Table row click → center map on peer
+    tbodyEl.addEventListener('click', (e) => {
+        // Check if it's an action button first
+        const btn = e.target.closest('.peer-action-btn');
+        if (btn) {
+            e.stopPropagation();
+            handlePeerAction(btn.dataset.action, parseInt(btn.dataset.id));
+            return;
+        }
+
+        const row = e.target.closest('tr[data-id]');
+        if (!row) return;
+        const peerId = parseInt(row.dataset.id);
+        const node = nodes.find(n => n.peerId === peerId && n.alive);
+        if (node) {
+            // Center map on this peer
+            const p = project(node.lon, node.lat);
+            targetView.x = (p.x - 0.5) * W;
+            targetView.y = (p.y - 0.5) * H;
+            if (targetView.zoom < 3) targetView.zoom = 3;
+
+            // Brief highlight
+            row.classList.add('row-selected');
+            setTimeout(() => row.classList.remove('row-selected'), 1500);
+        }
+    });
+
+    // Table row hover → highlight map node
+    tbodyEl.addEventListener('mouseover', (e) => {
+        const row = e.target.closest('tr[data-id]');
+        if (row) {
+            highlightedPeerId = parseInt(row.dataset.id);
+        }
+    });
+    tbodyEl.addEventListener('mouseleave', () => {
+        highlightedPeerId = null;
+    });
+
+    /** Handle disconnect/ban actions */
+    async function handlePeerAction(action, peerId) {
+        const confirmMsg = action === 'ban'
+            ? `Ban peer ${peerId} for 24 hours and disconnect?`
+            : `Disconnect peer ${peerId}?`;
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            if (action === 'ban') {
+                // Ban first, then disconnect
+                const banResp = await fetch('/api/peer/ban', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peer_id: peerId }),
+                });
+                const banData = await banResp.json();
+                if (!banData.success) {
+                    showActionResult(`Ban failed: ${banData.error}`, false);
+                    return;
+                }
+                // Now disconnect
+                const dcResp = await fetch('/api/peer/disconnect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peer_id: peerId }),
+                });
+                const dcData = await dcResp.json();
+                if (dcData.success) {
+                    showActionResult(`Banned ${banData.banned_ip} and disconnected peer ${peerId}`, true);
+                } else {
+                    showActionResult(`Banned but disconnect failed: ${dcData.error}`, false);
+                }
+            } else {
+                const resp = await fetch('/api/peer/disconnect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peer_id: peerId }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showActionResult(`Disconnected peer ${peerId}`, true);
+                } else {
+                    showActionResult(`Failed: ${data.error}`, false);
+                }
+            }
+            // Refresh peers after action
+            setTimeout(fetchPeers, 1000);
+        } catch (err) {
+            showActionResult(`Error: ${err.message}`, false);
+        }
+    }
+
+    /** Show a temporary result message in the toolbar */
+    function showActionResult(msg, success) {
+        const el = document.createElement('span');
+        el.className = `action-result ${success ? 'ok' : 'err'}`;
+        el.textContent = msg;
+        actionZoneEl.innerHTML = '';
+        actionZoneEl.appendChild(el);
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 5000);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // NODE HIGHLIGHT RING — Draw highlight for map↔table interaction
+    // ═══════════════════════════════════════════════════════════
+
+    /** Draw a highlight ring around a node when it's highlighted via table hover */
+    function drawHighlightRing(node, now, wrapOffsets) {
+        if (!node.alive) return;
+        const pulse = 0.7 + 0.3 * Math.sin(now * 0.005);
+        const r = CFG.nodeRadius * 2.5;
+        for (const off of wrapOffsets) {
+            const s = worldToScreen(node.lon + off, node.lat);
+            if (s.x < -r || s.x > W + r || s.y < -r || s.y > H + r) continue;
+            ctx.strokeStyle = rgba({ r: 255, g: 255, b: 255 }, 0.5 * pulse);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════
     // MAIN RENDER LOOP
     // Runs at ~60fps via requestAnimationFrame.
@@ -1241,6 +1541,12 @@
             drawNode(node, now, wrapOffsets);
         }
 
+        // 11. Highlight ring for map↔table cross-highlighting
+        if (highlightedPeerId !== null) {
+            const hlNode = nodes.find(n => n.peerId === highlightedPeerId && n.alive);
+            if (hlNode) drawHighlightRing(hlNode, now, wrapOffsets);
+        }
+
         // Update HUD overlays
         updateHUD();
         updateClock();
@@ -1272,14 +1578,16 @@
             targetView.y = dragViewStart.y - dy / dragZoom;
             hideTooltip();
         } else {
-            // Hover detection for tooltip
+            // Hover detection for tooltip + table highlight
             const node = findNodeAtScreen(e.clientX, e.clientY);
             if (node) {
                 showTooltip(node, e.clientX, e.clientY);
                 hoveredNode = node;
+                highlightTableRow(node.peerId);
                 canvas.style.cursor = 'pointer';
             } else if (hoveredNode) {
                 hideTooltip();
+                highlightTableRow(null);
                 canvas.style.cursor = 'grab';
             }
         }
