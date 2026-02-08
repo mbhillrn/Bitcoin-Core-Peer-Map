@@ -33,14 +33,27 @@
         <div class="hud-value" id="hud-block">---</div>
     </div>
 
-    <!-- Node Info sidebar card -->
-    <div id="node-info-card" class="info-card">
-        <div class="info-card-header">
-            <span class="info-card-title">Node Info</span>
+    <!-- Sidebar cards (collapsible tabs on right edge) -->
+    <div id="sidebar-cards" class="sidebar-cards">
+        <div id="node-info-card" class="info-card collapsed" data-card="node-info">
+            <div class="info-card-header" data-toggle="node-info">
+                <span class="info-card-title">Node Info</span>
+                <span class="info-card-arrow">&#9660;</span>
+            </div>
+            <div class="info-card-body">
+                <div class="info-row"><span class="info-label">Version</span><span class="info-val">&mdash;</span></div>
+                <div class="info-row"><span class="info-label">Status</span><span class="info-val">Loading...</span></div>
+            </div>
         </div>
-        <div class="info-card-body">
-            <div class="info-row"><span class="info-label">Version</span><span class="info-val">&mdash;</span></div>
-            <div class="info-row"><span class="info-label">Status</span><span class="info-val">Loading...</span></div>
+        <div id="system-info-card" class="info-card collapsed" data-card="system-info">
+            <div class="info-card-header" data-toggle="system-info">
+                <span class="info-card-title">System</span>
+                <span class="info-card-arrow">&#9660;</span>
+            </div>
+            <div class="info-card-body">
+                <div class="info-row"><span class="info-label">CPU</span><span class="info-val">&mdash;</span></div>
+                <div class="info-row"><span class="info-label">RAM</span><span class="info-val">&mdash;</span></div>
+            </div>
         </div>
     </div>
 

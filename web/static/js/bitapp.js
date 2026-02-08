@@ -586,7 +586,7 @@
 
         // Blockchain size
         if (info.blockchain) {
-            html += `<div class="info-row"><span class="info-label">Chain Size</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
+            html += `<div class="info-row"><span class="info-label" title="On-disk blockchain storage usage">Blockchain Size (Disk)</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
 
             // Node type (Full / Pruned)
             const nodeType = info.blockchain.pruned ? 'Pruned' : 'Full';
@@ -1450,7 +1450,10 @@
         });
     }
 
-    /** Build colgroup with column widths (only when auto-fit is OFF) */
+    /** Build colgroup with column widths.
+     *  Auto-fit ON: compute widths from data distribution (~95th percentile of value lengths),
+     *  then scale proportionally to fill the viewport.
+     *  Auto-fit OFF: use reasonable default widths from column definitions. */
     function renderColgroup() {
         const table = document.getElementById('peer-table');
         // Remove old colgroup if present
@@ -1458,10 +1461,61 @@
         if (old) old.remove();
 
         if (autoFitColumns) {
-            table.style.tableLayout = 'auto';
+            // ── Auto-fit: size columns to fit viewport based on data ──
+            table.style.tableLayout = 'fixed';
+            const cg = document.createElement('colgroup');
+            const charPx = 7;  // approximate px per character at font-size 11px
+            const headerPad = 28; // padding + sort arrow
+            const colPad = 16;   // cell padding (8px each side)
+            const actionsW = 80; // fixed actions column
+
+            // Measure available width
+            const tableWrap = table.closest('.peer-table-wrap');
+            const availW = (tableWrap ? tableWrap.clientWidth : W) - actionsW;
+
+            const widths = [];
+            for (const key of visibleColumns) {
+                const col = COLUMNS.find(c => c.key === key);
+                if (!col) { widths.push(60); continue; }
+
+                // Minimum: header label width
+                const headerW = col.label.length * charPx + headerPad;
+
+                if (lastPeers.length === 0) {
+                    widths.push(Math.max(headerW, col.w));
+                    continue;
+                }
+
+                // Gather string lengths for all values
+                const lens = lastPeers.map(p => String(col.get(p)).length);
+                lens.sort((a, b) => a - b);
+
+                // Use ~95th percentile to ignore extreme outliers (e.g. Tor/I2P addresses)
+                const p95Idx = Math.min(Math.floor(lens.length * 0.95), lens.length - 1);
+                const p95Len = lens[p95Idx];
+                const dataW = p95Len * charPx + colPad;
+
+                widths.push(Math.max(headerW, Math.min(dataW, 250)));
+            }
+
+            // Scale proportionally to fill available width
+            const totalNatural = widths.reduce((s, w) => s + w, 0);
+            const scale = totalNatural > 0 ? Math.max(availW / totalNatural, 0.5) : 1;
+
+            for (const w of widths) {
+                const colEl = document.createElement('col');
+                colEl.style.width = Math.round(w * scale) + 'px';
+                cg.appendChild(colEl);
+            }
+            // Actions column
+            const actCol = document.createElement('col');
+            actCol.style.width = actionsW + 'px';
+            cg.appendChild(actCol);
+            table.insertBefore(cg, table.firstChild);
             return;
         }
 
+        // ── Auto-fit OFF: use reasonable default widths from column definitions ──
         table.style.tableLayout = 'fixed';
         const cg = document.createElement('colgroup');
         for (const key of visibleColumns) {
@@ -1762,11 +1816,11 @@
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
             // Center and zoom map on this peer, placing it in the upper-middle
-            // portion of the visible map area (accounting for HUD panels and peer panel)
+            // portion of the visible map area (accounting for HUD panels and peer panel).
+            // Always reset to a baseline zoom and zoom in fresh (don't pan from previous peer).
             const p = project(node.lon, node.lat);
-            if (targetView.zoom < 3) targetView.zoom = 3;
 
-            // Calculate visible map area: topbar=40px, peer panel ~340px when open
+            // Calculate visible map area
             const topbarH = 40;
             const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
             const visibleTop = topbarH;
@@ -1774,9 +1828,29 @@
             const visibleH = visibleBot - visibleTop;
             // Place peer at ~30% from top of visible area (upper-middle)
             const targetScreenY = visibleTop + visibleH * 0.30;
-            // Offset from true center: how far above center the target point is
-            const offsetFromCenter = (H / 2 - targetScreenY) / targetView.zoom;
 
+            // Mercator world bounds for vertical clamping
+            const yTop = project(0, 85).y;
+            const yBot = project(0, -85).y;
+
+            // Start at zoom 3 (standard peer zoom), but for peers near world edges
+            // (e.g. Australia, Antarctica) that can't be positioned at 30% from top
+            // without violating vertical bounds, escalate zoom until it works.
+            let z = 3;
+            for (; z <= CFG.maxZoom; z += 0.2) {
+                const offsetFromCenter = (H / 2 - targetScreenY) / z;
+                const candidateY = (p.y - 0.5) * H - offsetFromCenter;
+                // Check if this Y violates the vertical clamp bounds at this zoom
+                const minPanY = (yTop - 0.5) * H + H / (2 * z);
+                const maxPanY = (yBot - 0.5) * H - H / (2 * z);
+                if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
+                    break;  // This zoom level works
+                }
+            }
+            z = Math.min(z, CFG.maxZoom);
+            targetView.zoom = z;
+
+            const offsetFromCenter = (H / 2 - targetScreenY) / targetView.zoom;
             targetView.x = (p.x - 0.5) * W;
             targetView.y = (p.y - 0.5) * H - offsetFromCenter;
 
@@ -2290,6 +2364,69 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // SIDEBAR CARDS — Collapsible tab system
+    // ═══════════════════════════════════════════════════════════
+
+    document.querySelectorAll('.info-card-header[data-toggle]').forEach(header => {
+        header.addEventListener('click', () => {
+            const card = header.closest('.info-card');
+            card.classList.toggle('collapsed');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // SYSTEM INFO CARD — CPU/RAM from /api/stats
+    // ═══════════════════════════════════════════════════════════
+
+    async function fetchSystemStats() {
+        try {
+            const resp = await fetch('/api/stats');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            renderSystemInfoCard(data.system_stats || {});
+        } catch (err) {
+            console.error('[vNext] Failed to fetch system stats:', err);
+        }
+    }
+
+    function renderSystemInfoCard(stats) {
+        const card = document.getElementById('system-info-card');
+        if (!card) return;
+        const body = card.querySelector('.info-card-body');
+        if (!body) return;
+
+        const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
+        const memPct = stats.mem_pct != null ? Math.round(stats.mem_pct) : null;
+        const memUsed = stats.mem_used_mb;
+        const memTotal = stats.mem_total_mb;
+
+        let html = '';
+
+        // CPU bar
+        html += '<div class="info-row">';
+        html += '<span class="info-label">CPU</span>';
+        if (cpuPct != null) {
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
+        } else {
+            html += '<span class="info-val">&mdash;</span>';
+        }
+        html += '</div>';
+
+        // RAM bar
+        html += '<div class="info-row">';
+        html += '<span class="info-label">RAM</span>';
+        if (memPct != null) {
+            const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text">${memStr}</span></span>`;
+        } else {
+            html += '<span class="info-val">&mdash;</span>';
+        }
+        html += '</div>';
+
+        body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
 
@@ -2314,6 +2451,10 @@
         // Fetch node info (block height etc) immediately, then poll every 15s
         fetchInfo();
         setInterval(fetchInfo, CFG.infoPollInterval);
+
+        // Fetch system stats (CPU/RAM) immediately, then poll every 10s
+        fetchSystemStats();
+        setInterval(fetchSystemStats, CFG.pollInterval);
 
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)

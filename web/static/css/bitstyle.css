@@ -301,52 +301,85 @@ html, body {
     color: var(--text-secondary);
 }
 
-/* ---------- Node Info Sidebar Card ---------- */
-.info-card {
+/* ---------- Sidebar Cards (collapsible tabs) ---------- */
+.sidebar-cards {
     position: fixed;
     top: 126px;
     right: 16px;
     z-index: 50;
-    min-width: 180px;
-    background: rgba(10, 14, 20, 0.85);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: auto;
+}
+.info-card {
+    min-width: 200px;
+    background: rgba(10, 14, 20, 0.88);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.12);
     border-radius: var(--radius);
     user-select: none;
-    pointer-events: none;
     overflow: hidden;
+    transition: all 0.2s ease;
 }
 .info-card-header {
-    padding: 8px 12px 4px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.info-card-header:hover {
+    background: rgba(88, 166, 255, 0.04);
 }
 .info-card-title {
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.info-card-arrow {
+    font-size: 8px;
     color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+.info-card.collapsed .info-card-arrow {
+    transform: rotate(-90deg);
 }
 .info-card-body {
-    padding: 4px 12px 8px;
+    padding: 0 12px 8px;
+    max-height: 300px;
+    overflow: hidden;
+    transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+    opacity: 1;
+}
+.info-card.collapsed .info-card-body {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
 }
 .info-row {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
-    padding: 2px 0;
+    align-items: center;
+    padding: 3px 0;
     gap: 12px;
 }
 .info-label {
     font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     flex-shrink: 0;
 }
 .info-val {
     font-size: 11px;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--text-primary);
     text-align: right;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -354,6 +387,36 @@ html, body {
 }
 .info-val-ok { color: var(--ok); }
 .info-val-warn { color: var(--warn); }
+
+/* CPU / RAM bar */
+.info-bar-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 80px;
+    height: 14px;
+    background: rgba(88, 166, 255, 0.06);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.info-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(88, 166, 255, 0.25);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+.info-bar-text {
+    position: relative;
+    z-index: 1;
+    padding: 0 6px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
 
 /* ---------- Zoom Controls ---------- */
 #zoom-controls {
