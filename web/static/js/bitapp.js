@@ -99,13 +99,28 @@
 
     // ═══════════════════════════════════════════════════════════
     // WORLD GEOMETRY STATE
-    // Land polygons and lake polygons loaded from static assets.
+    // Land polygons, lake polygons, borders, and cities loaded
+    // from static assets. Each layer appears at different zoom levels.
     // ═══════════════════════════════════════════════════════════
 
     let worldPolygons = [];
     let lakePolygons = [];
+    let borderLines = [];      // country border line strings
+    let stateLines = [];       // state/province border line strings
+    let cityPoints = [];       // { n: name, p: population, c: [lon,lat] }
     let worldReady = false;
     let lakesReady = false;
+    let bordersReady = false;
+    let statesReady = false;
+    let citiesReady = false;
+
+    // Zoom thresholds for progressive detail layers
+    const ZOOM_SHOW_BORDERS = 1.5;   // country borders appear at this zoom
+    const ZOOM_SHOW_STATES  = 3.0;   // state/province borders appear
+    const ZOOM_SHOW_CITIES_MAJOR = 2.0;  // cities > 5M population
+    const ZOOM_SHOW_CITIES_LARGE = 3.0;  // cities > 1M population
+    const ZOOM_SHOW_CITIES_MED   = 4.5;  // cities > 300K population
+    const ZOOM_SHOW_CITIES_ALL   = 6.0;  // all cities
 
     // DOM references
     const clockEl = document.getElementById('clock');
@@ -245,6 +260,57 @@
         } catch (err) {
             // Lakes are non-critical — map still works without them
             console.warn('[vNext] Failed to load lake geometry:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // COUNTRY BORDERS — Natural Earth 50m admin-0 boundary lines
+    // Subtle dashed lines between countries, visible at medium zoom.
+    // ═══════════════════════════════════════════════════════════
+
+    async function loadBorderGeometry() {
+        try {
+            const resp = await fetch('/static/assets/borders-50m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            borderLines = await resp.json();
+            bordersReady = true;
+            console.log(`[vNext] Loaded ${borderLines.length} country border lines`);
+        } catch (err) {
+            console.warn('[vNext] Failed to load country borders:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STATE/PROVINCE BORDERS — Natural Earth 50m admin-1 lines
+    // Even subtler lines, visible only at higher zoom.
+    // ═══════════════════════════════════════════════════════════
+
+    async function loadStateGeometry() {
+        try {
+            const resp = await fetch('/static/assets/states-50m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            stateLines = await resp.json();
+            statesReady = true;
+            console.log(`[vNext] Loaded ${stateLines.length} state/province border lines`);
+        } catch (err) {
+            console.warn('[vNext] Failed to load state borders:', err);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CITIES — Natural Earth 50m populated places
+    // Point data with name and population, shown at high zoom.
+    // ═══════════════════════════════════════════════════════════
+
+    async function loadCityData() {
+        try {
+            const resp = await fetch('/static/assets/cities-50m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            cityPoints = await resp.json();
+            citiesReady = true;
+            console.log(`[vNext] Loaded ${cityPoints.length} cities`);
+        } catch (err) {
+            console.warn('[vNext] Failed to load city data:', err);
         }
     }
 
@@ -522,6 +588,93 @@
     }
 
     /**
+     * Draw line strings (borders) at a given longitude offset.
+     * Used for both country and state borders.
+     */
+    function drawLineSet(lines, strokeStyle, lineWidth, lonOffset) {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        for (const line of lines) {
+            ctx.beginPath();
+            for (let i = 0; i < line.length; i++) {
+                const s = worldToScreen(line[i][0] + lonOffset, line[i][1]);
+                if (i === 0) ctx.moveTo(s.x, s.y);
+                else ctx.lineTo(s.x, s.y);
+            }
+            ctx.stroke();
+        }
+    }
+
+    /** Draw country borders at all wrap positions (zoom >= ZOOM_SHOW_BORDERS) */
+    function drawCountryBorders() {
+        if (!bordersReady || view.zoom < ZOOM_SHOW_BORDERS) return;
+        // Fade in gradually: 0 at threshold, full at threshold + 0.5
+        const alpha = clamp((view.zoom - ZOOM_SHOW_BORDERS) / 0.5, 0, 1) * 0.15;
+        const offsets = getWrapOffsets();
+        for (const off of offsets) {
+            drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, 0.5, off);
+        }
+    }
+
+    /** Draw state/province borders at all wrap positions (zoom >= ZOOM_SHOW_STATES) */
+    function drawStateBorders() {
+        if (!statesReady || view.zoom < ZOOM_SHOW_STATES) return;
+        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 0.8, 0, 1) * 0.08;
+        const offsets = getWrapOffsets();
+        for (const off of offsets) {
+            drawLineSet(stateLines, `rgba(88,166,255,${alpha})`, 0.3, off);
+        }
+    }
+
+    /**
+     * Draw city labels at all wrap positions.
+     * Population threshold determines which cities appear at each zoom:
+     *   zoom 2.0+  → mega-cities (>5M)
+     *   zoom 3.0+  → large cities (>1M)
+     *   zoom 4.5+  → medium cities (>300K)
+     *   zoom 6.0+  → all cities
+     */
+    function drawCities() {
+        if (!citiesReady || view.zoom < ZOOM_SHOW_CITIES_MAJOR) return;
+
+        // Determine population cutoff based on zoom
+        let minPop;
+        if (view.zoom >= ZOOM_SHOW_CITIES_ALL)        minPop = 0;
+        else if (view.zoom >= ZOOM_SHOW_CITIES_MED)    minPop = 300000;
+        else if (view.zoom >= ZOOM_SHOW_CITIES_LARGE)  minPop = 1000000;
+        else                                            minPop = 5000000;
+
+        // Overall opacity fades in from the first threshold
+        const alpha = clamp((view.zoom - ZOOM_SHOW_CITIES_MAJOR) / 0.5, 0, 1) * 0.7;
+
+        const offsets = getWrapOffsets();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        for (const city of cityPoints) {
+            if (city.p < minPop) continue;
+
+            for (const off of offsets) {
+                const s = worldToScreen(city.c[0] + off, city.c[1]);
+                // Cull off-screen cities
+                if (s.x < -50 || s.x > W + 50 || s.y < -20 || s.y > H + 20) continue;
+
+                // Small dot
+                ctx.fillStyle = `rgba(212,218,228,${alpha * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // City name label
+                const fontSize = city.p > 5000000 ? 10 : city.p > 1000000 ? 9 : 8;
+                ctx.font = `${fontSize}px 'SF Mono','Fira Code',Consolas,monospace`;
+                ctx.fillStyle = `rgba(212,218,228,${alpha * 0.6})`;
+                ctx.fillText(city.n, s.x + 5, s.y);
+            }
+        }
+    }
+
+    /**
      * Draw a single node at a specific screen position.
      * Shared by drawNode() for each wrap offset.
      */
@@ -747,13 +900,19 @@
         const wrapOffsets = getWrapOffsets();
 
         // Draw layers bottom-to-top:
-        // 1. Grid lines
+        // 1. Grid lines (always visible)
         drawGrid();
-        // 2. Land polygons (filled darker than ocean)
+        // 2. Land polygons (always visible)
         drawLandmasses();
-        // 3. Lakes carved out on top of land (filled with ocean colour)
+        // 3. Lakes carved out on top of land (always visible)
         drawLakes();
-        // 4. Connection mesh lines between nearby peers
+        // 4. Country borders (zoom >= 1.5, fades in)
+        drawCountryBorders();
+        // 5. State/province borders (zoom >= 3.0, fades in)
+        drawStateBorders();
+        // 6. City labels (zoom >= 2.0, population-filtered)
+        drawCities();
+        // 7. Connection mesh lines between nearby peers
         drawConnectionLines(now, wrapOffsets);
 
         // 5. Peer nodes (alive + fading out) at all wrap positions
@@ -872,9 +1031,12 @@
         resize();
         window.addEventListener('resize', resize);
 
-        // Load real Natural Earth world geometry (async, renders once loaded)
+        // Load all Natural Earth geometry layers (async, each renders once loaded)
         loadWorldGeometry();
         loadLakeGeometry();
+        loadBorderGeometry();
+        loadStateGeometry();
+        loadCityData();
 
         // Fetch real peer data immediately, then poll every 10s
         fetchPeers();
