@@ -1,6 +1,6 @@
 /* ============================================================
    MBCore vNext — Canvas World Map with Real Bitcoin Peers
-   Phase 2.5: Network controls, map wrapping, panel constraints
+   Interaction Stabilization Pass
    ============================================================
    - Fetches real peers from the existing MBCoreServer backend
    - Renders them on a canvas world map (no Leaflet)
@@ -131,7 +131,23 @@
     let knownPeerIds = {};   // id -> true, tracks which peers we've seen
     let lastPeers = [];      // raw API response for table rendering
     let highlightedPeerId = null;  // peer ID highlighted via map↔table interaction
-    let activeNetFilter = null;    // null = show all, or 'ipv4'|'ipv6'|'onion'|'i2p'|'cjdns'
+
+    // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
+    const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
+    let enabledNets = new Set(ALL_NETS);  // start with all enabled
+
+    /** Check if all networks are enabled (= "All" state) */
+    function isAllNetsEnabled() {
+        for (const n of ALL_NETS) {
+            if (!enabledNets.has(n)) return false;
+        }
+        return true;
+    }
+
+    /** Check if a node passes the current network filter */
+    function passesNetFilter(netKey) {
+        return enabledNets.has(netKey);
+    }
 
     // ═══════════════════════════════════════════════════════════
     // WORLD GEOMETRY STATE
@@ -584,31 +600,23 @@
      * Returns longitude offsets for world rendering.
      * Computes which copies of the 360° world are visible on screen
      * so the map repeats seamlessly when panning horizontally.
+     * Always runs — even at zoom 1, the user can pan horizontally
+     * so we need to fill any exposed edges with adjacent copies.
      */
     function getWrapOffsets() {
-        // At zoom 1, world width = W pixels. At higher zooms, wider.
+        // World width in pixels at current zoom
         const worldWidthPx = W * view.zoom;
 
-        // If the world is narrower than the screen, only one copy needed
-        if (worldWidthPx <= W * 1.5) return [0];
-
-        // Determine how many degrees correspond to the visible screen width
-        const degreesPerPixel = 360 / worldWidthPx;
-        const leftEdge = screenToWorld(0, H / 2);
-        const rightEdge = screenToWorld(W, H / 2);
-
-        // Start from the canonical world (offset 0) and add copies
-        // that are needed to cover the viewport
-        const offsets = [];
-        // How many full world copies can we potentially need?
+        // How many full world copies could fit in the viewport + margin
         const copiesNeeded = Math.ceil(W / worldWidthPx) + 2;
 
+        const offsets = [];
         for (let i = -copiesNeeded; i <= copiesNeeded; i++) {
             const off = i * 360;
-            // Check if this copy would be visible — project left and right edges
+            // Project the left and right edges of this world copy
             const leftPx = worldToScreen(-180 + off, 0).x;
             const rightPx = worldToScreen(180 + off, 0).x;
-            // If this copy's horizontal range overlaps the screen at all
+            // Include if any part of this copy overlaps the viewport (with margin)
             if (rightPx > -200 && leftPx < W + 200) {
                 offsets.push(off);
             }
@@ -964,9 +972,9 @@
     function drawNode(node, now, wrapOffsets) {
         if (now < node.spawnTime) return;
 
-        // Network filter: skip nodes that don't match the active filter
+        // Network filter: skip nodes whose network isn't enabled
         // (but always draw fading-out nodes so they dissolve gracefully)
-        if (activeNetFilter && node.net !== activeNetFilter && node.alive) return;
+        if (!passesNetFilter(node.net) && node.alive) return;
 
         const c = node.color;
         const ageMs = now - node.spawnTime;
@@ -1037,8 +1045,8 @@
         ctx.lineWidth = 0.5;
         let aliveNodes = nodes.filter(n => n.alive);
         // Respect network filter for connection lines too
-        if (activeNetFilter) {
-            aliveNodes = aliveNodes.filter(n => n.net === activeNetFilter);
+        if (!isAllNetsEnabled()) {
+            aliveNodes = aliveNodes.filter(n => passesNetFilter(n.net));
         }
 
         for (const off of wrapOffsets) {
@@ -1245,45 +1253,74 @@
     // BOTTOM PEER PANEL — Full peer table with all columns
     // ═══════════════════════════════════════════════════════════
 
-    // Column definitions: { key, label, getter, defaultVisible }
+    // Connection type acronyms: short form + full description for hover
+    const CONN_TYPE_SHORT = {
+        'outbound-full-relay': 'OFR',
+        'block-relay-only': 'BRO',
+        'manual': 'MAN',
+        'addr-fetch': 'AF',
+        'feeler': 'FLR',
+        'inbound': 'IN',
+    };
+    const CONN_TYPE_FULL = {
+        'OFR': 'Outbound Full Relay',
+        'BRO': 'Block Relay Only',
+        'MAN': 'Manual',
+        'AF': 'Address Fetch',
+        'FLR': 'Feeler',
+        'IN': 'Inbound',
+        'OUT': 'Outbound',
+    };
+
+    /** Get short type string for a peer and its full description */
+    function peerTypeShort(p) {
+        const dir = p.direction === 'IN' ? 'IN' : 'OUT';
+        if (!p.connection_type) return dir;
+        const ct = CONN_TYPE_SHORT[p.connection_type] || p.connection_type;
+        return p.direction === 'IN' ? ct : `${dir}/${ct}`;
+    }
+    function peerTypeFull(p) {
+        const dir = p.direction === 'IN' ? 'Inbound' : 'Outbound';
+        return p.connection_type ? `${dir} / ${p.connection_type}` : dir;
+    }
+
+    // Column definitions: { key, label, get(short), full(hover), vis, width }
+    // width: preferred width in px for fixed layout. min is enforced via CSS.
     const COLUMNS = [
-        { key: 'id',               label: 'ID',        get: p => p.id,                        vis: true  },
-        { key: 'network',          label: 'Net',       get: p => p.network,                   vis: true  },
-        { key: 'conntime_fmt',     label: 'Duration',  get: p => p.conntime_fmt || '—',       vis: true  },
-        { key: 'connection_type',  label: 'Type',      get: p => {
-            const dir = p.direction === 'IN' ? 'Inbound' : 'Outbound';
-            return p.connection_type ? `${dir} / ${p.connection_type}` : dir;
-        }, vis: true },
-        { key: 'addr',             label: 'IP:Port',   get: p => p.addr || `${p.ip}:${p.port}`, vis: true },
-        { key: 'subver',           label: 'Software',  get: p => p.subver || '—',             vis: true  },
-        { key: 'services_abbrev',  label: 'Services',  get: p => p.services_abbrev || '—',    vis: true  },
-        { key: 'city',             label: 'City',      get: p => p.city || '—',               vis: true  },
-        { key: 'regionName',       label: 'State/Region', get: p => p.regionName || '—',      vis: true  },
-        { key: 'country',          label: 'Country',   get: p => p.country || '—',            vis: true  },
-        { key: 'continent',        label: 'Continent', get: p => p.continent || '—',          vis: true  },
-        { key: 'isp',              label: 'ISP',       get: p => p.isp || '—',                vis: true  },
-        { key: 'ping_ms',          label: 'Ping',      get: p => p.ping_ms != null ? p.ping_ms + 'ms' : '—', vis: true },
-        { key: 'bytessent_fmt',    label: 'Sent',      get: p => p.bytessent_fmt || '—',      vis: true  },
-        { key: 'bytesrecv_fmt',    label: 'Received',  get: p => p.bytesrecv_fmt || '—',      vis: true  },
-        { key: 'in_addrman',       label: 'Addrman',   get: p => p.in_addrman ? 'Yes' : 'No', vis: true },
+        { key: 'id',              label: 'ID',       get: p => p.id,                                      full: null,  vis: true,  w: 40  },
+        { key: 'network',         label: 'Net',      get: p => (NET_DISPLAY[p.network] || p.network),     full: null,  vis: true,  w: 45  },
+        { key: 'conntime_fmt',    label: 'Duration', get: p => p.conntime_fmt || '—',                     full: null,  vis: true,  w: 75  },
+        { key: 'connection_type', label: 'Type',     get: p => peerTypeShort(p),                           full: p => peerTypeFull(p), vis: true, w: 70 },
+        { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 160 },
+        { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 120 },
+        { key: 'services_abbrev', label: 'Services', get: p => p.services_abbrev || '—',                   full: null,  vis: true,  w: 70  },
+        { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 80  },
+        { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 80  },
+        { key: 'country',         label: 'Country',  get: p => p.country || '—',                           full: null,  vis: true,  w: 70  },
+        { key: 'continent',       label: 'Cont.',    get: p => p.continent || '—',                         full: null,  vis: true,  w: 60  },
+        { key: 'isp',             label: 'ISP',      get: p => p.isp || '—',                               full: null,  vis: true,  w: 110 },
+        { key: 'ping_ms',         label: 'Ping',     get: p => p.ping_ms != null ? p.ping_ms + 'ms' : '—', full: null, vis: true,  w: 50  },
+        { key: 'bytessent_fmt',   label: 'Sent',     get: p => p.bytessent_fmt || '—',                     full: null,  vis: true,  w: 60  },
+        { key: 'bytesrecv_fmt',   label: 'Recv',     get: p => p.bytesrecv_fmt || '—',                     full: null,  vis: true,  w: 60  },
+        { key: 'in_addrman',      label: 'Addrman',  get: p => p.in_addrman ? 'Yes' : 'No',                full: null,  vis: true,  w: 55  },
         // Advanced columns (hidden by default)
-        { key: 'direction',        label: 'In/Out',    get: p => p.direction,                 vis: false },
-        { key: 'countryCode',      label: 'CC',        get: p => p.countryCode || '—',        vis: false },
-        { key: 'continentCode',    label: 'Cont. Code', get: p => p.continentCode || '—',     vis: false },
-        { key: 'lat',              label: 'Lat',       get: p => p.lat != null ? p.lat.toFixed(2) : '—', vis: false },
-        { key: 'lon',              label: 'Lon',       get: p => p.lon != null ? p.lon.toFixed(2) : '—', vis: false },
-        { key: 'region',           label: 'Region (short)', get: p => p.region || '—',        vis: false },
-        { key: 'as',               label: 'AS',        get: p => p.as || '—',                 vis: false },
-        { key: 'asname',           label: 'AS Name',   get: p => p.asname || '—',             vis: false },
-        { key: 'district',         label: 'District',  get: p => p.district || '—',           vis: false },
-        { key: 'mobile',           label: 'Mobile',    get: p => p.mobile ? 'Yes' : 'No',     vis: false },
-        { key: 'org',              label: 'Org',       get: p => p.org || '—',                vis: false },
-        { key: 'timezone',         label: 'Timezone',  get: p => p.timezone || '—',           vis: false },
-        { key: 'currency',         label: 'Currency',  get: p => p.currency || '—',           vis: false },
-        { key: 'hosting',          label: 'Hosting',   get: p => p.hosting ? 'Yes' : 'No',    vis: false },
-        { key: 'offset',           label: 'UTC Offset', get: p => p.offset != null ? p.offset : '—', vis: false },
-        { key: 'proxy',            label: 'Proxy',     get: p => p.proxy ? 'Yes' : 'No',      vis: false },
-        { key: 'zip',              label: 'ZIP',       get: p => p.zip || '—',                vis: false },
+        { key: 'direction',       label: 'Dir',      get: p => p.direction === 'IN' ? 'IN' : 'OUT',        full: p => p.direction === 'IN' ? 'Inbound' : 'Outbound', vis: false, w: 40 },
+        { key: 'countryCode',     label: 'CC',       get: p => p.countryCode || '—',                       full: null,  vis: false, w: 35  },
+        { key: 'continentCode',   label: 'CC',       get: p => p.continentCode || '—',                     full: null,  vis: false, w: 35  },
+        { key: 'lat',             label: 'Lat',      get: p => p.lat != null ? p.lat.toFixed(2) : '—',     full: null,  vis: false, w: 55  },
+        { key: 'lon',             label: 'Lon',      get: p => p.lon != null ? p.lon.toFixed(2) : '—',     full: null,  vis: false, w: 55  },
+        { key: 'region',          label: 'Rgn',      get: p => p.region || '—',                             full: null,  vis: false, w: 60  },
+        { key: 'as',              label: 'AS',        get: p => p.as || '—',                                full: null,  vis: false, w: 80  },
+        { key: 'asname',          label: 'AS Name',   get: p => p.asname || '—',                            full: null,  vis: false, w: 100 },
+        { key: 'district',        label: 'District',  get: p => p.district || '—',                          full: null,  vis: false, w: 80  },
+        { key: 'mobile',          label: 'Mob',       get: p => p.mobile ? 'Y' : 'N',                       full: p => p.mobile ? 'Yes' : 'No', vis: false, w: 35 },
+        { key: 'org',             label: 'Org',       get: p => p.org || '—',                               full: null,  vis: false, w: 100 },
+        { key: 'timezone',        label: 'TZ',        get: p => p.timezone || '—',                          full: null,  vis: false, w: 70  },
+        { key: 'currency',        label: 'Curr',      get: p => p.currency || '—',                          full: null,  vis: false, w: 45  },
+        { key: 'hosting',         label: 'Host',      get: p => p.hosting ? 'Y' : 'N',                      full: p => p.hosting ? 'Yes' : 'No', vis: false, w: 35 },
+        { key: 'offset',          label: 'UTC',        get: p => p.offset != null ? p.offset : '—',         full: null,  vis: false, w: 45  },
+        { key: 'proxy',           label: 'Proxy',      get: p => p.proxy ? 'Y' : 'N',                       full: p => p.proxy ? 'Yes' : 'No', vis: false, w: 40 },
+        { key: 'zip',             label: 'ZIP',        get: p => p.zip || '—',                              full: null,  vis: false, w: 55  },
     ];
 
     // Visible column keys (start with defaults, can be toggled later)
@@ -1293,10 +1330,14 @@
     let sortKey = 'id';
     let sortAsc = true;
 
-    // Panel DOM
+    // Auto-fit column state: ON by default, OFF when user resizes
+    let autoFitColumns = true;
+    let userColumnWidths = {};  // key -> px width (only used when autoFit OFF)
+
+    // Panel DOM (let because ban list view replaces and restores them)
     const panelEl = document.getElementById('peer-panel');
-    const theadEl = document.getElementById('peer-thead');
-    const tbodyEl = document.getElementById('peer-tbody');
+    let theadEl = document.getElementById('peer-thead');
+    let tbodyEl = document.getElementById('peer-tbody');
     const handleCountEl = document.getElementById('handle-count');
     const actionZoneEl = document.getElementById('peer-action-zone');
 
@@ -1328,7 +1369,35 @@
         });
     }
 
-    /** Build table header row */
+    /** Build colgroup with column widths (only when auto-fit is OFF) */
+    function renderColgroup() {
+        const table = document.getElementById('peer-table');
+        // Remove old colgroup if present
+        const old = table.querySelector('colgroup');
+        if (old) old.remove();
+
+        if (autoFitColumns) {
+            table.style.tableLayout = 'auto';
+            return;
+        }
+
+        table.style.tableLayout = 'fixed';
+        const cg = document.createElement('colgroup');
+        for (const key of visibleColumns) {
+            const col = COLUMNS.find(c => c.key === key);
+            const colEl = document.createElement('col');
+            const w = userColumnWidths[key] || (col ? col.w : 80);
+            colEl.style.width = w + 'px';
+            cg.appendChild(colEl);
+        }
+        // Actions column
+        const actCol = document.createElement('col');
+        actCol.style.width = '100px';
+        cg.appendChild(actCol);
+        table.insertBefore(cg, table.firstChild);
+    }
+
+    /** Build table header row with resize handles */
     function renderPeerTableHead() {
         let html = '<tr>';
         for (const key of visibleColumns) {
@@ -1337,11 +1406,12 @@
             const isActive = sortKey === key;
             const arrow = isActive ? (sortAsc ? '&#9650;' : '&#9660;') : '&#9650;';
             const cls = isActive ? 'sort-arrow active' : 'sort-arrow';
-            html += `<th data-sort="${key}">${col.label} <span class="${cls}">${arrow}</span></th>`;
+            html += `<th data-sort="${key}"><span class="th-text">${col.label} <span class="${cls}">${arrow}</span></span><span class="th-resize" data-col="${key}"></span></th>`;
         }
         html += '<th>Actions</th>';
         html += '</tr>';
         theadEl.innerHTML = html;
+        renderColgroup();
     }
 
     /** Build table body from lastPeers (filtered by active network filter) */
@@ -1350,8 +1420,8 @@
         let sorted = getSortedPeers();
 
         // Apply network filter to table as well
-        if (activeNetFilter) {
-            sorted = sorted.filter(p => (p.network || 'ipv4') === activeNetFilter);
+        if (!isAllNetsEnabled()) {
+            sorted = sorted.filter(p => passesNetFilter(p.network || 'ipv4'));
         }
 
         handleCountEl.textContent = sorted.length;
@@ -1365,7 +1435,9 @@
             for (const key of visibleColumns) {
                 const col = COLUMNS.find(c => c.key === key);
                 if (!col) continue;
-                html += `<td>${col.get(peer)}</td>`;
+                const val = col.get(peer);
+                const hoverVal = col.full ? col.full(peer) : val;
+                html += `<td title="${String(hoverVal).replace(/"/g, '&quot;')}">${val}</td>`;
             }
             // Action buttons
             const canBan = (net === 'ipv4' || net === 'ipv6');
@@ -1383,8 +1455,9 @@
     // Initial header render
     renderPeerTableHead();
 
-    // Sort on column header click
-    theadEl.addEventListener('click', (e) => {
+    // ── Named event handlers (for reattachment after ban list close) ──
+
+    function handleTheadClick(e) {
         const th = e.target.closest('th[data-sort]');
         if (!th) return;
         const key = th.dataset.sort;
@@ -1396,11 +1469,193 @@
         }
         renderPeerTableHead();
         renderPeerTable();
+    }
+
+    let resizeState = null;
+    function handleTheadResize(e) {
+        const handle = e.target.closest('.th-resize');
+        if (!handle) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const colKey = handle.dataset.col;
+        const th = handle.parentElement;
+        const startX = e.clientX;
+        const startW = th.offsetWidth;
+
+        resizeState = { colKey, th, startX, startW };
+
+        const onMove = (me) => {
+            if (!resizeState) return;
+            const delta = me.clientX - resizeState.startX;
+            const newW = Math.max(30, resizeState.startW + delta);
+            if (autoFitColumns) {
+                autoFitColumns = false;
+                const ths = theadEl.querySelectorAll('th[data-sort]');
+                ths.forEach(t => {
+                    const key = t.dataset.sort;
+                    if (key) userColumnWidths[key] = t.offsetWidth;
+                });
+                updateAutoFitBtn();
+            }
+            userColumnWidths[resizeState.colKey] = newW;
+            renderColgroup();
+        };
+        const onUp = () => {
+            resizeState = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }
+
+    // Sort on column header click
+    theadEl.addEventListener('click', handleTheadClick);
+    // Column resize via drag on th-resize handles
+    theadEl.addEventListener('mousedown', handleTheadResize);
+
+    // ── Auto-fit toggle button ──
+    const autoFitBtn = document.getElementById('btn-autofit');
+    function updateAutoFitBtn() {
+        autoFitBtn.classList.toggle('active', autoFitColumns);
+    }
+    updateAutoFitBtn();
+    autoFitBtn.addEventListener('click', () => {
+        autoFitColumns = !autoFitColumns;
+        if (autoFitColumns) userColumnWidths = {};
+        updateAutoFitBtn();
+        renderColgroup();
     });
 
-    // Table row click → center map on peer
-    tbodyEl.addEventListener('click', (e) => {
-        // Check if it's an action button first
+    // ── Ban list view (replaces table content temporarily) ──
+    const bansBtn = document.getElementById('btn-bans');
+    let banListOpen = false;
+    const tableWrapEl = document.querySelector('.peer-table-wrap');
+
+    bansBtn.addEventListener('click', () => {
+        if (banListOpen) {
+            closeBanList();
+        } else {
+            openBanList();
+        }
+    });
+
+    function openBanList() {
+        banListOpen = true;
+        bansBtn.classList.add('active');
+        tableWrapEl.dataset.prevHtml = tableWrapEl.innerHTML;
+        tableWrapEl.innerHTML = '<div class="ban-list-loading">Loading ban list...</div>';
+        fetchBanList();
+    }
+
+    function closeBanList() {
+        banListOpen = false;
+        bansBtn.classList.remove('active');
+        // Rebuild the table element fresh
+        tableWrapEl.innerHTML = '<table class="peer-table" id="peer-table"><thead id="peer-thead"></thead><tbody id="peer-tbody"></tbody></table>';
+        // Re-bind DOM refs (they were replaced)
+        theadEl = document.getElementById('peer-thead');
+        tbodyEl = document.getElementById('peer-tbody');
+        renderPeerTableHead();
+        renderPeerTable();
+        // Re-attach sort + resize handlers (delegated to theadEl)
+        theadEl.addEventListener('click', handleTheadClick);
+        theadEl.addEventListener('mousedown', handleTheadResize);
+        // Re-attach row handlers
+        tbodyEl.addEventListener('click', handleTbodyClick);
+        tbodyEl.addEventListener('mouseover', handleTbodyHover);
+        tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
+    }
+
+    async function fetchBanList() {
+        try {
+            const resp = await fetch('/api/bans');
+            const data = await resp.json();
+            const bans = data.bans || [];
+            renderBanList(bans);
+        } catch (err) {
+            tableWrapEl.innerHTML = `<div class="ban-list-loading" style="color:var(--err)">Failed to load bans: ${err.message}</div>`;
+        }
+    }
+
+    function renderBanList(bans) {
+        let html = '<div class="ban-list">';
+        html += '<div class="ban-list-header">';
+        html += `<span class="ban-list-title">Banned IPs (${bans.length})</span>`;
+        if (bans.length > 0) {
+            html += '<button class="toolbar-btn ban-clear-all" id="ban-clear-all">Clear All Bans</button>';
+        }
+        html += '</div>';
+
+        if (bans.length === 0) {
+            html += '<div class="ban-list-empty">No banned IPs</div>';
+        } else {
+            html += '<table class="peer-table ban-table"><thead><tr>';
+            html += '<th>Address</th><th>Ban Created</th><th>Ban Until</th><th>Actions</th>';
+            html += '</tr></thead><tbody>';
+            for (const ban of bans) {
+                const addr = ban.address || '—';
+                const created = ban.ban_created ? new Date(ban.ban_created * 1000).toLocaleString() : '—';
+                const until = ban.banned_until ? new Date(ban.banned_until * 1000).toLocaleString() : '—';
+                html += `<tr>`;
+                html += `<td title="${addr}">${addr}</td>`;
+                html += `<td>${created}</td>`;
+                html += `<td>${until}</td>`;
+                html += `<td><button class="peer-action-btn ban-unban" data-addr="${addr}">Unban</button></td>`;
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+        tableWrapEl.innerHTML = html;
+
+        // Bind unban buttons
+        tableWrapEl.querySelectorAll('.ban-unban').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const addr = btn.dataset.addr;
+                if (!confirm(`Unban ${addr}?`)) return;
+                try {
+                    const resp = await fetch('/api/peer/unban', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address: addr }),
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showActionResult(`Unbanned ${addr}`, true);
+                        fetchBanList(); // refresh
+                    } else {
+                        showActionResult(`Unban failed: ${data.error}`, false);
+                    }
+                } catch (err) {
+                    showActionResult(`Error: ${err.message}`, false);
+                }
+            });
+        });
+
+        // Bind clear all
+        const clearBtn = document.getElementById('ban-clear-all');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', async () => {
+                if (!confirm('Clear ALL bans? This cannot be undone.')) return;
+                try {
+                    const resp = await fetch('/api/bans/clear', { method: 'POST' });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showActionResult('All bans cleared', true);
+                        fetchBanList(); // refresh
+                    } else {
+                        showActionResult(`Clear failed: ${data.error}`, false);
+                    }
+                } catch (err) {
+                    showActionResult(`Error: ${err.message}`, false);
+                }
+            });
+        }
+    }
+
+    // Table row click → center map on peer + open tooltip
+    function handleTbodyClick(e) {
         const btn = e.target.closest('.peer-action-btn');
         if (btn) {
             e.stopPropagation();
@@ -1413,28 +1668,45 @@
         const peerId = parseInt(row.dataset.id);
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
-            // Center map on this peer
+            // Center and zoom map on this peer
             const p = project(node.lon, node.lat);
             targetView.x = (p.x - 0.5) * W;
             targetView.y = (p.y - 0.5) * H;
             if (targetView.zoom < 3) targetView.zoom = 3;
 
-            // Brief highlight
+            // Open the inspection tooltip at the node's screen position (once view settles)
+            highlightedPeerId = peerId;
+            setTimeout(() => {
+                const offsets = getWrapOffsets();
+                for (const off of offsets) {
+                    const s = worldToScreen(node.lon + off, node.lat);
+                    if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
+                        showTooltip(node, s.x, s.y);
+                        hoveredNode = node;
+                        break;
+                    }
+                }
+            }, 400);
+
             row.classList.add('row-selected');
             setTimeout(() => row.classList.remove('row-selected'), 1500);
         }
-    });
+    }
 
-    // Table row hover → highlight map node
-    tbodyEl.addEventListener('mouseover', (e) => {
+    function handleTbodyHover(e) {
         const row = e.target.closest('tr[data-id]');
         if (row) {
             highlightedPeerId = parseInt(row.dataset.id);
         }
-    });
-    tbodyEl.addEventListener('mouseleave', () => {
+    }
+
+    function handleTbodyLeave() {
         highlightedPeerId = null;
-    });
+    }
+
+    tbodyEl.addEventListener('click', handleTbodyClick);
+    tbodyEl.addEventListener('mouseover', handleTbodyHover);
+    tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
 
     /** Handle disconnect/ban actions */
     async function handlePeerAction(action, peerId) {
@@ -1741,42 +2013,51 @@
     const antNote = document.getElementById('antarctica-note');
     const antCloseBtn = document.getElementById('ant-close');
 
-    /** Update badge visual states to reflect the current filter */
+    /** Update badge visual states to reflect the current multi-select filter */
     function updateBadgeStates() {
+        const allOn = isAllNetsEnabled();
         netBadges.forEach(badge => {
             const net = badge.dataset.net;
-            if (activeNetFilter === null) {
-                // All active
-                badge.classList.toggle('active', net === 'all');
-                badge.classList.remove('dimmed');
+            if (net === 'all') {
+                badge.classList.toggle('active', allOn);
+                badge.classList.toggle('dimmed', !allOn);
             } else {
-                badge.classList.toggle('active', net === activeNetFilter);
-                badge.classList.toggle('dimmed', net !== activeNetFilter && net !== 'all');
-                // "All" badge is dimmed when a specific filter is active
-                if (net === 'all') badge.classList.add('dimmed');
+                badge.classList.toggle('active', enabledNets.has(net));
+                badge.classList.toggle('dimmed', !enabledNets.has(net));
             }
         });
+
+        // Show Antarctica annotation when any private network is exclusively shown
+        const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
+        const hasClearnet = enabledNets.has('ipv4') || enabledNets.has('ipv6');
+        if (hasPrivate && !hasClearnet) {
+            antNote.classList.remove('hidden');
+        } else {
+            antNote.classList.add('hidden');
+        }
     }
 
-    // Click to filter map & table by network type
+    // Click to toggle network badges (multi-select)
     netBadges.forEach(badge => {
         badge.addEventListener('click', () => {
             const net = badge.dataset.net;
-            if (net === 'all' || activeNetFilter === net) {
-                // Clicking "All" or the already-active filter → clear filter
-                activeNetFilter = null;
+            if (net === 'all') {
+                // "All" → select everything
+                enabledNets = new Set(ALL_NETS);
             } else {
-                activeNetFilter = net;
+                // Toggle this network
+                if (enabledNets.has(net)) {
+                    enabledNets.delete(net);
+                    // Don't allow empty selection — re-enable if it would be empty
+                    if (enabledNets.size === 0) {
+                        enabledNets = new Set(ALL_NETS);
+                    }
+                } else {
+                    enabledNets.add(net);
+                }
             }
             updateBadgeStates();
             renderPeerTable();
-
-            // Show Antarctica annotation when selecting a private network
-            if (activeNetFilter === 'onion' || activeNetFilter === 'i2p' || activeNetFilter === 'cjdns') {
-                antNote.classList.remove('hidden');
-            } else {
-                antNote.classList.add('hidden');
-            }
         });
 
         // Hover to show network stats popover

@@ -169,7 +169,7 @@ html, body {
 
 #hud-top-left    { top: 56px; left: 16px; }
 #hud-top-right   { top: 56px; right: 16px; text-align: right; }
-#hud-bottom-left { bottom: 20px; left: 16px; }
+#hud-bottom-left { bottom: 44px; left: 16px; transition: bottom 0.3s ease; }
 
 .hud-nets {
     display: flex;
@@ -259,7 +259,7 @@ html, body {
 /* Antarctica annotation */
 .antarctica-note {
     position: fixed;
-    bottom: 60px;
+    bottom: 110px;
     left: 16px;
     max-width: 340px;
     padding: 8px 12px;
@@ -493,12 +493,37 @@ html, body {
 .peer-panel-toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     padding: 4px 12px;
     border-bottom: 1px solid rgba(88, 166, 255, 0.06);
     flex-shrink: 0;
     min-height: 28px;
+    gap: 6px;
 }
+.toolbar-btn {
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+}
+.toolbar-btn:hover {
+    color: var(--text-secondary);
+    border-color: rgba(88, 166, 255, 0.4);
+    background: rgba(88, 166, 255, 0.06);
+}
+.toolbar-btn.active {
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    background: rgba(88, 166, 255, 0.1);
+}
+.toolbar-spacer { flex: 1; }
 .peer-action-zone {
     display: flex;
     align-items: center;
@@ -563,10 +588,32 @@ html, body {
     opacity: 1;
     color: var(--accent);
 }
+/* Resize handle on header cells */
+.peer-table th { position: relative; }
+.peer-table th .th-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.peer-table th .th-resize {
+    position: absolute;
+    top: 0; right: 0;
+    width: 5px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 3;
+}
+.peer-table th .th-resize:hover {
+    background: rgba(88, 166, 255, 0.2);
+}
+
 .peer-table td {
     padding: 3px 8px;
     color: var(--text-secondary);
     border-bottom: 1px solid rgba(88, 166, 255, 0.03);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .peer-table tbody tr {
     cursor: pointer;
@@ -615,17 +662,61 @@ html, body {
     border-color: var(--warn);
 }
 
-/* Adjust HUD/zoom when panel is open */
+/* Ban list view (inside peer panel) */
+.ban-list { padding: 0; }
+.ban-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.ban-list-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+}
+.ban-clear-all {
+    color: var(--err) !important;
+    border-color: rgba(248, 81, 73, 0.3) !important;
+}
+.ban-clear-all:hover {
+    background: rgba(248, 81, 73, 0.1) !important;
+    border-color: var(--err) !important;
+}
+.ban-list-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+.ban-list-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+.ban-table .ban-unban {
+    color: var(--accent);
+    border-color: rgba(88, 166, 255, 0.3);
+}
+.ban-table .ban-unban:hover {
+    background: rgba(88, 166, 255, 0.1);
+    border-color: var(--accent);
+}
+
+/* Adjust HUD/zoom when panel is open — keep them above the panel */
 .peer-panel:not(.collapsed) ~ #hud-bottom-left {
-    bottom: 350px;
-    transition: bottom 0.3s ease;
+    bottom: 352px;
 }
 .peer-panel:not(.collapsed) ~ .antarctica-note {
-    bottom: 350px;
+    bottom: 352px;
     transition: bottom 0.3s ease;
 }
 .peer-panel:not(.collapsed) ~ #zoom-controls {
-    bottom: 350px;
+    bottom: 352px;
     transition: bottom 0.3s ease;
 }
 
