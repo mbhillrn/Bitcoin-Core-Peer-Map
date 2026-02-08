@@ -24,7 +24,7 @@
         pulseSpeed: 0.0018,        // glow pulse speed (radians per ms)
         fadeInDuration: 800,       // ms for new node spawn animation
         fadeOutDuration: 1500,     // ms for disconnected node fade-out
-        minZoom: 0.5,
+        minZoom: 1,
         maxZoom: 18,
         zoomStep: 1.15,
         panSmooth: 0.12,           // smoothing factor for view interpolation
@@ -1067,21 +1067,23 @@
     // ═══════════════════════════════════════════════════════════
 
     // ── Mouse pan ──
+    let dragZoom = 1;  // zoom level when drag started
     canvas.addEventListener('mousedown', (e) => {
         dragging = true;
         dragStart.x = e.clientX;
         dragStart.y = e.clientY;
         dragViewStart.x = targetView.x;
         dragViewStart.y = targetView.y;
+        dragZoom = view.zoom;  // capture current zoom for consistent drag speed
     });
 
     window.addEventListener('mousemove', (e) => {
         if (dragging) {
-            // Pan the view by drag delta
+            // Pan the view by drag delta, scaled by zoom so drag feels 1:1 with the map
             const dx = e.clientX - dragStart.x;
             const dy = e.clientY - dragStart.y;
-            targetView.x = dragViewStart.x - dx;
-            targetView.y = dragViewStart.y - dy;
+            targetView.x = dragViewStart.x - dx / dragZoom;
+            targetView.y = dragViewStart.y - dy / dragZoom;
             hideTooltip();
         } else {
             // Hover detection for tooltip
@@ -1125,11 +1127,13 @@
 
     // ── Touch pan (single finger) ──
     let touchStart = null;
+    let touchZoom = 1;
     canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
             touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
             dragViewStart.x = targetView.x;
             dragViewStart.y = targetView.y;
+            touchZoom = view.zoom;
         }
     }, { passive: true });
 
@@ -1137,8 +1141,8 @@
         if (touchStart && e.touches.length === 1) {
             const dx = e.touches[0].clientX - touchStart.x;
             const dy = e.touches[0].clientY - touchStart.y;
-            targetView.x = dragViewStart.x - dx;
-            targetView.y = dragViewStart.y - dy;
+            targetView.x = dragViewStart.x - dx / touchZoom;
+            targetView.y = dragViewStart.y - dy / touchZoom;
         }
     }, { passive: true });
 
