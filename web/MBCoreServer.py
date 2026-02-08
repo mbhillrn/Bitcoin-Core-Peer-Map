@@ -1617,6 +1617,12 @@ async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "version": VERSION})
 
 
+@app.get("/vnext", response_class=HTMLResponse)
+async def vnext(request: Request):
+    """Serve the experimental vNext dashboard"""
+    return templates.TemplateResponse("bitindex.html", {"request": request, "version": VERSION})
+
+
 # Mount static files
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
