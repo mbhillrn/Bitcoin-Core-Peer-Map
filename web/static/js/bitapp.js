@@ -1,6 +1,6 @@
 /* ============================================================
    MBCore vNext — Canvas World Map with Real Bitcoin Peers
-   Phase 2.4: Bottom peer panel + cross-highlighting
+   Phase 2.5: Network controls, map wrapping, panel constraints
    ============================================================
    - Fetches real peers from the existing MBCoreServer backend
    - Renders them on a canvas world map (no Leaflet)
@@ -13,6 +13,10 @@
    - Bidirectional highlight: hover map node ↔ table row
    - Click table row → center map on that peer
    - Peer actions: disconnect, ban (24h)
+   - Network badge click-to-filter + hover stats popover
+   - Horizontal world wrapping (seamless pan)
+   - Vertical lock at zoom 1, vertical clamping at all zooms
+   - Antarctica annotation for private network peers
    ============================================================ */
 
 (function () {
@@ -127,6 +131,7 @@
     let knownPeerIds = {};   // id -> true, tracks which peers we've seen
     let lastPeers = [];      // raw API response for table rendering
     let highlightedPeerId = null;  // peer ID highlighted via map↔table interaction
+    let activeNetFilter = null;    // null = show all, or 'ipv4'|'ipv6'|'onion'|'i2p'|'cjdns'
 
     // ═══════════════════════════════════════════════════════════
     // WORLD GEOMETRY STATE
@@ -572,15 +577,44 @@
 
     // ═══════════════════════════════════════════════════════════
     // DRAWING — Grid, landmasses, lakes, borders, cities, nodes
-    // World is locked to a single copy (no horizontal wrap).
+    // Horizontal world wrapping: the map repeats seamlessly.
     // ═══════════════════════════════════════════════════════════
 
     /**
      * Returns longitude offsets for world rendering.
-     * Currently locked to a single copy (no horizontal wrap).
+     * Computes which copies of the 360° world are visible on screen
+     * so the map repeats seamlessly when panning horizontally.
      */
     function getWrapOffsets() {
-        return [0];
+        // At zoom 1, world width = W pixels. At higher zooms, wider.
+        const worldWidthPx = W * view.zoom;
+
+        // If the world is narrower than the screen, only one copy needed
+        if (worldWidthPx <= W * 1.5) return [0];
+
+        // Determine how many degrees correspond to the visible screen width
+        const degreesPerPixel = 360 / worldWidthPx;
+        const leftEdge = screenToWorld(0, H / 2);
+        const rightEdge = screenToWorld(W, H / 2);
+
+        // Start from the canonical world (offset 0) and add copies
+        // that are needed to cover the viewport
+        const offsets = [];
+        // How many full world copies can we potentially need?
+        const copiesNeeded = Math.ceil(W / worldWidthPx) + 2;
+
+        for (let i = -copiesNeeded; i <= copiesNeeded; i++) {
+            const off = i * 360;
+            // Check if this copy would be visible — project left and right edges
+            const leftPx = worldToScreen(-180 + off, 0).x;
+            const rightPx = worldToScreen(180 + off, 0).x;
+            // If this copy's horizontal range overlaps the screen at all
+            if (rightPx > -200 && leftPx < W + 200) {
+                offsets.push(off);
+            }
+        }
+
+        return offsets.length > 0 ? offsets : [0];
     }
 
     /** Draw subtle lat/lon grid lines (with wrap) */
@@ -930,6 +964,10 @@
     function drawNode(node, now, wrapOffsets) {
         if (now < node.spawnTime) return;
 
+        // Network filter: skip nodes that don't match the active filter
+        // (but always draw fading-out nodes so they dissolve gracefully)
+        if (activeNetFilter && node.net !== activeNetFilter && node.alive) return;
+
         const c = node.color;
         const ageMs = now - node.spawnTime;
         const nowSec = Math.floor(now / 1000);
@@ -997,7 +1035,11 @@
      */
     function drawConnectionLines(now, wrapOffsets) {
         ctx.lineWidth = 0.5;
-        const aliveNodes = nodes.filter(n => n.alive);
+        let aliveNodes = nodes.filter(n => n.alive);
+        // Respect network filter for connection lines too
+        if (activeNetFilter) {
+            aliveNodes = aliveNodes.filter(n => n.net === activeNetFilter);
+        }
 
         for (const off of wrapOffsets) {
             for (let i = 0; i < aliveNodes.length; i++) {
@@ -1044,6 +1086,12 @@
             blockEl.textContent = lastBlockHeight.toLocaleString();
         } else {
             blockEl.textContent = '---';
+        }
+
+        // "All" badge with total count
+        const allBadge = document.querySelector('.net-all');
+        if (allBadge) {
+            allBadge.textContent = `All ${total}`;
         }
 
         // Network badges with live counts
@@ -1296,10 +1344,16 @@
         theadEl.innerHTML = html;
     }
 
-    /** Build table body from lastPeers */
+    /** Build table body from lastPeers (filtered by active network filter) */
     function renderPeerTable() {
         if (!tbodyEl) return;
-        const sorted = getSortedPeers();
+        let sorted = getSortedPeers();
+
+        // Apply network filter to table as well
+        if (activeNetFilter) {
+            sorted = sorted.filter(p => (p.network || 'ipv4') === activeNetFilter);
+        }
+
         handleCountEl.textContent = sorted.length;
 
         let html = '';
@@ -1470,31 +1524,48 @@
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Clamp the view so you can never pan past the world edges.
-     * At zoom <= 1 the world is centered (no panning).
-     * When zoomed in, panning is free within bounds but world edges
-     * never leave the screen — you always see map, never void.
+     * Clamp the view to prevent empty space.
+     *
+     * Horizontal: no clamping — the world wraps seamlessly, so the
+     * user can pan left/right forever. getWrapOffsets() ensures we
+     * always render enough copies to fill the viewport.
+     *
+     * Vertical:
+     *   - At zoom <= 1: vertical panning is completely locked (centered)
+     *   - At zoom > 1: panning is allowed but clamped so the Mercator
+     *     world edges (±85°) never retreat inside the viewport.
      */
     function clampView() {
-        // ── Horizontal: world spans p.x 0..1 ──
-        const maxPanX = Math.max(0, W / 2 - W / (2 * view.zoom));
-        view.x = clamp(view.x, -maxPanX, maxPanX);
-        targetView.x = clamp(targetView.x, -maxPanX, maxPanX);
+        // ── Horizontal: free (wrapping handles it) ──
+        // No clamping on view.x or targetView.x
 
         // ── Vertical: Mercator bounds at ±85° latitude ──
         const yTop = project(0, 85).y;   // ~0.035
         const yBot = project(0, -85).y;  // ~0.965
-        const minPanY = (yTop - 0.5) * H + H / (2 * view.zoom);
-        const maxPanY = (yBot - 0.5) * H - H / (2 * view.zoom);
+        const centerY = ((yTop + yBot) / 2 - 0.5) * H;
 
-        if (minPanY >= maxPanY) {
-            // World doesn't fill screen vertically — center it
-            const centerY = ((yTop + yBot) / 2 - 0.5) * H;
+        if (view.zoom <= 1.001) {
+            // At zoom 1: lock vertical position — no panning at all
             view.y = centerY;
             targetView.y = centerY;
         } else {
-            view.y = clamp(view.y, minPanY, maxPanY);
-            targetView.y = clamp(targetView.y, minPanY, maxPanY);
+            // Zoomed in: allow vertical pan within bounds.
+            // World top in screen space = (yTop - 0.5) * H * zoom + H/2 - y * zoom
+            // We want that to be <= 0 (world top at or above screen top)
+            // => y >= (yTop - 0.5) * H + H / (2 * zoom)
+            // Similarly, world bottom must be >= H (at or below screen bottom)
+            // => y <= (yBot - 0.5) * H - H / (2 * zoom)
+            const minPanY = (yTop - 0.5) * H + H / (2 * view.zoom);
+            const maxPanY = (yBot - 0.5) * H - H / (2 * view.zoom);
+
+            if (minPanY >= maxPanY) {
+                // World doesn't fill screen vertically — center it
+                view.y = centerY;
+                targetView.y = centerY;
+            } else {
+                view.y = clamp(view.y, minPanY, maxPanY);
+                targetView.y = clamp(targetView.y, minPanY, maxPanY);
+            }
         }
     }
 
@@ -1575,7 +1646,10 @@
             const dx = e.clientX - dragStart.x;
             const dy = e.clientY - dragStart.y;
             targetView.x = dragViewStart.x - dx / dragZoom;
-            targetView.y = dragViewStart.y - dy / dragZoom;
+            // At zoom 1, vertical panning is locked (clampView enforces it)
+            if (dragZoom > 1.001) {
+                targetView.y = dragViewStart.y - dy / dragZoom;
+            }
             hideTooltip();
         } else {
             // Hover detection for tooltip + table highlight
@@ -1636,7 +1710,10 @@
             const dx = e.touches[0].clientX - touchStart.x;
             const dy = e.touches[0].clientY - touchStart.y;
             targetView.x = dragViewStart.x - dx / touchZoom;
-            targetView.y = dragViewStart.y - dy / touchZoom;
+            // At zoom 1, vertical panning is locked
+            if (touchZoom > 1.001) {
+                targetView.y = dragViewStart.y - dy / touchZoom;
+            }
         }
     }, { passive: true });
 
@@ -1654,6 +1731,117 @@
         targetView.y = 0;
         targetView.zoom = 1;
     });
+
+    // ═══════════════════════════════════════════════════════════
+    // NETWORK BADGE CONTROLS — Click to filter, hover for stats
+    // ═══════════════════════════════════════════════════════════
+
+    const netBadges = document.querySelectorAll('#hud-bottom-left .net-badge');
+    const netPopover = document.getElementById('net-popover');
+    const antNote = document.getElementById('antarctica-note');
+    const antCloseBtn = document.getElementById('ant-close');
+
+    /** Update badge visual states to reflect the current filter */
+    function updateBadgeStates() {
+        netBadges.forEach(badge => {
+            const net = badge.dataset.net;
+            if (activeNetFilter === null) {
+                // All active
+                badge.classList.toggle('active', net === 'all');
+                badge.classList.remove('dimmed');
+            } else {
+                badge.classList.toggle('active', net === activeNetFilter);
+                badge.classList.toggle('dimmed', net !== activeNetFilter && net !== 'all');
+                // "All" badge is dimmed when a specific filter is active
+                if (net === 'all') badge.classList.add('dimmed');
+            }
+        });
+    }
+
+    // Click to filter map & table by network type
+    netBadges.forEach(badge => {
+        badge.addEventListener('click', () => {
+            const net = badge.dataset.net;
+            if (net === 'all' || activeNetFilter === net) {
+                // Clicking "All" or the already-active filter → clear filter
+                activeNetFilter = null;
+            } else {
+                activeNetFilter = net;
+            }
+            updateBadgeStates();
+            renderPeerTable();
+
+            // Show Antarctica annotation when selecting a private network
+            if (activeNetFilter === 'onion' || activeNetFilter === 'i2p' || activeNetFilter === 'cjdns') {
+                antNote.classList.remove('hidden');
+            } else {
+                antNote.classList.add('hidden');
+            }
+        });
+
+        // Hover to show network stats popover
+        badge.addEventListener('mouseenter', () => {
+            const net = badge.dataset.net;
+            const stats = getNetworkStats(net);
+            if (!stats) return;
+            netPopover.innerHTML = stats;
+            netPopover.classList.remove('hidden');
+        });
+        badge.addEventListener('mouseleave', () => {
+            netPopover.classList.add('hidden');
+        });
+    });
+
+    // Close Antarctica annotation
+    if (antCloseBtn) {
+        antCloseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            antNote.classList.add('hidden');
+        });
+    }
+
+    /** Build popover HTML for a network type or "all" */
+    function getNetworkStats(net) {
+        const aliveNodes = nodes.filter(n => n.alive);
+        const counts = { ipv4: 0, ipv6: 0, onion: 0, i2p: 0, cjdns: 0 };
+        let inbound = 0, outbound = 0, totalPing = 0, pingCount = 0;
+
+        for (const n of aliveNodes) {
+            if (counts.hasOwnProperty(n.net)) counts[n.net]++;
+            const match = (net === 'all') || (n.net === net);
+            if (match) {
+                if (n.direction === 'IN') inbound++;
+                else outbound++;
+                if (n.ping > 0) { totalPing += n.ping; pingCount++; }
+            }
+        }
+
+        const total = net === 'all'
+            ? aliveNodes.length
+            : (counts[net] || 0);
+
+        if (total === 0 && net !== 'all') return null;
+
+        const avgPing = pingCount > 0 ? Math.round(totalPing / pingCount) : '—';
+        const label = net === 'all' ? 'All Networks' : (NET_DISPLAY[net] || net.toUpperCase());
+
+        let html = `<div class="pop-title">${label}</div>`;
+        html += `<div class="pop-row"><span class="pop-label">Peers</span><span class="pop-val">${total}</span></div>`;
+        html += `<div class="pop-row"><span class="pop-label">Inbound</span><span class="pop-val">${inbound}</span></div>`;
+        html += `<div class="pop-row"><span class="pop-label">Outbound</span><span class="pop-val">${outbound}</span></div>`;
+        html += `<div class="pop-row"><span class="pop-label">Avg Ping</span><span class="pop-val">${avgPing}${avgPing !== '—' ? 'ms' : ''}</span></div>`;
+
+        if (net === 'all') {
+            // Show per-network breakdown
+            for (const nk of Object.keys(NET_COLORS)) {
+                if (counts[nk] > 0) {
+                    html += `<div class="pop-row"><span class="pop-label">${NET_DISPLAY[nk]}</span><span class="pop-val">${counts[nk]}</span></div>`;
+                }
+            }
+        }
+
+        return html;
+    }
 
     // ═══════════════════════════════════════════════════════════
     // INIT — Start everything

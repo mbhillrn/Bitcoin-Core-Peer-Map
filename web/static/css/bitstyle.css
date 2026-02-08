@@ -190,6 +190,117 @@ html, body {
 .net-i2p   { color: var(--net-i2p);   background: rgba(139,92,246,0.12);  border: 1px solid rgba(139,92,246,0.25); }
 .net-cjdns { color: var(--net-cjdns); background: rgba(210,168,255,0.12); border: 1px solid rgba(210,168,255,0.25); }
 
+/* "All" badge — accent-coloured */
+.net-all   { color: var(--accent);   background: rgba(88,166,255,0.12);   border: 1px solid rgba(88,166,255,0.25); }
+
+/* Interactive HUD panel for network badges */
+.hud-interactive { pointer-events: auto; }
+.hud-interactive .net-badge {
+    cursor: pointer;
+    transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+    position: relative;
+}
+.hud-interactive .net-badge:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+}
+/* Dimmed when a filter is active and this badge is NOT selected */
+.hud-interactive .net-badge.dimmed {
+    opacity: 0.35;
+}
+/* Active / selected badge gets a brighter border glow */
+.hud-interactive .net-badge.active {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(88, 166, 255, 0.25);
+}
+
+/* Network stats popover on badge hover */
+.net-popover {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 180px;
+    padding: 8px 10px;
+    background: rgba(10, 14, 20, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(88, 166, 255, 0.18);
+    border-radius: var(--radius);
+    font-size: 10px;
+    color: var(--text-secondary);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 60;
+}
+.net-popover.hidden { display: none; }
+.net-popover .pop-title {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.net-popover .pop-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+    gap: 12px;
+}
+.net-popover .pop-label {
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.net-popover .pop-val {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* Antarctica annotation */
+.antarctica-note {
+    position: fixed;
+    bottom: 60px;
+    left: 16px;
+    max-width: 340px;
+    padding: 8px 12px;
+    background: rgba(10, 14, 20, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(88, 166, 255, 0.12);
+    border-radius: var(--radius);
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    z-index: 55;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    transition: opacity 0.2s ease;
+}
+.antarctica-note.hidden { display: none; }
+.ant-icon {
+    font-size: 14px;
+    color: var(--accent);
+    flex-shrink: 0;
+    line-height: 1;
+}
+.ant-text {
+    flex: 1;
+}
+.ant-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.ant-close:hover {
+    color: var(--text-secondary);
+}
+
 /* ---------- Zoom Controls ---------- */
 #zoom-controls {
     position: fixed;
@@ -312,7 +423,7 @@ html, body {
     z-index: 80;
     display: flex;
     flex-direction: column;
-    max-height: 50vh;
+    max-height: 340px;  /* ~10 rows (25px each) + header/toolbar */
     transition: max-height 0.3s ease, transform 0.3s ease;
     pointer-events: auto;
 }
@@ -506,9 +617,15 @@ html, body {
 
 /* Adjust HUD/zoom when panel is open */
 .peer-panel:not(.collapsed) ~ #hud-bottom-left {
+    bottom: 350px;
+    transition: bottom 0.3s ease;
+}
+.peer-panel:not(.collapsed) ~ .antarctica-note {
+    bottom: 350px;
     transition: bottom 0.3s ease;
 }
 .peer-panel:not(.collapsed) ~ #zoom-controls {
+    bottom: 350px;
     transition: bottom 0.3s ease;
 }
 
