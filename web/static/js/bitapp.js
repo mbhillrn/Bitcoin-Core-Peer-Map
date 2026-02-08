@@ -184,6 +184,7 @@
     // DOM references
     const clockEl = document.getElementById('clock');
     const tooltipEl = document.getElementById('node-tooltip');
+    const antNote = document.getElementById('antarctica-note');
     let hoveredNode = null;
     let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
@@ -471,6 +472,8 @@
                     // ── Update in place (peer still connected) ──
                     existing.lat = lat;
                     existing.lon = lon;
+                    existing.net = netKey;      // always use authoritative API value
+                    existing.color = color;     // keep colour in sync with network
                     existing.ping = peer.ping_ms || 0;
                     existing.city = peer.city || '';
                     existing.regionName = peer.regionName || '';
@@ -561,6 +564,13 @@
 
             // Update Node Info card
             renderNodeInfoCard(info);
+
+            // Update BTC price ticker
+            const priceEl = document.getElementById('hud-price');
+            if (priceEl && info.btc_price) {
+                const price = parseFloat(info.btc_price);
+                priceEl.textContent = `BTC $${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${info.btc_currency || 'USD'}`;
+            }
         } catch (err) {
             console.error('[vNext] Failed to fetch info:', err);
         }
@@ -1165,6 +1175,18 @@
                 badge.textContent = `${label} ${netCounts[net]}`;
             }
         }
+    }
+
+    /** Position the Antarctica annotation on the map landmass */
+    function updateAntarcticaNote() {
+        if (!antNote || antNote.classList.contains('hidden')) return;
+        // Place at central Antarctica (~-72°lat, 30°lon — near Novolazarevskaya)
+        const s = worldToScreen(30, -72);
+        // Offset so the note sits centered above the point
+        const noteW = antNote.offsetWidth || 340;
+        const noteH = antNote.offsetHeight || 40;
+        antNote.style.left = Math.max(8, Math.min(W - noteW - 8, s.x - noteW / 2)) + 'px';
+        antNote.style.top = Math.max(48, Math.min(H - noteH - 40, s.y - noteH - 12)) + 'px';
     }
 
     /** Update the clock display in the topbar */
@@ -1838,6 +1860,11 @@
             // Peer lands at ~30% from top of visible map area.
             const p = project(node.lon, node.lat);
 
+            // For southern peers (lat < -30), auto-collapse the panel so they're visible
+            if (node.lat < -30 && !panelEl.classList.contains('collapsed')) {
+                panelEl.classList.add('collapsed');
+            }
+
             // Calculate visible map area
             const topbarH = 40;
             const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
@@ -2163,6 +2190,7 @@
         // Update HUD overlays
         updateHUD();
         updateClock();
+        updateAntarcticaNote();
 
         requestAnimationFrame(frame);
     }
@@ -2226,6 +2254,14 @@
                 pinnedNode = node;
                 highlightedPeerId = node.peerId;
                 showTooltip(node, e.clientX, e.clientY, true);
+                // Scroll peer table to this row (expand panel if collapsed)
+                if (panelEl.classList.contains('collapsed')) {
+                    panelEl.classList.remove('collapsed');
+                    // Wait for panel to expand before scrolling
+                    setTimeout(() => highlightTableRow(node.peerId, true), 350);
+                } else {
+                    highlightTableRow(node.peerId, true);
+                }
             } else if (pinnedNode) {
                 // Clicked empty space — unpin
                 hideTooltip();
@@ -2300,9 +2336,8 @@
     // NETWORK BADGE CONTROLS — Click to filter, hover for stats
     // ═══════════════════════════════════════════════════════════
 
-    const netBadges = document.querySelectorAll('#hud-bottom-left .net-badge');
+    const netBadges = document.querySelectorAll('.handle-nets .net-badge');
     const netPopover = document.getElementById('net-popover');
-    const antNote = document.getElementById('antarctica-note');
     const antCloseBtn = document.getElementById('ant-close');
     let antNoteDismissed = false;  // tracks if user dismissed the annotation this session
 
@@ -2331,8 +2366,10 @@
     }
 
     // Click to toggle network badges (multi-select)
+    // stopPropagation prevents the peer-panel-handle click from toggling the panel
     netBadges.forEach(badge => {
-        badge.addEventListener('click', () => {
+        badge.addEventListener('click', (e) => {
+            e.stopPropagation();
             const net = badge.dataset.net;
             if (net === 'all') {
                 // "All" → select everything
@@ -2354,13 +2391,17 @@
             renderPeerTable();
         });
 
-        // Hover to show network stats popover
+        // Hover to show network stats popover (positioned above the badge)
         badge.addEventListener('mouseenter', () => {
             const net = badge.dataset.net;
             const stats = getNetworkStats(net);
             if (!stats) return;
             netPopover.innerHTML = stats;
             netPopover.classList.remove('hidden');
+            // Position popover above the hovered badge
+            const rect = badge.getBoundingClientRect();
+            netPopover.style.left = rect.left + 'px';
+            netPopover.style.top = (rect.top - netPopover.offsetHeight - 6) + 'px';
         });
         badge.addEventListener('mouseleave', () => {
             netPopover.classList.add('hidden');
@@ -2423,9 +2464,11 @@
     // SIDEBAR CARDS — Collapsible tab system
     // ═══════════════════════════════════════════════════════════
 
-    document.querySelectorAll('.info-card-header[data-toggle]').forEach(header => {
-        header.addEventListener('click', () => {
-            const card = header.closest('.info-card');
+    // Tab click → expand; Header click → collapse
+    document.querySelectorAll('[data-toggle]').forEach(el => {
+        el.addEventListener('click', () => {
+            const card = el.closest('.info-card');
+            if (!card) return;
             card.classList.toggle('collapsed');
         });
     });
@@ -2479,7 +2522,81 @@
         }
         html += '</div>';
 
+        // Network traffic bars (from /api/netspeed)
+        if (lastNetTraffic) {
+            const rx = lastNetTraffic.rx_bps || 0;
+            const tx = lastNetTraffic.tx_bps || 0;
+            html += `<div class="info-row"><span class="info-label">NET &darr;</span><span class="info-val" style="color:var(--ok)">${formatBps(rx)}</span></div>`;
+            html += `<div class="info-row"><span class="info-label">NET &uarr;</span><span class="info-val" style="color:var(--net-ipv6)">${formatBps(tx)}</span></div>`;
+        }
+
         body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // RECENT CHANGES FEED — from /api/changes
+    // ═══════════════════════════════════════════════════════════
+
+    async function fetchChanges() {
+        try {
+            const resp = await fetch('/api/changes');
+            if (!resp.ok) return;
+            const changes = await resp.json();
+            renderChangesCard(changes);
+        } catch (err) {
+            console.error('[vNext] Failed to fetch changes:', err);
+        }
+    }
+
+    function renderChangesCard(changes) {
+        const card = document.getElementById('changes-card');
+        if (!card) return;
+        const body = card.querySelector('.info-card-body');
+        if (!body) return;
+
+        if (!changes || changes.length === 0) {
+            body.innerHTML = '<div class="changes-empty">No recent changes</div>';
+            return;
+        }
+
+        // Show most recent 8 changes
+        const recent = changes.slice(-8).reverse();
+        let html = '';
+        for (const c of recent) {
+            const isConnect = c.type === 'connected';
+            const dotClass = isConnect ? 'connected' : 'disconnected';
+            const ip = c.peer ? (c.peer.ip || '') : '';
+            const port = c.peer ? (c.peer.port || '') : '';
+            const label = ip ? `${ip}:${port}` : '—';
+            // Format time as HH:MM:SS
+            const d = new Date(c.time * 1000);
+            const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+            html += `<div class="change-entry"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
+        }
+        body.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // NETWORK TRAFFIC — from /api/netspeed
+    // ═══════════════════════════════════════════════════════════
+
+    let lastNetTraffic = null;
+
+    async function fetchNetSpeed() {
+        try {
+            const resp = await fetch('/api/netspeed');
+            if (!resp.ok) return;
+            lastNetTraffic = await resp.json();
+        } catch (err) {
+            console.error('[vNext] Failed to fetch netspeed:', err);
+        }
+    }
+
+    /** Format bytes/sec to human-readable string */
+    function formatBps(bps) {
+        if (bps < 1024) return `${Math.round(bps)} B/s`;
+        if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
+        return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2511,6 +2628,14 @@
         // Fetch system stats (CPU/RAM) immediately, then poll every 10s
         fetchSystemStats();
         setInterval(fetchSystemStats, CFG.pollInterval);
+
+        // Fetch recent changes immediately, then poll every 10s
+        fetchChanges();
+        setInterval(fetchChanges, CFG.pollInterval);
+
+        // Fetch network traffic speed immediately, then poll every 5s
+        fetchNetSpeed();
+        setInterval(fetchNetSpeed, 5000);
 
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)
