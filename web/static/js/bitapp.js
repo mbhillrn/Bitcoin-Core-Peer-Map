@@ -191,44 +191,37 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // WORLD MAP POLYGONS (continent outlines)
-    // Same simplified polygons as Phase 1.
+    // WORLD MAP GEOMETRY — Real Natural Earth 110m landmasses
+    // Loaded from /static/assets/world-110m.json on startup.
+    // Format: array of polygons, each polygon is an array of
+    // rings (outer + holes), each ring is [[lon,lat], ...].
+    // Source: Natural Earth (public domain), stripped to coords only.
     // ═══════════════════════════════════════════════════════════
 
-    function buildWorldPolygons() {
-        worldPolygons = [
-            // North America
-            [[-130,50],[-125,60],[-115,68],[-95,72],[-80,72],[-65,62],[-55,50],[-60,45],[-68,44],[-75,38],[-82,30],[-90,28],[-97,26],[-105,30],[-118,34],[-125,42],[-130,50]],
-            // Central America
-            [[-105,24],[-100,20],[-97,18],[-92,16],[-88,14],[-84,10],[-80,8],[-82,10],[-86,14],[-90,16],[-95,20],[-100,22],[-105,24]],
-            // South America
-            [[-80,10],[-75,12],[-63,10],[-52,4],[-42,0],[-35,-5],[-35,-12],[-38,-18],[-42,-22],[-48,-28],[-52,-33],[-58,-38],[-65,-45],[-68,-53],[-72,-48],[-75,-42],[-72,-35],[-68,-28],[-70,-18],[-75,-10],[-80,0],[-80,10]],
-            // Europe
-            [[-10,36],[0,38],[3,42],[5,44],[2,48],[-5,48],[-8,54],[-5,58],[5,62],[12,58],[18,55],[24,58],[30,60],[35,58],[42,55],[45,50],[40,45],[35,40],[28,36],[20,36],[12,38],[5,38],[0,36],[-10,36]],
-            // Africa
-            [[-15,12],[-17,15],[-12,25],[-5,35],[0,36],[10,37],[12,32],[20,32],[25,30],[32,32],[35,30],[42,12],[50,2],[42,-5],[40,-12],[35,-22],[30,-30],[22,-34],[18,-34],[15,-28],[12,-18],[8,-5],[5,5],[0,6],[-8,5],[-15,12]],
-            // Asia
-            [[28,36],[35,40],[42,48],[50,50],[55,55],[60,60],[65,68],[75,72],[90,72],[100,68],[115,65],[125,60],[130,55],[140,55],[145,50],[142,44],[135,38],[128,34],[122,30],[115,24],[108,18],[105,12],[100,5],[98,8],[95,15],[88,22],[80,28],[72,32],[60,38],[50,40],[42,45],[35,40],[28,36]],
-            // India
-            [[68,24],[72,22],[78,16],[80,8],[82,12],[88,22],[90,26],[85,28],[80,30],[75,28],[68,24]],
-            // Southeast Asian islands
-            [[100,2],[105,0],[108,-2],[112,-5],[115,-8],[120,-8],[125,-5],[128,-2],[130,0],[128,2],[122,5],[118,3],[112,2],[108,3],[105,2],[100,2]],
-            // Australia
-            [[115,-15],[120,-14],[130,-12],[135,-14],[140,-16],[148,-20],[152,-25],[153,-28],[150,-33],[145,-38],[137,-35],[130,-32],[122,-33],[116,-32],[114,-28],[114,-22],[118,-20],[120,-18],[115,-15]],
-            // New Zealand
-            [[166,-35],[172,-34],[178,-37],[177,-42],[174,-46],[170,-45],[168,-42],[166,-35]],
-            // UK / Ireland
-            [[-8,51],[-5,52],[-3,54],[-5,56],[-3,58],[0,58],[2,54],[2,52],[0,50],[-4,50],[-8,51]],
-            // Japan
-            [[130,31],[132,34],[136,36],[140,38],[142,42],[144,44],[142,44],[140,42],[138,38],[136,36],[134,34],[130,31]],
-            // Greenland
-            [[-55,60],[-48,62],[-42,65],[-35,70],[-25,74],[-20,76],[-22,80],[-30,82],[-42,82],[-50,78],[-55,74],[-58,68],[-55,60]],
-            // Iceland
-            [[-24,64],[-22,65],[-18,66],[-14,65],[-13,64],[-16,63],[-20,63],[-24,64]],
-            // Madagascar
-            [[44,-13],[48,-14],[50,-18],[49,-22],[47,-25],[44,-24],[43,-20],[44,-13]],
-        ];
-        worldReady = true;
+    async function loadWorldGeometry() {
+        try {
+            const resp = await fetch('/static/assets/world-110m.json');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const polygons = await resp.json();
+
+            // Convert to our internal format: each entry is { rings: [[[lon,lat],...], ...] }
+            // The first ring is the outer boundary, subsequent rings are holes (lakes etc)
+            worldPolygons = polygons;
+            worldReady = true;
+            console.log(`[vNext] Loaded ${polygons.length} land polygons`);
+        } catch (err) {
+            console.error('[vNext] Failed to load world geometry, using fallback:', err);
+            // Fallback: minimal hand-traced outlines so the map isn't blank
+            worldPolygons = [
+                [[[-130,50],[-125,60],[-115,68],[-95,72],[-80,72],[-65,62],[-55,50],[-60,45],[-68,44],[-75,38],[-82,30],[-90,28],[-97,26],[-105,30],[-118,34],[-125,42],[-130,50]]],
+                [[[-80,10],[-75,12],[-63,10],[-52,4],[-42,0],[-35,-5],[-35,-12],[-38,-18],[-42,-22],[-48,-28],[-52,-33],[-58,-38],[-65,-45],[-68,-53],[-72,-48],[-75,-42],[-72,-35],[-68,-28],[-70,-18],[-75,-10],[-80,0],[-80,10]]],
+                [[[-10,36],[0,38],[3,42],[5,44],[2,48],[-5,48],[-8,54],[-5,58],[5,62],[12,58],[18,55],[24,58],[30,60],[35,58],[42,55],[45,50],[40,45],[35,40],[28,36],[20,36],[12,38],[5,38],[0,36],[-10,36]]],
+                [[[-15,12],[-17,15],[-12,25],[-5,35],[0,36],[10,37],[12,32],[20,32],[25,30],[32,32],[35,30],[42,12],[50,2],[42,-5],[40,-12],[35,-22],[30,-30],[22,-34],[18,-34],[15,-28],[12,-18],[8,-5],[5,5],[0,6],[-8,5],[-15,12]]],
+                [[[28,36],[35,40],[42,48],[50,50],[55,55],[60,60],[65,68],[75,72],[90,72],[100,68],[115,65],[125,60],[130,55],[140,55],[145,50],[142,44],[135,38],[128,34],[122,30],[115,24],[108,18],[105,12],[100,5],[98,8],[95,15],[88,22],[80,28],[72,32],[60,38],[50,40],[42,45],[35,40],[28,36]]],
+                [[[115,-15],[120,-14],[130,-12],[135,-14],[140,-16],[148,-20],[152,-25],[153,-28],[150,-33],[145,-38],[137,-35],[130,-32],[122,-33],[116,-32],[114,-28],[114,-22],[118,-20],[120,-18],[115,-15]]],
+            ];
+            worldReady = true;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -432,7 +425,12 @@
         }
     }
 
-    /** Draw simplified continent outlines filled with dark colour */
+    /**
+     * Draw real Natural Earth landmasses on the canvas.
+     * Each polygon has one or more rings: ring[0] is the outer boundary,
+     * ring[1+] are holes (lakes, inland seas). We use the evenodd fill
+     * rule so holes are cut out automatically.
+     */
     function drawLandmasses() {
         if (!worldReady) return;
 
@@ -442,13 +440,19 @@
 
         for (const poly of worldPolygons) {
             ctx.beginPath();
-            for (let i = 0; i < poly.length; i++) {
-                const s = worldToScreen(poly[i][0], poly[i][1]);
-                if (i === 0) ctx.moveTo(s.x, s.y);
-                else ctx.lineTo(s.x, s.y);
+
+            // Draw each ring (outer boundary + holes)
+            for (const ring of poly) {
+                for (let i = 0; i < ring.length; i++) {
+                    const s = worldToScreen(ring[i][0], ring[i][1]);
+                    if (i === 0) ctx.moveTo(s.x, s.y);
+                    else ctx.lineTo(s.x, s.y);
+                }
+                ctx.closePath();
             }
-            ctx.closePath();
-            ctx.fill();
+
+            // evenodd ensures holes are cut out of filled land
+            ctx.fill('evenodd');
             ctx.stroke();
         }
     }
@@ -788,8 +792,8 @@
         resize();
         window.addEventListener('resize', resize);
 
-        // Build continent outlines
-        buildWorldPolygons();
+        // Load real Natural Earth world geometry (async, renders once loaded)
+        loadWorldGeometry();
 
         // Fetch real peer data immediately, then poll every 10s
         fetchPeers();
@@ -799,7 +803,8 @@
         fetchInfo();
         setInterval(fetchInfo, CFG.infoPollInterval);
 
-        // Start the render loop
+        // Start the render loop (grid + nodes render immediately,
+        // landmasses appear once world-110m.json finishes loading)
         requestAnimationFrame(frame);
     }
 
