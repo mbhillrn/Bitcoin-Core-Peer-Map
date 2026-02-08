@@ -168,7 +168,7 @@ html, body {
 }
 
 #hud-top-left    { top: 56px; left: 16px; }
-#hud-top-right   { top: 56px; right: 16px; text-align: right; }
+#hud-top-right   { top: 56px; right: 16px; text-align: right; min-width: 180px; }
 #hud-bottom-left { bottom: 44px; left: 16px; transition: bottom 0.3s ease; }
 
 .hud-nets {
@@ -301,6 +301,60 @@ html, body {
     color: var(--text-secondary);
 }
 
+/* ---------- Node Info Sidebar Card ---------- */
+.info-card {
+    position: fixed;
+    top: 126px;
+    right: 16px;
+    z-index: 50;
+    min-width: 180px;
+    background: rgba(10, 14, 20, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(88, 166, 255, 0.1);
+    border-radius: var(--radius);
+    user-select: none;
+    pointer-events: none;
+    overflow: hidden;
+}
+.info-card-header {
+    padding: 8px 12px 4px;
+}
+.info-card-title {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+}
+.info-card-body {
+    padding: 4px 12px 8px;
+}
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 2px 0;
+    gap: 12px;
+}
+.info-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.info-val {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.info-val-ok { color: var(--ok); }
+.info-val-warn { color: var(--warn); }
+
 /* ---------- Zoom Controls ---------- */
 #zoom-controls {
     position: fixed;
@@ -414,6 +468,38 @@ html, body {
 .tt-muted {
     color: var(--text-muted);
     font-style: italic;
+}
+/* Pinned tooltip — interactive, has action buttons */
+.tooltip.pinned {
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    border-color: rgba(88, 166, 255, 0.3);
+}
+.tt-actions {
+    padding: 6px 10px;
+    border-top: 1px solid rgba(88, 166, 255, 0.1);
+    display: flex;
+    gap: 6px;
+}
+.tt-action-btn {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    border-radius: 3px;
+    border: 1px solid;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+    text-align: center;
+}
+.tt-disconnect {
+    color: var(--err);
+    border-color: rgba(248, 81, 73, 0.3);
+    background: rgba(248, 81, 73, 0.06);
+}
+.tt-disconnect:hover {
+    background: rgba(248, 81, 73, 0.15);
+    border-color: var(--err);
 }
 
 /* ---------- Bottom Peer Panel ---------- */
@@ -549,6 +635,16 @@ html, body {
     flex: 1;
     overflow: auto;
 }
+/* Horizontal scrollbar affordance — subtle blue tint */
+.peer-table-wrap::-webkit-scrollbar { height: 6px; }
+.peer-table-wrap::-webkit-scrollbar-track { background: var(--bg-deep); }
+.peer-table-wrap::-webkit-scrollbar-thumb {
+    background: var(--accent-dim);
+    border-radius: 3px;
+}
+.peer-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
 
 /* Table */
 .peer-table {
@@ -635,6 +731,12 @@ html, body {
 .peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor); }
 .peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p); }
 .peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns); }
+/* Network tint intensifies on hover */
+.peer-table tbody tr[data-net="ipv4"]:hover  { border-left: 3px solid var(--net-ipv4);  background: rgba(227,179,65,0.06); }
+.peer-table tbody tr[data-net="ipv6"]:hover  { border-left: 3px solid var(--net-ipv6);  background: rgba(240,113,120,0.06); }
+.peer-table tbody tr[data-net="onion"]:hover { border-left: 3px solid var(--net-tor);   background: rgba(74,158,255,0.06); }
+.peer-table tbody tr[data-net="i2p"]:hover   { border-left: 3px solid var(--net-i2p);   background: rgba(139,92,246,0.06); }
+.peer-table tbody tr[data-net="cjdns"]:hover { border-left: 3px solid var(--net-cjdns); background: rgba(210,168,255,0.06); }
 
 /* Peer action buttons in rows */
 .peer-table .peer-action-btn {
@@ -653,15 +755,6 @@ html, body {
     background: rgba(248, 81, 73, 0.15);
     border-color: var(--err);
 }
-.peer-table .peer-action-btn.ban {
-    color: var(--warn);
-    border-color: rgba(210, 153, 34, 0.3);
-}
-.peer-table .peer-action-btn.ban:hover {
-    background: rgba(210, 153, 34, 0.15);
-    border-color: var(--warn);
-}
-
 /* Ban list view (inside peer panel) */
 .ban-list { padding: 0; }
 .ban-list-header {

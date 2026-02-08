@@ -185,6 +185,7 @@
     const clockEl = document.getElementById('clock');
     const tooltipEl = document.getElementById('node-tooltip');
     let hoveredNode = null;
+    let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
     // ═══════════════════════════════════════════════════════════
     // HELPERS
@@ -543,6 +544,7 @@
     // ═══════════════════════════════════════════════════════════
 
     let lastBlockHeight = null;
+    let lastNodeInfo = null;  // Full /api/info response for Node Info card
 
     async function fetchInfo() {
         try {
@@ -550,13 +552,64 @@
             if (!resp.ok) return;
             const info = await resp.json();
 
+            lastNodeInfo = info;
+
             // Update block height HUD
             if (info.last_block && info.last_block.height) {
                 lastBlockHeight = info.last_block.height;
             }
+
+            // Update Node Info card
+            renderNodeInfoCard(info);
         } catch (err) {
             console.error('[vNext] Failed to fetch info:', err);
         }
+    }
+
+    /** Render the Node Info sidebar card from /api/info data */
+    function renderNodeInfoCard(info) {
+        const card = document.getElementById('node-info-card');
+        if (!card) return;
+
+        const body = card.querySelector('.info-card-body');
+        if (!body) return;
+
+        let html = '';
+
+        // Bitcoin Core version
+        const ver = info.subversion || '—';
+        html += `<div class="info-row"><span class="info-label">Version</span><span class="info-val">${ver}</span></div>`;
+
+        // Peer count
+        const peers = info.connected != null ? info.connected : '—';
+        html += `<div class="info-row"><span class="info-label">Peers</span><span class="info-val">${peers}</span></div>`;
+
+        // Blockchain size
+        if (info.blockchain) {
+            html += `<div class="info-row"><span class="info-label">Chain Size</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
+
+            // Node type (Full / Pruned)
+            const nodeType = info.blockchain.pruned ? 'Pruned' : 'Full';
+            html += `<div class="info-row"><span class="info-label">Node Type</span><span class="info-val">${nodeType}</span></div>`;
+
+            // Indexed status
+            const indexed = info.blockchain.indexed ? 'Yes' : 'No';
+            html += `<div class="info-row"><span class="info-label">TX Index</span><span class="info-val">${indexed}</span></div>`;
+
+            // Sync / IBD status
+            if (info.blockchain.ibd) {
+                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-warn">Syncing (IBD)</span></div>`;
+            } else {
+                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-ok">Synced</span></div>`;
+            }
+        }
+
+        // Mempool
+        if (info.mempool_size != null) {
+            html += `<div class="info-row"><span class="info-label">Mempool</span><span class="info-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+        }
+
+        body.innerHTML = html;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1151,8 +1204,9 @@
         return `<div class="tt-row"><span class="tt-label">${label}</span><span class="tt-val">${value}</span></div>`;
     }
 
-    /** Display comprehensive tooltip near cursor with peer details */
-    function showTooltip(node, mx, my) {
+    /** Display comprehensive tooltip near cursor with peer details.
+     *  When pinned=true, tooltip gets pointer-events and a disconnect button. */
+    function showTooltip(node, mx, my, pinned) {
         const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
         const netColor = rgba(node.color, 0.9);
 
@@ -1210,8 +1264,32 @@
         if (node.conntime_fmt) html += ttRow('Uptime', node.conntime_fmt);
         html += `</div>`;
 
+        // ── Actions (only when pinned) ──
+        if (pinned) {
+            html += `<div class="tt-actions">`;
+            html += `<button class="tt-action-btn tt-disconnect" data-id="${node.peerId}" data-net="${node.net}">Disconnect</button>`;
+            html += `</div>`;
+        }
+
         tooltipEl.innerHTML = html;
         tooltipEl.classList.remove('hidden');
+
+        // Pinned tooltips are interactive (clickable buttons)
+        if (pinned) {
+            tooltipEl.classList.add('pinned');
+            tooltipEl.style.pointerEvents = 'auto';
+            // Bind disconnect button
+            const dcBtn = tooltipEl.querySelector('.tt-disconnect');
+            if (dcBtn) {
+                dcBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showDisconnectDialog(parseInt(dcBtn.dataset.id), dcBtn.dataset.net);
+                });
+            }
+        } else {
+            tooltipEl.classList.remove('pinned');
+            tooltipEl.style.pointerEvents = 'none';
+        }
 
         // Position: prefer right of cursor, flip left if near right edge
         const ttWidth = 260;
@@ -1227,7 +1305,10 @@
 
     function hideTooltip() {
         tooltipEl.classList.add('hidden');
+        tooltipEl.classList.remove('pinned');
+        tooltipEl.style.pointerEvents = 'none';
         hoveredNode = null;
+        pinnedNode = null;
     }
 
     /** Highlight a table row by peer ID (map node hover → table row) */
@@ -1291,11 +1372,11 @@
         { key: 'network',         label: 'Net',      get: p => (NET_DISPLAY[p.network] || p.network),     full: null,  vis: true,  w: 45  },
         { key: 'conntime_fmt',    label: 'Duration', get: p => p.conntime_fmt || '—',                     full: null,  vis: true,  w: 75  },
         { key: 'connection_type', label: 'Type',     get: p => peerTypeShort(p),                           full: p => peerTypeFull(p), vis: true, w: 70 },
-        { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 160 },
-        { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 120 },
+        { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 130 },
+        { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 90  },
         { key: 'services_abbrev', label: 'Services', get: p => p.services_abbrev || '—',                   full: null,  vis: true,  w: 70  },
-        { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 80  },
-        { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 80  },
+        { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 60  },
+        { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 55  },
         { key: 'country',         label: 'Country',  get: p => p.country || '—',                           full: null,  vis: true,  w: 70  },
         { key: 'continent',       label: 'Cont.',    get: p => p.continent || '—',                         full: null,  vis: true,  w: 60  },
         { key: 'isp',             label: 'ISP',      get: p => p.isp || '—',                               full: null,  vis: true,  w: 110 },
@@ -1699,14 +1780,15 @@
             targetView.x = (p.x - 0.5) * W;
             targetView.y = (p.y - 0.5) * H - offsetFromCenter;
 
-            // Open the inspection tooltip at the node's screen position (once view settles)
+            // Open pinned inspection tooltip at the node's screen position (once view settles)
             highlightedPeerId = peerId;
+            pinnedNode = node;
             setTimeout(() => {
                 const offsets = getWrapOffsets();
                 for (const off of offsets) {
                     const s = worldToScreen(node.lon + off, node.lat);
                     if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
-                        showTooltip(node, s.x, s.y);
+                        showTooltip(node, s.x, s.y, true);
                         hoveredNode = node;
                         break;
                     }
@@ -1961,8 +2043,10 @@
 
     // ── Mouse pan ──
     let dragZoom = 1;  // zoom level when drag started
+    let dragMoved = false;  // track if mouse moved during drag (vs click)
     canvas.addEventListener('mousedown', (e) => {
         dragging = true;
+        dragMoved = false;
         dragStart.x = e.clientX;
         dragStart.y = e.clientY;
         dragViewStart.x = targetView.x;
@@ -1975,29 +2059,49 @@
             // Pan the view by drag delta, scaled by zoom so drag feels 1:1 with the map
             const dx = e.clientX - dragStart.x;
             const dy = e.clientY - dragStart.y;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
             targetView.x = dragViewStart.x - dx / dragZoom;
             // At zoom 1, vertical panning is locked (clampView enforces it)
             if (dragZoom > 1.001) {
                 targetView.y = dragViewStart.y - dy / dragZoom;
             }
-            hideTooltip();
+            if (dragMoved) hideTooltip();
         } else {
             // Hover detection for tooltip + table highlight
             const node = findNodeAtScreen(e.clientX, e.clientY);
             if (node) {
-                showTooltip(node, e.clientX, e.clientY);
+                // Don't override a pinned tooltip with hover
+                if (!pinnedNode) {
+                    showTooltip(node, e.clientX, e.clientY, false);
+                }
                 hoveredNode = node;
                 highlightTableRow(node.peerId);
                 canvas.style.cursor = 'pointer';
-            } else if (hoveredNode) {
+            } else if (hoveredNode && !pinnedNode) {
                 hideTooltip();
                 highlightTableRow(null);
+                canvas.style.cursor = 'grab';
+            } else if (!pinnedNode) {
                 canvas.style.cursor = 'grab';
             }
         }
     });
 
-    window.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', (e) => {
+        if (dragging && !dragMoved) {
+            // This was a click, not a drag
+            const node = findNodeAtScreen(e.clientX, e.clientY);
+            if (node) {
+                // Pin tooltip on this node
+                pinnedNode = node;
+                highlightedPeerId = node.peerId;
+                showTooltip(node, e.clientX, e.clientY, true);
+            } else if (pinnedNode) {
+                // Clicked empty space — unpin
+                hideTooltip();
+                highlightTableRow(null);
+            }
+        }
         dragging = false;
     });
 
@@ -2070,6 +2174,7 @@
     const netPopover = document.getElementById('net-popover');
     const antNote = document.getElementById('antarctica-note');
     const antCloseBtn = document.getElementById('ant-close');
+    let antNoteDismissed = false;  // tracks if user dismissed the annotation this session
 
     /** Update badge visual states to reflect the current multi-select filter */
     function updateBadgeStates() {
@@ -2085,10 +2190,10 @@
             }
         });
 
-        // Show Antarctica annotation when any private network is exclusively shown
+        // Show Antarctica annotation when any private network is in the enabled set
+        // (unless the user has manually dismissed it this session)
         const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
-        const hasClearnet = enabledNets.has('ipv4') || enabledNets.has('ipv6');
-        if (hasPrivate && !hasClearnet) {
+        if (hasPrivate && !antNoteDismissed) {
             antNote.classList.remove('hidden');
         } else {
             antNote.classList.add('hidden');
@@ -2114,6 +2219,7 @@
                     enabledNets.add(net);
                 }
             }
+            antNoteDismissed = false;  // reset dismiss on filter change
             updateBadgeStates();
             renderPeerTable();
         });
@@ -2131,10 +2237,11 @@
         });
     });
 
-    // Close Antarctica annotation
+    // Close Antarctica annotation (dismisses until network filter changes)
     if (antCloseBtn) {
         antCloseBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            antNoteDismissed = true;
             antNote.classList.add('hidden');
         });
     }
