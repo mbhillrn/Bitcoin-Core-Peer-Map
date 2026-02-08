@@ -1,12 +1,14 @@
 /* ============================================================
    MBCore vNext — Canvas World Map with Real Bitcoin Peers
-   Phase 2.1: Real peer data from /api/peers, no fake nodes
+   Phase 2.2: Visual semantics for peer stability and activity
    ============================================================
    - Fetches real peers from the existing MBCoreServer backend
    - Renders them on a canvas world map (no Leaflet)
    - Private/overlay networks (Tor, I2P, CJDNS) placed in Antarctica
    - Polls every 10s with fade-in for new peers, fade-out for gone peers
    - Pan, zoom, hover tooltips all preserved from Phase 1
+   - Node brightness correlates with connection age (stability)
+   - Inbound vs outbound peers have distinct pulse rhythms
    ============================================================ */
 
 (function () {
@@ -30,6 +32,21 @@
         panSmooth: 0.12,           // smoothing factor for view interpolation
         gridSpacing: 30,           // degrees between grid lines
         coastlineWidth: 1.0,
+
+        // ── Visual semantics ──
+        // Connection age -> brightness mapping
+        ageBrightnessMin: 0.35,    // floor opacity for brand-new peers
+        ageBrightnessMax: 1.0,     // ceiling opacity for veteran peers
+        ageRampSeconds: 3600,      // seconds to go from min to max brightness (1 hour)
+
+        // Pulse behaviour by direction
+        pulseSpeedInbound: 0.0012,   // slower, calm breathing for inbound
+        pulseSpeedOutbound: 0.0024,  // faster, sharper pulse for outbound
+        pulseDepthInbound: 0.25,     // subtle amplitude for inbound
+        pulseDepthOutbound: 0.45,    // more pronounced for outbound
+
+        // Fade-out easing
+        fadeOutEase: 2.0,          // exponent for ease-out curve (higher = faster initial fade)
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -423,6 +440,7 @@
                     existing.country = peer.country || peer.countryCode || '';
                     existing.subver = peer.subver || '';
                     existing.direction = peer.direction || '';
+                    existing.conntime = peer.conntime || 0;
                     existing.conntime_fmt = peer.conntime_fmt || '';
                     existing.isp = peer.isp || '';
                     existing.isPrivate = isPrivate;
@@ -440,6 +458,7 @@
                         subver: peer.subver || '',
                         direction: peer.direction || '',
                         ping: peer.ping_ms || 0,
+                        conntime: peer.conntime || 0,
                         conntime_fmt: peer.conntime_fmt || '',
                         isp: peer.isp || '',
                         isPrivate,
@@ -776,59 +795,106 @@
     /**
      * Draw a single node at a specific screen position.
      * Shared by drawNode() for each wrap offset.
+     *
+     * @param {number} brightness - connection-age brightness multiplier (0..1)
+     *   Controls glow intensity and core opacity — veteran peers are brighter.
      */
-    function drawNodeAt(sx, sy, c, r, gr, pulse, opacity) {
-        // Outer glow (radial gradient)
+    function drawNodeAt(sx, sy, c, r, gr, pulse, opacity, brightness) {
+        // Outer glow (radial gradient) — modulated by brightness
         const grad = ctx.createRadialGradient(sx, sy, r, sx, sy, gr);
-        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity));
-        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity));
+        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity * brightness));
+        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity * brightness));
         grad.addColorStop(1, rgba(c, 0));
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(sx, sy, gr, 0, Math.PI * 2);
         ctx.fill();
 
-        // Core dot
-        ctx.fillStyle = rgba(c, 0.9 * opacity);
+        // Core dot — brightness affects base opacity
+        ctx.fillStyle = rgba(c, (0.5 + 0.4 * brightness) * opacity);
         ctx.beginPath();
         ctx.arc(sx, sy, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright white centre highlight
-        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity);
+        // Bright white centre highlight — scales with brightness
+        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity * brightness);
         ctx.beginPath();
         ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2);
         ctx.fill();
     }
 
     /**
+     * Compute connection-age brightness.
+     * New peers start dim, veteran peers glow fully.
+     * Uses conntime (Unix timestamp from Bitcoin Core) to compute real age.
+     */
+    function getAgeBrightness(node, nowSec) {
+        if (!node.conntime || node.conntime <= 0) return CFG.ageBrightnessMax;
+        const ageSec = nowSec - node.conntime;
+        if (ageSec <= 0) return CFG.ageBrightnessMin;
+        const t = clamp(ageSec / CFG.ageRampSeconds, 0, 1);
+        // Ease-in curve so brightness ramps quickly at first, then settles
+        const eased = 1 - Math.pow(1 - t, 2);
+        return CFG.ageBrightnessMin + (CFG.ageBrightnessMax - CFG.ageBrightnessMin) * eased;
+    }
+
+    /**
+     * Compute direction-aware pulse factor.
+     * Inbound:  slow, gentle sinusoidal breathing
+     * Outbound: faster pulse with a sharper attack (abs-sin shape)
+     */
+    function getDirectionPulse(node, ageMs) {
+        const isInbound = node.direction === 'IN';
+        const speed = isInbound ? CFG.pulseSpeedInbound : CFG.pulseSpeedOutbound;
+        const depth = isInbound ? CFG.pulseDepthInbound : CFG.pulseDepthOutbound;
+
+        if (isInbound) {
+            // Smooth sinusoidal breathing
+            return (1 - depth) + depth * (0.5 + 0.5 * Math.sin(node.phase + ageMs * speed));
+        } else {
+            // Sharper "ping" pulse — abs(sin) gives a quicker rise and fall
+            const raw = Math.abs(Math.sin(node.phase + ageMs * speed));
+            return (1 - depth) + depth * raw;
+        }
+    }
+
+    /**
      * Draw a single node on the canvas at all visible wrap positions.
-     * Handles fade-in, pulse glow, fade-out animations.
+     * Handles fade-in, fade-out, connection-age brightness, and
+     * direction-aware pulse behaviour.
      */
     function drawNode(node, now, wrapOffsets) {
         if (now < node.spawnTime) return;
 
         const c = node.color;
+        const ageMs = now - node.spawnTime;
 
-        // ── Calculate overall opacity (handles fade-in and fade-out) ──
+        // ── Connection-age brightness (dim newcomers, bright veterans) ──
+        const nowSec = Math.floor(now / 1000);
+        const brightness = getAgeBrightness(node, nowSec);
+
+        // ── Fade-in: ease-out curve for smooth materialization ──
         let opacity = 1;
-        const age = now - node.spawnTime;
-        if (age < CFG.fadeInDuration) {
-            opacity = age / CFG.fadeInDuration;
+        if (ageMs < CFG.fadeInDuration) {
+            const t = ageMs / CFG.fadeInDuration;
+            opacity = 1 - Math.pow(1 - t, 2);   // ease-out
         }
+
+        // ── Fade-out: eased curve so nodes dissolve gracefully ──
         if (!node.alive && node.fadeOutStart) {
             const fadeAge = now - node.fadeOutStart;
-            opacity = Math.max(0, 1 - fadeAge / CFG.fadeOutDuration);
-            if (opacity <= 0) return;
+            const t = clamp(fadeAge / CFG.fadeOutDuration, 0, 1);
+            opacity = Math.pow(1 - t, CFG.fadeOutEase);
+            if (opacity <= 0.001) return;
         }
 
-        // Pulsing factor (continuous sine wave)
-        const pulse = 0.6 + 0.4 * Math.sin(node.phase + age * CFG.pulseSpeed);
+        // ── Direction-aware pulse (inbound = calm, outbound = sharp) ──
+        const pulse = getDirectionPulse(node, ageMs);
 
         // Spawn "pop" scale effect (first 600ms)
         let scale = 1;
-        if (age < 600) {
-            const t = age / 600;
+        if (ageMs < 600) {
+            const t = ageMs / 600;
             scale = t < 0.6 ? (t / 0.6) * 1.4 : 1.4 - 0.4 * ((t - 0.6) / 0.4);
         }
 
@@ -840,7 +906,7 @@
             const s = worldToScreen(node.lon + off, node.lat);
             // Skip if well off screen (with glow margin)
             if (s.x < -gr || s.x > W + gr || s.y < -gr || s.y > H + gr) continue;
-            drawNodeAt(s.x, s.y, c, r, gr, pulse, opacity);
+            drawNodeAt(s.x, s.y, c, r, gr, pulse, opacity, brightness);
         }
     }
 
