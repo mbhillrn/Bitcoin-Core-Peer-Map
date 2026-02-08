@@ -732,6 +732,144 @@ html, body {
     100% { transform: scale(1); opacity: 1; }
 }
 
+/* ---------- Disconnect Confirmation Dialog ---------- */
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.dialog-box {
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    padding: 20px 24px;
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.dialog-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.dialog-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+.dialog-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.dialog-btn {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+    text-align: center;
+}
+.dialog-btn-disconnect {
+    color: var(--err);
+    border-color: rgba(248, 81, 73, 0.4);
+    background: rgba(248, 81, 73, 0.08);
+}
+.dialog-btn-disconnect:hover {
+    background: rgba(248, 81, 73, 0.18);
+    border-color: var(--err);
+}
+.dialog-btn-ban {
+    color: var(--warn);
+    border-color: rgba(210, 153, 34, 0.4);
+    background: rgba(210, 153, 34, 0.08);
+}
+.dialog-btn-ban:hover {
+    background: rgba(210, 153, 34, 0.18);
+    border-color: var(--warn);
+}
+.dialog-btn-cancel {
+    color: var(--text-muted);
+    border-color: rgba(88, 166, 255, 0.15);
+    background: transparent;
+}
+.dialog-btn-cancel:hover {
+    color: var(--text-secondary);
+    border-color: rgba(88, 166, 255, 0.3);
+    background: rgba(88, 166, 255, 0.04);
+}
+
+/* ---------- Ban List Modal ---------- */
+.ban-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.ban-modal-box {
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 680px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+.ban-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.ban-modal-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+.ban-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color var(--transition);
+}
+.ban-modal-close:hover {
+    color: var(--text-primary);
+}
+.ban-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+.ban-modal-table-wrap {
+    overflow-x: auto;
+}
+
 /* ---------- Scrollbar (if ever needed) ---------- */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }

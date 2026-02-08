@@ -1390,9 +1390,9 @@
             colEl.style.width = w + 'px';
             cg.appendChild(colEl);
         }
-        // Actions column
+        // Actions column (single Disconnect button)
         const actCol = document.createElement('col');
-        actCol.style.width = '100px';
+        actCol.style.width = '80px';
         cg.appendChild(actCol);
         table.insertBefore(cg, table.firstChild);
     }
@@ -1439,13 +1439,9 @@
                 const hoverVal = col.full ? col.full(peer) : val;
                 html += `<td title="${String(hoverVal).replace(/"/g, '&quot;')}">${val}</td>`;
             }
-            // Action buttons
-            const canBan = (net === 'ipv4' || net === 'ipv6');
+            // Action buttons — single Disconnect button opens confirmation dialog
             html += '<td>';
-            html += `<button class="peer-action-btn" data-action="disconnect" data-id="${peer.id}">Disconnect</button> `;
-            if (canBan) {
-                html += `<button class="peer-action-btn ban" data-action="ban" data-id="${peer.id}">Ban 24h</button>`;
-            }
+            html += `<button class="peer-action-btn" data-action="disconnect" data-id="${peer.id}" data-net="${net}">Disconnect</button>`;
             html += '</td>';
             html += '</tr>';
         }
@@ -1527,59 +1523,77 @@
         renderColgroup();
     });
 
-    // ── Ban list view (replaces table content temporarily) ──
+    // ── Ban list modal (overlay — peer table stays visible underneath) ──
     const bansBtn = document.getElementById('btn-bans');
-    let banListOpen = false;
-    const tableWrapEl = document.querySelector('.peer-table-wrap');
+    let banModalOpen = false;
 
     bansBtn.addEventListener('click', () => {
-        if (banListOpen) {
-            closeBanList();
+        if (banModalOpen) {
+            closeBanModal();
         } else {
-            openBanList();
+            openBanModal();
         }
     });
 
-    function openBanList() {
-        banListOpen = true;
+    function openBanModal() {
+        banModalOpen = true;
         bansBtn.classList.add('active');
-        tableWrapEl.dataset.prevHtml = tableWrapEl.innerHTML;
-        tableWrapEl.innerHTML = '<div class="ban-list-loading">Loading ban list...</div>';
+
+        // Remove any existing modal
+        const existing = document.getElementById('ban-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'ban-modal';
+        modal.className = 'ban-modal-overlay';
+        modal.innerHTML = `
+            <div class="ban-modal-box">
+                <div class="ban-modal-header">
+                    <span class="ban-modal-title">Banned IPs</span>
+                    <button class="ban-modal-close" id="ban-modal-close">&times;</button>
+                </div>
+                <div class="ban-modal-body" id="ban-modal-body">
+                    <div class="ban-list-loading">Loading ban list...</div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        // Close button
+        document.getElementById('ban-modal-close').addEventListener('click', closeBanModal);
+        // Close on overlay background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeBanModal();
+        });
+
         fetchBanList();
     }
 
-    function closeBanList() {
-        banListOpen = false;
+    function closeBanModal() {
+        banModalOpen = false;
         bansBtn.classList.remove('active');
-        // Rebuild the table element fresh
-        tableWrapEl.innerHTML = '<table class="peer-table" id="peer-table"><thead id="peer-thead"></thead><tbody id="peer-tbody"></tbody></table>';
-        // Re-bind DOM refs (they were replaced)
-        theadEl = document.getElementById('peer-thead');
-        tbodyEl = document.getElementById('peer-tbody');
-        renderPeerTableHead();
-        renderPeerTable();
-        // Re-attach sort + resize handlers (delegated to theadEl)
-        theadEl.addEventListener('click', handleTheadClick);
-        theadEl.addEventListener('mousedown', handleTheadResize);
-        // Re-attach row handlers
-        tbodyEl.addEventListener('click', handleTbodyClick);
-        tbodyEl.addEventListener('mouseover', handleTbodyHover);
-        tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
+        const modal = document.getElementById('ban-modal');
+        if (modal) modal.remove();
     }
 
     async function fetchBanList() {
+        const body = document.getElementById('ban-modal-body');
+        if (!body) return;
         try {
             const resp = await fetch('/api/bans');
             const data = await resp.json();
             const bans = data.bans || [];
             renderBanList(bans);
         } catch (err) {
-            tableWrapEl.innerHTML = `<div class="ban-list-loading" style="color:var(--err)">Failed to load bans: ${err.message}</div>`;
+            body.innerHTML = `<div class="ban-list-loading" style="color:var(--err)">Failed to load bans: ${err.message}</div>`;
         }
     }
 
     function renderBanList(bans) {
-        let html = '<div class="ban-list">';
+        const body = document.getElementById('ban-modal-body');
+        if (!body) return;
+
+        let html = '';
+        // Header with count + clear all
         html += '<div class="ban-list-header">';
         html += `<span class="ban-list-title">Banned IPs (${bans.length})</span>`;
         if (bans.length > 0) {
@@ -1590,30 +1604,28 @@
         if (bans.length === 0) {
             html += '<div class="ban-list-empty">No banned IPs</div>';
         } else {
-            html += '<table class="peer-table ban-table"><thead><tr>';
+            html += '<div class="ban-modal-table-wrap"><table class="peer-table ban-table"><thead><tr>';
             html += '<th>Address</th><th>Ban Created</th><th>Ban Until</th><th>Actions</th>';
             html += '</tr></thead><tbody>';
             for (const ban of bans) {
                 const addr = ban.address || '—';
                 const created = ban.ban_created ? new Date(ban.ban_created * 1000).toLocaleString() : '—';
                 const until = ban.banned_until ? new Date(ban.banned_until * 1000).toLocaleString() : '—';
-                html += `<tr>`;
+                html += '<tr>';
                 html += `<td title="${addr}">${addr}</td>`;
                 html += `<td>${created}</td>`;
                 html += `<td>${until}</td>`;
                 html += `<td><button class="peer-action-btn ban-unban" data-addr="${addr}">Unban</button></td>`;
                 html += '</tr>';
             }
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
         }
-        html += '</div>';
-        tableWrapEl.innerHTML = html;
+        body.innerHTML = html;
 
         // Bind unban buttons
-        tableWrapEl.querySelectorAll('.ban-unban').forEach(btn => {
+        body.querySelectorAll('.ban-unban').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const addr = btn.dataset.addr;
-                if (!confirm(`Unban ${addr}?`)) return;
                 try {
                     const resp = await fetch('/api/peer/unban', {
                         method: 'POST',
@@ -1623,7 +1635,7 @@
                     const data = await resp.json();
                     if (data.success) {
                         showActionResult(`Unbanned ${addr}`, true);
-                        fetchBanList(); // refresh
+                        fetchBanList();
                     } else {
                         showActionResult(`Unban failed: ${data.error}`, false);
                     }
@@ -1643,7 +1655,7 @@
                     const data = await resp.json();
                     if (data.success) {
                         showActionResult('All bans cleared', true);
-                        fetchBanList(); // refresh
+                        fetchBanList();
                     } else {
                         showActionResult(`Clear failed: ${data.error}`, false);
                     }
@@ -1659,7 +1671,7 @@
         const btn = e.target.closest('.peer-action-btn');
         if (btn) {
             e.stopPropagation();
-            handlePeerAction(btn.dataset.action, parseInt(btn.dataset.id));
+            handlePeerAction(btn.dataset.action, parseInt(btn.dataset.id), btn.dataset.net);
             return;
         }
 
@@ -1668,11 +1680,24 @@
         const peerId = parseInt(row.dataset.id);
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
-            // Center and zoom map on this peer
+            // Center and zoom map on this peer, placing it in the upper-middle
+            // portion of the visible map area (accounting for HUD panels and peer panel)
             const p = project(node.lon, node.lat);
-            targetView.x = (p.x - 0.5) * W;
-            targetView.y = (p.y - 0.5) * H;
             if (targetView.zoom < 3) targetView.zoom = 3;
+
+            // Calculate visible map area: topbar=40px, peer panel ~340px when open
+            const topbarH = 40;
+            const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
+            const visibleTop = topbarH;
+            const visibleBot = H - panelH;
+            const visibleH = visibleBot - visibleTop;
+            // Place peer at ~30% from top of visible area (upper-middle)
+            const targetScreenY = visibleTop + visibleH * 0.30;
+            // Offset from true center: how far above center the target point is
+            const offsetFromCenter = (H / 2 - targetScreenY) / targetView.zoom;
+
+            targetView.x = (p.x - 0.5) * W;
+            targetView.y = (p.y - 0.5) * H - offsetFromCenter;
 
             // Open the inspection tooltip at the node's screen position (once view settles)
             highlightedPeerId = peerId;
@@ -1708,56 +1733,89 @@
     tbodyEl.addEventListener('mouseover', handleTbodyHover);
     tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
 
-    /** Handle disconnect/ban actions */
-    async function handlePeerAction(action, peerId) {
-        const confirmMsg = action === 'ban'
-            ? `Ban peer ${peerId} for 24 hours and disconnect?`
-            : `Disconnect peer ${peerId}?`;
-        if (!confirm(confirmMsg)) return;
+    /** Show a confirmation dialog for disconnect with optional ban */
+    function showDisconnectDialog(peerId, net) {
+        const canBan = (net === 'ipv4' || net === 'ipv6');
+        // Remove any existing dialog
+        const existing = document.getElementById('disconnect-dialog');
+        if (existing) existing.remove();
 
-        try {
-            if (action === 'ban') {
-                // Ban first, then disconnect
-                const banResp = await fetch('/api/peer/ban', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ peer_id: peerId }),
-                });
-                const banData = await banResp.json();
-                if (!banData.success) {
-                    showActionResult(`Ban failed: ${banData.error}`, false);
-                    return;
-                }
-                // Now disconnect
-                const dcResp = await fetch('/api/peer/disconnect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ peer_id: peerId }),
-                });
-                const dcData = await dcResp.json();
-                if (dcData.success) {
-                    showActionResult(`Banned ${banData.banned_ip} and disconnected peer ${peerId}`, true);
+        const overlay = document.createElement('div');
+        overlay.id = 'disconnect-dialog';
+        overlay.className = 'dialog-overlay';
+        overlay.innerHTML = `
+            <div class="dialog-box">
+                <div class="dialog-title">Disconnect Peer ${peerId}</div>
+                <div class="dialog-text">Choose an action for this peer:</div>
+                <div class="dialog-actions">
+                    <button class="dialog-btn dialog-btn-disconnect" data-choice="disconnect">Disconnect Only</button>
+                    ${canBan ? `<button class="dialog-btn dialog-btn-ban" data-choice="ban">Disconnect + Ban 24h</button>` : ''}
+                    <button class="dialog-btn dialog-btn-cancel" data-choice="cancel">Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        // Handle button clicks
+        overlay.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.dialog-btn');
+            if (!btn) return;
+            const choice = btn.dataset.choice;
+            overlay.remove();
+
+            if (choice === 'cancel') return;
+
+            try {
+                if (choice === 'ban') {
+                    // Ban first, then disconnect
+                    const banResp = await fetch('/api/peer/ban', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId }),
+                    });
+                    const banData = await banResp.json();
+                    if (!banData.success) {
+                        showActionResult(`Ban failed: ${banData.error}`, false);
+                        return;
+                    }
+                    const dcResp = await fetch('/api/peer/disconnect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId }),
+                    });
+                    const dcData = await dcResp.json();
+                    if (dcData.success) {
+                        showActionResult(`Banned ${banData.banned_ip} and disconnected peer ${peerId}`, true);
+                    } else {
+                        showActionResult(`Banned but disconnect failed: ${dcData.error}`, false);
+                    }
                 } else {
-                    showActionResult(`Banned but disconnect failed: ${dcData.error}`, false);
+                    const resp = await fetch('/api/peer/disconnect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId }),
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showActionResult(`Disconnected peer ${peerId}`, true);
+                    } else {
+                        showActionResult(`Failed: ${data.error}`, false);
+                    }
                 }
-            } else {
-                const resp = await fetch('/api/peer/disconnect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ peer_id: peerId }),
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    showActionResult(`Disconnected peer ${peerId}`, true);
-                } else {
-                    showActionResult(`Failed: ${data.error}`, false);
-                }
+                setTimeout(fetchPeers, 1000);
+            } catch (err) {
+                showActionResult(`Error: ${err.message}`, false);
             }
-            // Refresh peers after action
-            setTimeout(fetchPeers, 1000);
-        } catch (err) {
-            showActionResult(`Error: ${err.message}`, false);
-        }
+        });
+
+        // Close on overlay background click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+    }
+
+    /** Handle disconnect action from table row button */
+    function handlePeerAction(action, peerId, net) {
+        showDisconnectDialog(peerId, net || 'ipv4');
     }
 
     /** Show a temporary result message in the toolbar */
