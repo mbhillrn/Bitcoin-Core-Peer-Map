@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBCore vNext</title>
+    <link rel="stylesheet" href="/static/css/bitstyle.css">
+</head>
+<body>
+    <!-- Top bar -->
+    <header id="topbar">
+        <div class="topbar-left">
+            <span class="logo">MBCore</span>
+            <span class="version">vNext</span>
+        </div>
+        <div class="topbar-center">
+            <span id="clock"></span>
+        </div>
+        <div class="topbar-right">
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-text">Offline</span>
+        </div>
+    </header>
+
+    <!-- HUD overlay stats (floats over the map) -->
+    <div id="hud-top-left" class="hud-panel">
+        <div class="hud-label">PEERS</div>
+        <div class="hud-value" id="hud-peers">0</div>
+    </div>
+
+    <div id="hud-top-right" class="hud-panel">
+        <div class="hud-label">BLOCK HEIGHT</div>
+        <div class="hud-value" id="hud-block">---</div>
+    </div>
+
+    <div id="hud-bottom-left" class="hud-panel">
+        <div class="hud-label">NETWORKS</div>
+        <div class="hud-nets">
+            <span class="net-badge net-ipv4">IPv4</span>
+            <span class="net-badge net-ipv6">IPv6</span>
+            <span class="net-badge net-tor">Tor</span>
+            <span class="net-badge net-i2p">I2P</span>
+            <span class="net-badge net-cjdns">CJDNS</span>
+        </div>
+    </div>
+
+    <!-- Full-screen canvas map -->
+    <canvas id="worldmap"></canvas>
+
+    <!-- Zoom controls -->
+    <div id="zoom-controls">
+        <button id="zoom-in" class="zoom-btn">+</button>
+        <button id="zoom-out" class="zoom-btn">&minus;</button>
+        <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
+    </div>
+
+    <!-- Tooltip for hovering over nodes -->
+    <div id="node-tooltip" class="tooltip hidden"></div>
+
+    <script src="/static/js/bitapp.js"></script>
+</body>
+</html>
