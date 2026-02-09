@@ -768,6 +768,17 @@
 
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') goBtn.click(); });
 
+        // Auto-populate CLI command hint as user types
+        input.addEventListener('input', () => {
+            const addr = input.value.trim();
+            const cmdSpan = cliCmd.querySelector('span');
+            if (cmdSpan) {
+                cmdSpan.textContent = addr
+                    ? `bitcoin-cli addnode "${addr}" add`
+                    : 'bitcoin-cli addnode <address> add';
+            }
+        });
+
         if (copyBtn) {
             copyBtn.addEventListener('click', () => {
                 const txt = cliCmd.querySelector('span').textContent;

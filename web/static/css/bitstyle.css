@@ -578,14 +578,17 @@ html, body {
     gap: 6px;
 }
 .ro-bar-bg {
+    display: inline-block;
     width: 80px;
     height: 7px;
     background: rgba(88, 166, 255, 0.08);
     border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    vertical-align: middle;
 }
 .ro-bar {
+    display: block;
     height: 100%;
     border-radius: 4px;
     transition: width 0.8s ease;
