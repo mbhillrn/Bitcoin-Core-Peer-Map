@@ -1093,6 +1093,46 @@ async def api_stats():
             pass
 
         system_stats = {'cpu_pct': cpu_pct, 'mem_pct': mem_pct, 'cpu_breakdown': cpu_breakdown, 'mem_used_mb': mem_used_mb, 'mem_total_mb': mem_total_mb}
+
+        # Uptime via /proc/uptime (instant)
+        try:
+            with open('/proc/uptime', 'r') as f:
+                uptime_sec = float(f.readline().split()[0])
+                days = int(uptime_sec // 86400)
+                hours = int((uptime_sec % 86400) // 3600)
+                mins = int((uptime_sec % 3600) // 60)
+                if days > 0:
+                    system_stats['uptime'] = f'{days}d {hours}h {mins}m'
+                elif hours > 0:
+                    system_stats['uptime'] = f'{hours}h {mins}m'
+                else:
+                    system_stats['uptime'] = f'{mins}m'
+                system_stats['uptime_sec'] = int(uptime_sec)
+        except:
+            pass
+
+        # Load average via /proc/loadavg (instant)
+        try:
+            with open('/proc/loadavg', 'r') as f:
+                parts = f.readline().split()
+                system_stats['load_1'] = float(parts[0])
+                system_stats['load_5'] = float(parts[1])
+                system_stats['load_15'] = float(parts[2])
+        except:
+            pass
+
+        # Disk usage for root filesystem (instant, no subprocess)
+        try:
+            st = os.statvfs('/')
+            disk_total = st.f_blocks * st.f_frsize
+            disk_free = st.f_bavail * st.f_frsize
+            disk_used = disk_total - (st.f_bfree * st.f_frsize)
+            system_stats['disk_total_gb'] = round(disk_total / 1e9, 1)
+            system_stats['disk_used_gb'] = round(disk_used / 1e9, 1)
+            system_stats['disk_free_gb'] = round(disk_free / 1e9, 1)
+            system_stats['disk_pct'] = round(disk_used / disk_total * 100, 1) if disk_total > 0 else 0
+        except:
+            pass
     except:
         pass
 

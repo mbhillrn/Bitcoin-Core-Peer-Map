@@ -458,13 +458,7 @@
     let currencyDropdownEl = null;
 
     const currCodeEl = document.getElementById('mo-btc-currency');
-    if (currCodeEl) {
-        currCodeEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (currencyDropdownEl) { closeCurrencyDropdown(); return; }
-            openCurrencyDropdown();
-        });
-    }
+    const btcPriceBarEl = document.getElementById('btc-price-bar');
 
     function openCurrencyDropdown() {
         closeCurrencyDropdown();
@@ -481,15 +475,19 @@
         document.body.appendChild(dd);
         currencyDropdownEl = dd;
 
-        // Position near the currency code element
-        const rect = currCodeEl.getBoundingClientRect();
-        dd.style.left = Math.max(8, rect.left - 60) + 'px';
-        dd.style.top = (rect.bottom + 6) + 'px';
+        // Position below the centered BTC price bar
+        const anchor = btcPriceBarEl || currCodeEl;
+        if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            const ddWidth = 200; // approx dropdown width
+            dd.style.left = Math.max(8, rect.left + rect.width / 2 - ddWidth / 2) + 'px';
+            dd.style.top = (rect.bottom + 6) + 'px';
+        }
 
         dd.querySelectorAll('.curr-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 btcCurrency = btn.dataset.curr;
-                currCodeEl.textContent = btcCurrency;
+                if (currCodeEl) currCodeEl.textContent = btcCurrency;
                 dd.querySelectorAll('.curr-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 fetchInfo();
@@ -515,7 +513,8 @@
     }
 
     function closeCurrencyOnOutside(e) {
-        if (currencyDropdownEl && !currencyDropdownEl.contains(e.target) && e.target !== currCodeEl) {
+        const bar = btcPriceBarEl || currCodeEl;
+        if (currencyDropdownEl && !currencyDropdownEl.contains(e.target) && (!bar || !bar.contains(e.target))) {
             closeCurrencyDropdown();
         }
     }
@@ -827,17 +826,38 @@
         systemInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
     }
 
-    // Map overlay link: Node Info
-    const moNodeInfoLink = document.getElementById('mo-node-info');
-    if (moNodeInfoLink) {
-        moNodeInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+    // Right overlay: NODE INFO link → opens Node Info modal
+    const roNodeInfoLink = document.getElementById('ro-node-info');
+    if (roNodeInfoLink) {
+        roNodeInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
     }
 
-    // Right overlay: MBCore DB link
+    // Right overlay: MBCORE DB link
     const roGeodbLink = document.getElementById('ro-geodb-link');
     if (roGeodbLink) {
         roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(roGeodbLink); });
     }
+
+    // Left overlay: CPU/RAM/NET rows → click opens system info modal
+    ['mo-row-cpu', 'mo-row-ram', 'mo-row-netin', 'mo-row-netout'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
+    });
+
+    // BTC price bar: click anywhere opens currency selector
+    const btcPriceBar = document.getElementById('btc-price-bar');
+    if (btcPriceBar) {
+        btcPriceBar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCurrencyDropdown();
+        });
+    }
+
+    // Right overlay: click Update/Status rows → open settings popup
+    ['ro-row-countdown', 'ro-row-statusmsg'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openDisplaySettingsPopup(el); });
+    });
 
     // ═══════════════════════════════════════════════════════════
     // PRIVATE NETWORK POPUP (for peer list clicks)
@@ -3339,6 +3359,99 @@
         }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // DISPLAY SETTINGS POPUP — right overlay Update/Status rows
+    // ═══════════════════════════════════════════════════════════
+
+    let displaySettingsEl = null;
+
+    function openDisplaySettingsPopup(anchorEl) {
+        closeDisplaySettingsPopup();
+        const popup = document.createElement('div');
+        popup.className = 'display-settings-popup';
+        popup.id = 'display-settings-popup';
+
+        const pollSec = Math.round(CFG.pollInterval / 1000);
+        const infoSec = Math.round(CFG.infoPollInterval / 1000);
+
+        // Right-side display toggle states
+        const rightItems = [
+            { id: 'ro-row-countdown', label: 'Update Countdown', visible: true },
+            { id: 'ro-row-statusmsg', label: 'Map Status', visible: true },
+            { id: 'ro-row-nodestatus', label: 'Node Info', visible: true },
+            { id: 'ro-row-geodb', label: 'MBCore DB', visible: true },
+        ];
+        // Check actual visibility
+        rightItems.forEach(item => {
+            const el = document.getElementById(item.id);
+            if (el) item.visible = el.style.display !== 'none';
+        });
+
+        let html = '<div class="dsp-title">Display Settings</div>';
+        html += '<div class="dsp-section">Update Frequency</div>';
+        html += `<div class="dsp-row"><span class="dsp-label">Peer refresh</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += `<div class="dsp-row"><span class="dsp-label">Info refresh</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += '<div class="dsp-section">Show / Hide</div>';
+        rightItems.forEach(item => {
+            html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
+        });
+        popup.innerHTML = html;
+        document.body.appendChild(popup);
+        displaySettingsEl = popup;
+
+        // Position near anchor
+        if (anchorEl) {
+            const rect = anchorEl.getBoundingClientRect();
+            popup.style.right = (window.innerWidth - rect.right) + 'px';
+            popup.style.top = (rect.bottom + 6) + 'px';
+        }
+
+        // Bind frequency inputs
+        const pollInput = document.getElementById('dsp-poll-sec');
+        if (pollInput) {
+            pollInput.addEventListener('change', () => {
+                const v = clamp(parseInt(pollInput.value) || 10, 3, 120);
+                pollInput.value = v;
+                CFG.pollInterval = v * 1000;
+            });
+        }
+        const infoInput = document.getElementById('dsp-info-sec');
+        if (infoInput) {
+            infoInput.addEventListener('change', () => {
+                const v = clamp(parseInt(infoInput.value) || 15, 5, 120);
+                infoInput.value = v;
+                CFG.infoPollInterval = v * 1000;
+            });
+        }
+
+        // Bind show/hide toggles
+        popup.querySelectorAll('.dsp-toggle input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const target = document.getElementById(cb.dataset.target);
+                if (target) target.style.display = cb.checked ? '' : 'none';
+            });
+        });
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', closeDisplaySettingsOnOutside);
+        }, 0);
+    }
+
+    function closeDisplaySettingsOnOutside(e) {
+        if (displaySettingsEl && !displaySettingsEl.contains(e.target)) {
+            closeDisplaySettingsPopup();
+        }
+    }
+
+    function closeDisplaySettingsPopup() {
+        if (displaySettingsEl) {
+            displaySettingsEl.remove();
+            displaySettingsEl = null;
+        }
+        document.removeEventListener('click', closeDisplaySettingsOnOutside);
+    }
+
     /** Store latest system stats for modal use */
     let lastSystemStats = null;
 
@@ -3376,7 +3489,7 @@
         }
     }
 
-    /** Open combined System Info modal — system stats + GeoDB + traffic + recent changes */
+    /** Open combined System Info modal — system stats + NET bar settings + display toggles + recent changes */
     function openSystemInfoModal() {
         const existing = document.getElementById('system-info-modal');
         if (existing) existing.remove();
@@ -3384,22 +3497,22 @@
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'system-info-modal';
-        overlay.innerHTML = `<div class="modal-box" style="max-width:520px"><div class="modal-header"><span class="modal-title">System Info</span><button class="modal-close" id="system-info-close">&times;</button></div><div class="modal-body" id="system-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        overlay.innerHTML = `<div class="modal-box" style="max-width:560px"><div class="modal-header"><span class="modal-title">System Info</span><button class="modal-close" id="system-info-close">&times;</button></div><div class="modal-body" id="system-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
         document.body.appendChild(overlay);
         document.getElementById('system-info-close').addEventListener('click', () => overlay.remove());
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
         const body = document.getElementById('system-info-body');
-        let html = '';
-
-        // ── Section 1: System Stats ──
-        html += '<div class="modal-section-title">System</div>';
         const stats = lastSystemStats || {};
         const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
         const memPct = stats.mem_pct != null ? Math.round(stats.mem_pct) : null;
         const memUsed = stats.mem_used_mb;
         const memTotal = stats.mem_total_mb;
+        let html = '';
 
+        // ── Section 1: System Overview ──
+        html += '<div class="modal-section-title">System</div>';
+        // CPU with bar
         html += '<div class="info-row"><span class="info-label">CPU</span>';
         if (cpuPct != null) {
             html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
@@ -3407,7 +3520,7 @@
             html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
-
+        // RAM with bar
         html += '<div class="info-row"><span class="info-label">RAM</span>';
         if (memPct != null) {
             const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
@@ -3416,65 +3529,109 @@
             html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
+        // Uptime
+        if (stats.uptime) {
+            html += `<div class="info-row"><span class="info-label">Uptime</span><span class="info-val">${stats.uptime}</span></div>`;
+        }
+        // Load average
+        if (stats.load_1 != null) {
+            html += `<div class="info-row"><span class="info-label">Load Avg</span><span class="info-val">${stats.load_1.toFixed(2)} / ${stats.load_5.toFixed(2)} / ${stats.load_15.toFixed(2)}</span></div>`;
+        }
+        // Disk usage
+        if (stats.disk_pct != null) {
+            const diskStr = `${stats.disk_pct}% (${stats.disk_used_gb} / ${stats.disk_total_gb} GB)`;
+            html += `<div class="info-row"><span class="info-label">Disk</span><span class="info-val info-bar-wrap"><span class="info-bar" style="width:${stats.disk_pct}%"></span><span class="info-bar-text">${diskStr}</span></span></div>`;
+        }
 
-        // Network traffic
+        // ── Section 2: Network Traffic ──
+        html += '<div class="modal-section-title">Network Traffic</div>';
         if (lastNetTraffic) {
             const rx = lastNetTraffic.rx_bps || 0;
             const tx = lastNetTraffic.tx_bps || 0;
-            const maxBps = Math.max(rx, tx, 1);
-            const rxPct = Math.min(100, (rx / maxBps) * 100);
-            const txPct = Math.min(100, (tx / maxBps) * 100);
-            html += `<div class="info-row"><span class="info-label">NET \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
-            html += `<div class="info-row"><span class="info-label">NET \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
-        }
-
-        // ── Section 2: MBCore DB ──
-        html += '<div class="modal-section-title">MBCore DB</div>';
-        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
-            const geoStats = lastNodeInfo.geo_db_stats;
-            const statusText = geoStats.status || 'unknown';
-            const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
-            html += `<div class="modal-row"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
-            if (geoStats.entries != null) html += `<div class="modal-row"><span class="modal-label">Entries</span><span class="modal-val">${geoStats.entries.toLocaleString()}</span></div>`;
-            if (geoStats.size_bytes != null) html += `<div class="modal-row"><span class="modal-label">Size</span><span class="modal-val">${(geoStats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
-            if (geoStats.oldest_age_days != null) html += `<div class="modal-row"><span class="modal-label">Oldest Entry</span><span class="modal-val">${geoStats.oldest_age_days} days</span></div>`;
-            if (geoStats.path) html += `<div class="modal-row"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:200px" title="${geoStats.path}">${geoStats.path}</span></div>`;
-            const alCls = geoStats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
-            html += `<div class="modal-row"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${geoStats.auto_lookup ? 'On' : 'Off'}</span></div>`;
-            const auCls = geoStats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
-            html += `<div class="modal-row"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${geoStats.auto_update ? 'On' : 'Off'}</span></div>`;
-            html += '<button class="geodb-update-btn" id="si-geodb-update-btn">Update Database</button>';
-            html += '<div class="geodb-result" id="si-geodb-result"></div>';
+            const curMaxIn = netBarMode === 'manual' ? netBarManualMaxIn : getAdaptiveMax(netHistoryIn);
+            const curMaxOut = netBarMode === 'manual' ? netBarManualMaxOut : getAdaptiveMax(netHistoryOut);
+            const rxPct = Math.min(100, (rx / curMaxIn) * 100);
+            const txPct = Math.min(100, (tx / curMaxOut) * 100);
+            html += `<div class="info-row"><span class="info-label">IN \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
+            html += `<div class="info-row"><span class="info-label">OUT \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
+            html += `<div class="info-row" style="margin-top:2px"><span class="info-label">Current Max</span><span class="info-val" style="font-size:10px;color:var(--text-muted)">IN: ${formatBps(curMaxIn)} \u00b7 OUT: ${formatBps(curMaxOut)}</span></div>`;
         } else {
-            html += '<div style="color:var(--text-muted);padding:4px 0">No GeoDB data available</div>';
+            html += '<div style="color:var(--text-muted);padding:4px 0">No traffic data yet</div>';
         }
 
-        // ── Section 3: Recent Changes ──
+        // ── Section 3: NET Bar Settings ──
+        html += '<div class="modal-section-title">NET Bar Scaling</div>';
+        const manualMaxInKB = Math.round(netBarManualMaxIn / 1024);
+        const manualMaxOutKB = Math.round(netBarManualMaxOut / 1024);
+        html += '<div class="si-net-mode">';
+        html += `<label class="si-radio"><input type="radio" name="si-netbar-mode" value="auto" ${netBarMode === 'auto' ? 'checked' : ''}><span class="si-radio-dot"></span><span class="si-radio-text"><span class="si-radio-label">Auto-detect</span><span class="si-radio-desc">Adapts to p90 of recent traffic (recommended)</span></span></label>`;
+        html += `<label class="si-radio"><input type="radio" name="si-netbar-mode" value="manual" ${netBarMode === 'manual' ? 'checked' : ''}><span class="si-radio-dot"></span><span class="si-radio-text"><span class="si-radio-label">Manual</span><span class="si-radio-desc">Set fixed max values for bar scaling</span></span></label>`;
+        html += '</div>';
+        html += `<div class="si-manual-fields" id="si-manual-fields" style="display:${netBarMode === 'manual' ? 'block' : 'none'}">`;
+        html += `<div class="info-row"><span class="info-label">Max IN</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="si-max-in" value="${manualMaxInKB}" min="1" max="999999"><span class="dsp-unit">KB/s</span></div></div>`;
+        html += `<div class="info-row"><span class="info-label">Max OUT</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="si-max-out" value="${manualMaxOutKB}" min="1" max="999999"><span class="dsp-unit">KB/s</span></div></div>`;
+        html += '</div>';
+
+        // ── Section 4: Dashboard Display ──
+        html += '<div class="modal-section-title">Dashboard Display</div>';
+        const dashItems = [
+            { id: 'mo-row-cpu', label: 'CPU' },
+            { id: 'mo-row-ram', label: 'RAM' },
+            { id: 'mo-row-netin', label: 'NET \u2193 (Download)' },
+            { id: 'mo-row-netout', label: 'NET \u2191 (Upload)' },
+        ];
+        dashItems.forEach(item => {
+            const el = document.getElementById(item.id);
+            const vis = el ? el.style.display !== 'none' : true;
+            html += `<div class="info-row"><span class="info-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" class="si-dash-toggle" data-target="${item.id}" ${vis ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
+        });
+
+        // ── Section 5: Recent Changes ──
         html += '<div class="modal-section-title">Recent Changes</div>';
         html += '<div id="si-changes-section" style="color:var(--text-muted);padding:4px 0">Loading...</div>';
 
         body.innerHTML = html;
 
-        // Bind GeoDB update button
-        const geodbBtn = document.getElementById('si-geodb-update-btn');
-        if (geodbBtn) {
-            geodbBtn.addEventListener('click', async () => {
-                const resultEl = document.getElementById('si-geodb-result');
-                resultEl.textContent = 'Updating...';
-                resultEl.style.color = 'var(--text-secondary)';
-                try {
-                    const resp = await fetch('/api/geodb/update', { method: 'POST' });
-                    const data = await resp.json();
-                    resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
-                    resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
-                } catch (err) {
-                    resultEl.textContent = 'Error: ' + err.message;
-                    resultEl.style.color = 'var(--err)';
-                }
+        // ── Bind NET bar mode radios ──
+        const modeRadios = body.querySelectorAll('input[name="si-netbar-mode"]');
+        const manualFields = document.getElementById('si-manual-fields');
+        modeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                netBarMode = radio.value;
+                if (manualFields) manualFields.style.display = netBarMode === 'manual' ? 'block' : 'none';
+                updateHandleTrafficBars();
+            });
+        });
+
+        // ── Bind manual max inputs ──
+        const maxInInput = document.getElementById('si-max-in');
+        const maxOutInput = document.getElementById('si-max-out');
+        if (maxInInput) {
+            maxInInput.addEventListener('change', () => {
+                const v = clamp(parseInt(maxInInput.value) || 100, 1, 999999);
+                maxInInput.value = v;
+                netBarManualMaxIn = v * 1024;
+                if (netBarMode === 'manual') updateHandleTrafficBars();
+            });
+        }
+        if (maxOutInput) {
+            maxOutInput.addEventListener('change', () => {
+                const v = clamp(parseInt(maxOutInput.value) || 100, 1, 999999);
+                maxOutInput.value = v;
+                netBarManualMaxOut = v * 1024;
+                if (netBarMode === 'manual') updateHandleTrafficBars();
             });
         }
 
-        // Fetch recent changes
+        // ── Bind dashboard display toggles ──
+        body.querySelectorAll('.si-dash-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const target = document.getElementById(cb.dataset.target);
+                if (target) target.style.display = cb.checked ? '' : 'none';
+            });
+        });
+
+        // ── Fetch recent changes ──
         fetch('/api/changes').then(r => r.json()).then(changes => {
             const section = document.getElementById('si-changes-section');
             if (!section) return;
@@ -3530,6 +3687,11 @@
 
     let lastNetTraffic = null;
 
+    // NET bar scaling mode: 'auto' uses p90 adaptive, 'manual' uses fixed max values
+    let netBarMode = 'auto';
+    let netBarManualMaxIn = 1024 * 1024;   // 1 MB/s default manual max for IN
+    let netBarManualMaxOut = 1024 * 1024;  // 1 MB/s default manual max for OUT
+
     async function fetchNetSpeed() {
         try {
             const resp = await fetch('/api/netspeed');
@@ -3554,20 +3716,20 @@
         return Math.max(p90 * 1.2, 10 * 1024);
     }
 
-    /** Update the traffic bars in the right overlay */
+    /** Update the traffic bars in the left overlay */
     function updateHandleTrafficBars() {
         if (!lastNetTraffic) return;
         const rx = lastNetTraffic.rx_bps || 0;
         const tx = lastNetTraffic.tx_bps || 0;
 
-        // Push to history for adaptive scaling (like original dashboard)
+        // Push to history for adaptive scaling
         netHistoryIn.push(rx);
         netHistoryOut.push(tx);
         if (netHistoryIn.length > NET_HISTORY_SIZE) netHistoryIn.shift();
         if (netHistoryOut.length > NET_HISTORY_SIZE) netHistoryOut.shift();
 
-        const maxIn = getAdaptiveMax(netHistoryIn);
-        const maxOut = getAdaptiveMax(netHistoryOut);
+        const maxIn = netBarMode === 'manual' ? netBarManualMaxIn : getAdaptiveMax(netHistoryIn);
+        const maxOut = netBarMode === 'manual' ? netBarManualMaxOut : getAdaptiveMax(netHistoryOut);
 
         const rxPct = Math.min(100, (rx / maxIn) * 100);
         const txPct = Math.min(100, (tx / maxOut) * 100);

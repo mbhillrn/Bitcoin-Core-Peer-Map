@@ -401,7 +401,7 @@ html, body {
 .row-highlight-anim td { animation: row-highlight-flash 1.5s ease-out; }
 
 /* ==========================================================
-   6. MAP OVERLAY — text-only, no panel background
+   6. MAP OVERLAY — left side: peers + system stats
    ========================================================== */
 .map-overlay {
     position: fixed;
@@ -417,26 +417,29 @@ html, body {
 
 .mo-row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
 }
+.mo-sys-row {
+    pointer-events: auto;
+    cursor: pointer;
+}
+.mo-sys-row:hover .mo-value { color: var(--accent); }
 .mo-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 1.2px;
     color: var(--text-muted);
     text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    font-weight: 600;
 }
 .mo-value {
     font-size: 14px;
     font-weight: 700;
     color: var(--text-primary);
     text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
-}
-.mo-value-big {
-    font-size: 24px;
-    font-weight: 700;
-    text-shadow: 0 1px 8px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.7);
+    font-family: var(--font-data);
+    transition: color var(--transition);
 }
 .mo-status-msg {
     font-size: 11px;
@@ -448,35 +451,25 @@ html, body {
     color: var(--ok);
 }
 
-/* Clickable link items in map overlay */
-.mo-link-row {
-    pointer-events: auto;
-}
-.mo-link {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--accent);
-    cursor: pointer;
-    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
-    transition: color var(--transition), text-shadow var(--transition);
-    letter-spacing: 0.3px;
-}
-.mo-link:hover {
-    color: #7dbeff;
-    text-shadow: 0 0 10px rgba(88,166,255,0.4), 0 1px 6px rgba(0,0,0,0.9);
-}
-
-/* BTC price in left overlay */
-.mo-btc-row {
-    margin-top: 4px;
-    pointer-events: auto;
-}
-.mo-btc {
+/* ==========================================================
+   6a. BTC PRICE BAR — centered below flight deck
+   ========================================================== */
+.btc-price-bar {
+    position: fixed;
+    top: 78px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 85;
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    cursor: default;
+    pointer-events: auto;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 8px;
+    transition: opacity 0.3s ease;
 }
+.btc-price-bar:hover { opacity: 0.85; }
 .mo-btc-symbol {
     font-size: 22px;
     font-weight: 700;
@@ -519,7 +512,7 @@ html, body {
 }
 
 /* ==========================================================
-   6b. RIGHT OVERLAY — system stats panel (no background)
+   6b. RIGHT OVERLAY — update status, node info, db
    ========================================================== */
 .right-overlay {
     position: fixed;
@@ -537,6 +530,8 @@ html, body {
     display: flex;
     align-items: center;
     gap: 8px;
+    pointer-events: auto;
+    cursor: pointer;
 }
 .ro-label {
     font-size: 11px;
@@ -553,6 +548,25 @@ html, body {
     text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
     font-family: var(--font-data);
 }
+.ro-status-msg {
+    font-size: 11px;
+    color: var(--warn);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    transition: color var(--transition);
+}
+.ro-status-msg.loaded { color: var(--ok); }
+.ro-link-blue {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    pointer-events: auto;
+    cursor: pointer;
+    transition: color var(--transition);
+}
+.ro-link-blue:hover { color: #7dbeff; }
 .ro-traffic-row {
     gap: 6px;
 }
@@ -800,9 +814,10 @@ html, body {
 .handle-title {
     font-size: 15px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    font-family: var(--font-display);
     flex-shrink: 0;
 }
 
@@ -1272,6 +1287,177 @@ html, body {
     white-space: nowrap;
     min-width: 55px;
     text-align: right;
+}
+
+/* ==========================================================
+   14b. DISPLAY SETTINGS POPUP
+   ========================================================== */
+.display-settings-popup {
+    position: fixed;
+    z-index: 250;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    min-width: 220px;
+    max-width: 280px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.dsp-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.dsp-section {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent);
+    margin-top: 10px;
+    margin-bottom: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(88, 166, 255, 0.06);
+}
+.dsp-section:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+.dsp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    gap: 8px;
+}
+.dsp-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.dsp-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.dsp-input {
+    width: 48px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-family: var(--font-data);
+    background: var(--bg-deep);
+    border: 1px solid rgba(88, 166, 255, 0.15);
+    border-radius: 3px;
+    color: var(--text-primary);
+    text-align: center;
+}
+.dsp-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.dsp-unit {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+/* Toggle switch */
+.dsp-toggle {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 16px;
+    cursor: pointer;
+}
+.dsp-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+.dsp-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+.dsp-toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    left: 2px;
+    bottom: 2px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+.dsp-toggle input:checked + .dsp-toggle-slider {
+    background: rgba(88, 166, 255, 0.3);
+}
+.dsp-toggle input:checked + .dsp-toggle-slider::before {
+    transform: translateX(16px);
+    background: var(--accent);
+}
+
+/* ==========================================================
+   14c. SYSTEM INFO MODAL — Radio & Manual NET fields
+   ========================================================== */
+.si-net-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 2px 0;
+}
+.si-radio {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+.si-radio input { opacity: 0; width: 0; height: 0; position: absolute; }
+.si-radio-dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(88, 166, 255, 0.3);
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: border-color 0.2s;
+    position: relative;
+}
+.si-radio-dot::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    background: var(--accent);
+    transition: transform 0.2s;
+}
+.si-radio input:checked ~ .si-radio-dot {
+    border-color: var(--accent);
+}
+.si-radio input:checked ~ .si-radio-dot::after {
+    transform: translate(-50%, -50%) scale(1);
+}
+.si-radio-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.si-radio-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1;
+}
+.si-radio-desc {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+.si-manual-fields {
+    padding: 4px 0 2px 22px;
 }
 
 /* ==========================================================

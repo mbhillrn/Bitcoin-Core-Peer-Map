@@ -52,38 +52,37 @@
         </div>
     </div>
 
-    <!-- Left map overlay — node info panel (no background) -->
-    <div id="map-overlay" class="map-overlay">
-        <div class="mo-row"><span class="mo-label">Peers</span> <span class="mo-value mo-value-big" id="mo-peers" title="Total Connected Peers">0</span></div>
-        <div class="mo-row"><span class="mo-label">Node Status</span> <span class="mo-value" id="mo-status" title="Node sync status">&mdash;</span></div>
-        <div class="mo-row"><span class="mo-label">Update in</span> <span class="mo-value" id="mo-countdown">&mdash;</span></div>
-        <div class="mo-row"><span class="mo-status-msg" id="mo-status-msg">Loading...</span></div>
-        <div class="mo-row mo-link-row"><span class="mo-link" id="mo-node-info" title="Click here for node information">Node Info</span></div>
-        <div class="mo-row mo-btc-row">
-            <span class="mo-btc" id="mo-btc" title="Bitcoin price — updates automatically">
-                <span class="mo-btc-symbol" id="mo-btc-symbol">&#x20bf;</span>
-                <span class="mo-btc-price" id="mo-btc-price">&mdash;</span>
-                <span class="mo-btc-arrow" id="mo-btc-arrow"></span>
-                <span class="mo-btc-currency" id="mo-btc-currency" title="Click to change currency">USD</span>
-            </span>
-        </div>
+    <!-- BTC price — centered below flight deck -->
+    <div id="btc-price-bar" class="btc-price-bar" title="Bitcoin price — click to change currency">
+        <span class="mo-btc-symbol" id="mo-btc-symbol">&#x20bf;</span>
+        <span class="mo-btc-price" id="mo-btc-price">&mdash;</span>
+        <span class="mo-btc-arrow" id="mo-btc-arrow"></span>
+        <span class="mo-btc-currency" id="mo-btc-currency">USD</span>
     </div>
 
-    <!-- Right map overlay — system stats panel (no background) -->
-    <div id="right-overlay" class="right-overlay">
-        <div class="ro-row"><span class="ro-label">CPU</span> <span class="ro-value" id="ro-cpu" title="Host CPU utilization">&mdash;</span></div>
-        <div class="ro-row"><span class="ro-label">RAM</span> <span class="ro-value" id="ro-ram" title="System memory usage">&mdash;</span></div>
-        <div class="ro-row ro-traffic-row">
-            <span class="ro-label">NET &#8595;</span>
+    <!-- Left map overlay — peers + system stats -->
+    <div id="map-overlay" class="map-overlay">
+        <div class="mo-row mo-sys-row" id="mo-row-peers"><span class="mo-label">Peers</span> <span class="mo-value" id="mo-peers" title="Total connected peers">0</span></div>
+        <div class="mo-row mo-sys-row" id="mo-row-cpu" title="CPU utilization — click for system details"><span class="mo-label">CPU</span> <span class="mo-value" id="ro-cpu">&mdash;</span></div>
+        <div class="mo-row mo-sys-row" id="mo-row-ram" title="Memory usage — click for system details"><span class="mo-label">RAM</span> <span class="mo-value" id="ro-ram">&mdash;</span></div>
+        <div class="mo-row mo-sys-row ro-traffic-row" id="mo-row-netin" title="Network download — click for system details">
+            <span class="mo-label">NET &#8595;</span>
             <span class="ro-bar-bg"><span class="ro-bar ro-bar-in" id="ro-bar-in"></span></span>
             <span class="ro-rate" id="ro-rate-in">&mdash;</span>
         </div>
-        <div class="ro-row ro-traffic-row">
-            <span class="ro-label">NET &#8593;</span>
+        <div class="mo-row mo-sys-row ro-traffic-row" id="mo-row-netout" title="Network upload — click for system details">
+            <span class="mo-label">NET &#8593;</span>
             <span class="ro-bar-bg"><span class="ro-bar ro-bar-out" id="ro-bar-out"></span></span>
             <span class="ro-rate" id="ro-rate-out">&mdash;</span>
         </div>
-        <div class="ro-row"><span class="ro-link" id="ro-geodb-link" title="Click here for MBCore DB info and update">MBCore DB <span class="ro-geodb-count" id="ro-geodb-count">&mdash;</span></span></div>
+    </div>
+
+    <!-- Right map overlay — update status + node info + db -->
+    <div id="right-overlay" class="right-overlay">
+        <div class="ro-row" id="ro-row-countdown" title="Time until next peer data refresh"><span class="ro-label">Update in</span> <span class="ro-value" id="mo-countdown">&mdash;</span></div>
+        <div class="ro-row" id="ro-row-statusmsg" title="Peer geolocation progress"><span class="ro-status-msg" id="mo-status-msg">Loading...</span></div>
+        <div class="ro-row" id="ro-row-nodestatus"><span class="ro-link-blue" id="ro-node-info" title="Click to view detailed node information">NODE INFO</span> <span class="ro-value" id="mo-status">&mdash;</span></div>
+        <div class="ro-row" id="ro-row-geodb"><span class="ro-link-blue" id="ro-geodb-link" title="Click for MBCore DB info and update">MBCORE DB</span> <span class="ro-value" id="ro-geodb-count">&mdash;</span></div>
     </div>
 
     <!-- Map controls — bottom-right, above peer panel -->
@@ -116,7 +115,7 @@
     <div id="peer-panel" class="peer-panel">
         <div id="peer-panel-handle" class="peer-panel-handle">
             <div class="handle-row1">
-                <span class="handle-title">Peer List</span>
+                <span class="handle-title">PEER LIST</span>
                 <div class="handle-nets">
                     <span class="net-badge net-all active" data-net="all" title="Click to show all peers">All <span class="badge-count" id="bc-all">0</span></span>
                     <span class="net-badge net-ipv4" data-net="ipv4" title="Click to filter by IPv4">IPv4 <span class="badge-count" id="bc-ipv4">0</span></span>
