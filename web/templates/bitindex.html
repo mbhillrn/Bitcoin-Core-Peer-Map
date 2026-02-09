@@ -15,20 +15,13 @@
             <span class="version">v5.3</span>
         </div>
         <div class="topbar-right">
-            <span class="topbar-btc" id="topbar-btc" title="Bitcoin price — updates automatically">
-                <span class="topbar-btc-symbol" id="topbar-btc-symbol">&#x20bf;</span>
-                <span class="topbar-btc-price" id="topbar-btc-price">&mdash;</span>
-                <span class="topbar-btc-arrow" id="topbar-btc-arrow"></span>
-                <span class="topbar-btc-currency" id="topbar-btc-currency" title="Click to change currency">USD</span>
-            </span>
-            <span class="topbar-sep">|</span>
             <span id="clock" class="topbar-clock" title="Current local time"></span>
             <span class="status-dot" id="status-dot" title="Connection status"></span>
             <span class="status-text" id="status-text">Offline</span>
         </div>
     </header>
 
-    <!-- Frosted glass flight deck -->
+    <!-- Network stats overlay — transparent panel centered at top of map -->
     <div id="flight-deck" class="flight-deck">
         <div class="fd-toggle" id="fd-toggle" title="Toggle network stats">&#9662;</div>
         <div class="fd-content" id="fd-content">
@@ -62,12 +55,45 @@
         </div>
     </div>
 
-    <!-- Map text overlay (top-left, no visible panel) -->
+    <!-- Left map overlay — node info panel (no background) -->
     <div id="map-overlay" class="map-overlay">
         <div class="mo-row"><span class="mo-label">Peers</span> <span class="mo-value mo-value-big" id="mo-peers" title="Total Connected Peers">0</span></div>
-        <div class="mo-row"><span class="mo-label">Status</span> <span class="mo-value" id="mo-status" title="Node sync status">&mdash;</span></div>
+        <div class="mo-row"><span class="mo-label">Node Status</span> <span class="mo-value" id="mo-status" title="Node sync status">&mdash;</span></div>
         <div class="mo-row"><span class="mo-label">Update in</span> <span class="mo-value" id="mo-countdown">&mdash;</span></div>
         <div class="mo-row"><span class="mo-status-msg" id="mo-status-msg">Loading...</span></div>
+        <div class="mo-row mo-link-row"><span class="mo-link" id="mo-node-info" title="Click here for node information">Node Info</span></div>
+        <div class="mo-row mo-link-row"><span class="mo-link" id="mo-mempool-info" title="Click here for mempool information">Mempool Info</span></div>
+        <div class="mo-row mo-link-row"><span class="mo-link" id="mo-blockchain-info" title="Click here for blockchain information">Blockchain Info</span></div>
+        <div class="mo-row mo-btc-row">
+            <span class="mo-btc" id="mo-btc" title="Bitcoin price — updates automatically">
+                <span class="mo-btc-symbol" id="mo-btc-symbol">&#x20bf;</span>
+                <span class="mo-btc-price" id="mo-btc-price">&mdash;</span>
+                <span class="mo-btc-arrow" id="mo-btc-arrow"></span>
+                <span class="mo-btc-currency" id="mo-btc-currency" title="Click to change currency">USD</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Right map overlay — system stats panel (no background) -->
+    <div id="right-overlay" class="right-overlay">
+        <div class="ro-row"><span class="ro-label">CPU</span> <span class="ro-value" id="ro-cpu" title="Host CPU utilization">&mdash;</span></div>
+        <div class="ro-row"><span class="ro-label">RAM</span> <span class="ro-value" id="ro-ram" title="System memory usage">&mdash;</span></div>
+        <div class="ro-row ro-traffic-row">
+            <span class="ro-label">NET &#8595;</span>
+            <span class="ro-bar-bg"><span class="ro-bar ro-bar-in" id="ro-bar-in"></span></span>
+            <span class="ro-rate" id="ro-rate-in">&mdash;</span>
+        </div>
+        <div class="ro-row ro-traffic-row">
+            <span class="ro-label">NET &#8593;</span>
+            <span class="ro-bar-bg"><span class="ro-bar ro-bar-out" id="ro-bar-out"></span></span>
+            <span class="ro-rate" id="ro-rate-out">&mdash;</span>
+        </div>
+        <div class="ro-row"><span class="ro-link" id="ro-geodb-link" title="Click here for MBCore DB info and update">MBCore DB <span class="ro-geodb-count" id="ro-geodb-count">&mdash;</span></span></div>
+        <div class="ro-controls" id="ro-controls">
+            <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
+            <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
+            <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
+        </div>
     </div>
 
     <!-- Net popover -->
@@ -83,13 +109,6 @@
     <!-- Full-screen canvas map -->
     <canvas id="worldmap"></canvas>
 
-    <!-- Zoom controls -->
-    <div id="zoom-controls">
-        <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
-        <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
-        <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
-    </div>
-
     <!-- Tooltip for hovering over map nodes -->
     <div id="node-tooltip" class="tooltip hidden"></div>
 
@@ -99,35 +118,18 @@
             <div class="handle-row1">
                 <span class="handle-title">Peer List</span>
                 <div class="handle-nets">
-                    <span class="net-badge net-all active" data-net="all" title="Click to show all peers">All</span>
-                    <span class="net-badge net-ipv4" data-net="ipv4" title="Click to filter by IPv4">IPv4</span>
-                    <span class="net-badge net-ipv6" data-net="ipv6" title="Click to filter by IPv6">IPv6</span>
-                    <span class="net-badge net-tor" data-net="onion" title="Click to filter by Tor/Onion">Tor</span>
-                    <span class="net-badge net-i2p" data-net="i2p" title="Click to filter by I2P">I2P</span>
-                    <span class="net-badge net-cjdns" data-net="cjdns" title="Click to filter by CJDNS">CJDNS</span>
+                    <span class="net-badge net-all active" data-net="all" title="Click to show all peers">All <span class="badge-count" id="bc-all">0</span></span>
+                    <span class="net-badge net-ipv4" data-net="ipv4" title="Click to filter by IPv4">IPv4 <span class="badge-count" id="bc-ipv4">0</span></span>
+                    <span class="net-badge net-ipv6" data-net="ipv6" title="Click to filter by IPv6">IPv6 <span class="badge-count" id="bc-ipv6">0</span></span>
+                    <span class="net-badge net-tor" data-net="onion" title="Click to filter by Tor/Onion">Tor <span class="badge-count" id="bc-tor">0</span></span>
+                    <span class="net-badge net-i2p" data-net="i2p" title="Click to filter by I2P">I2P <span class="badge-count" id="bc-i2p">0</span></span>
+                    <span class="net-badge net-cjdns" data-net="cjdns" title="Click to filter by CJDNS">CJDNS <span class="badge-count" id="bc-cjdns">0</span></span>
                 </div>
                 <div class="handle-spacer"></div>
-                <button class="handle-btn handle-btn-accent" id="btn-node-info" title="View node, mempool, and blockchain info">Node Info</button>
-                <button class="handle-btn handle-btn-accent" id="btn-system-info" title="View system stats and MBCore DB info">System Info</button>
                 <button class="handle-btn handle-btn-green" id="btn-connect-peer" title="Connect to a peer">Connect Peer</button>
-                <button class="handle-btn handle-btn-warn" id="btn-bans" title="View and manage banned IPs">Ban Options</button>
-                <div class="handle-traffic" title="Real-time network throughput (all interfaces)">
-                    <div class="handle-traffic-row"><span class="ht-label">Net &#8595;</span><span class="ht-bar-bg"><span class="ht-bar ht-bar-in" id="ht-bar-in"></span></span><span class="ht-rate" id="ht-rate-in">&mdash;</span></div>
-                    <div class="handle-traffic-row"><span class="ht-label">Net &#8593;</span><span class="ht-bar-bg"><span class="ht-bar ht-bar-out" id="ht-bar-out"></span></span><span class="ht-rate" id="ht-rate-out">&mdash;</span></div>
-                </div>
+                <button class="handle-btn handle-btn-warn" id="btn-bans" title="View and manage banned peers">Banned Peers</button>
                 <button class="handle-btn handle-btn-dim" id="btn-autofit" title="Toggle auto-fit columns">Auto-fit</button>
-                <button class="handle-btn handle-btn-dim" id="btn-minimize" title="Minimize peer list">&#9660;</button>
-            </div>
-            <div class="handle-row2" id="handle-row2">
-                <span class="handle-title-spacer"></span>
-                <div class="handle-counts">
-                    <span class="hc-count hc-all" id="hc-all">0</span>
-                    <span class="hc-count hc-ipv4" id="hc-ipv4">0</span>
-                    <span class="hc-count hc-ipv6" id="hc-ipv6">0</span>
-                    <span class="hc-count hc-tor" id="hc-tor">0</span>
-                    <span class="hc-count hc-i2p" id="hc-i2p">0</span>
-                    <span class="hc-count hc-cjdns" id="hc-cjdns">0</span>
-                </div>
+                <button class="handle-btn handle-btn-dim" id="btn-minimize" title="Toggle peer list table">Hide Table &#9660;</button>
             </div>
         </div>
         <div class="peer-panel-body">
@@ -142,9 +144,8 @@
 
     <!-- Footer -->
     <footer id="footer" class="footer">
-        <span class="footer-author">Created by <a class="footer-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" title="Visit mbhillrn MBCore repository: GitHub">@mbhillrn</a></span>
-        <span class="footer-sep">|</span>
         <span class="footer-btc" id="footer-btc" title="Click to copy BTC address to clipboard">Support (btc): <span class="footer-btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
+        <span class="footer-author">Created by <a class="footer-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" title="Visit mbhillrn MBCore repository: GitHub">@mbhillrn</a></span>
     </footer>
 
     <script src="/static/js/bitapp.js"></script>
