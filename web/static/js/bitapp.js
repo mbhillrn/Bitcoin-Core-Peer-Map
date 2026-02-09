@@ -707,14 +707,18 @@
     // CONNECT PEER MODAL
     // ═══════════════════════════════════════════════════════════
 
+    // Cache the CLI base command from backend (fetched once)
+    let cliBaseCommand = 'bitcoin-cli';
+
     function openConnectPeerModal() {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'connect-peer-modal';
-        overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
+        const defaultCmd = `${cliBaseCommand} addnode <address> add`;
+        overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
             <div class="modal-header"><span class="modal-title">Connect Peer</span><button class="modal-close" id="connect-close">&times;</button></div>
             <div class="modal-body">
-                <div class="connect-instructions">Enter a peer address to connect. Bitcoin Core will attempt a one-time connection.</div>
+                <div class="connect-instructions">Enter a peer address to connect. Bitcoin Core will attempt a one-time (onetry) connection.</div>
                 <div class="connect-example">IPv4: 1.2.3.4:8333</div>
                 <div class="connect-example">IPv6: [2001:db8::1]:8333</div>
                 <div class="connect-example">Tor: abc...xyz.onion:8333</div>
@@ -725,7 +729,7 @@
                     <button class="connect-btn" id="connect-go-btn">Connect</button>
                 </div>
                 <div class="connect-result" id="connect-result"></div>
-                <div class="connect-cli-hint">For a permanent connection, use:<div class="connect-cli-cmd" id="connect-cli-cmd"><span>bitcoin-cli addnode &lt;address&gt; add</span><button class="connect-copy-btn" id="connect-copy-cli">Copy</button></div></div>
+                <div class="connect-cli-hint">For a permanent connection, use:<div class="connect-cli-cmd" id="connect-cli-cmd"><span>${defaultCmd}</span><span class="connect-copy-note">(copy and paste to terminal)</span></div></div>
             </div>
         </div>`;
         document.body.appendChild(overlay);
@@ -736,7 +740,20 @@
         const goBtn = document.getElementById('connect-go-btn');
         const resultEl = document.getElementById('connect-result');
         const cliCmd = document.getElementById('connect-cli-cmd');
-        const copyBtn = document.getElementById('connect-copy-cli');
+
+        // Fetch actual CLI base command from backend
+        fetch('/api/cli-info').then(r => r.json()).then(data => {
+            if (data.base_command) {
+                cliBaseCommand = data.base_command;
+                const cmdSpan = cliCmd.querySelector('span');
+                const addr = input.value.trim();
+                if (cmdSpan) {
+                    cmdSpan.textContent = addr
+                        ? `${cliBaseCommand} addnode "${addr}" add`
+                        : `${cliBaseCommand} addnode <address> add`;
+                }
+            }
+        }).catch(() => {});
 
         goBtn.addEventListener('click', async () => {
             const addr = input.value.trim();
@@ -749,7 +766,7 @@
                 if (data.success) {
                     resultEl.textContent = `Connection attempt sent to ${data.address}`;
                     resultEl.className = 'connect-result ok';
-                    cliCmd.querySelector('span').textContent = `bitcoin-cli addnode "${data.address}" add`;
+                    cliCmd.querySelector('span').textContent = `${cliBaseCommand} addnode "${data.address}" add`;
                     setTimeout(fetchPeers, 2000);
                 } else {
                     resultEl.textContent = data.error || 'Failed';
@@ -769,20 +786,10 @@
             const cmdSpan = cliCmd.querySelector('span');
             if (cmdSpan) {
                 cmdSpan.textContent = addr
-                    ? `bitcoin-cli addnode "${addr}" add`
-                    : 'bitcoin-cli addnode <address> add';
+                    ? `${cliBaseCommand} addnode "${addr}" add`
+                    : `${cliBaseCommand} addnode <address> add`;
             }
         });
-
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                const txt = cliCmd.querySelector('span').textContent;
-                navigator.clipboard.writeText(txt).then(() => {
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
-                });
-            });
-        }
     }
 
     // Connect Peer button handler
@@ -2470,13 +2477,12 @@
     // ── Named event handlers (for reattachment after ban list close) ──
 
     let resizingColumn = false;  // suppress sort click when resize drag occurred
+    let draggingColumn = false;  // suppress sort click when column reorder drag occurred
 
     function handleTheadClick(e) {
-        // Suppress sort if this click followed a column resize drag
-        if (resizingColumn) {
-            resizingColumn = false;
-            return;
-        }
+        // Suppress sort if this click followed a column resize or reorder drag
+        if (resizingColumn) { resizingColumn = false; return; }
+        if (draggingColumn) { draggingColumn = false; return; }
         // Ignore clicks on resize handles
         if (e.target.closest('.th-resize')) return;
         const th = e.target.closest('th[data-sort]');
@@ -2537,6 +2543,80 @@
         window.addEventListener('mouseup', onUp);
     }
 
+    // ── Column drag-to-reorder ──
+    let colDragState = null;
+    let colDragIndicator = null;
+
+    function handleTheadDragStart(e) {
+        // Only start column drag on th text area (not resize handle)
+        if (e.target.closest('.th-resize')) return;
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+
+        const key = th.dataset.sort;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const thRect = th.getBoundingClientRect();
+        let moved = false;
+
+        const onMove = (me) => {
+            const dx = me.clientX - startX;
+            const dy = me.clientY - startY;
+            // Only activate drag after 10px horizontal movement
+            if (!moved && Math.abs(dx) < 10) return;
+            if (!moved) {
+                moved = true;
+                draggingColumn = true;
+                // Create floating indicator
+                colDragIndicator = document.createElement('div');
+                colDragIndicator.className = 'col-drag-indicator';
+                colDragIndicator.textContent = th.querySelector('.th-text') ? th.querySelector('.th-text').textContent.trim() : key;
+                colDragIndicator.style.width = thRect.width + 'px';
+                document.body.appendChild(colDragIndicator);
+            }
+            if (colDragIndicator) {
+                colDragIndicator.style.left = (me.clientX - thRect.width / 2) + 'px';
+                colDragIndicator.style.top = (thRect.top - 2) + 'px';
+            }
+            // Highlight drop target
+            const allThs = Array.from(theadEl.querySelectorAll('th[data-sort]'));
+            allThs.forEach(t => t.classList.remove('col-drag-over'));
+            const targetTh = document.elementFromPoint(me.clientX, thRect.top + thRect.height / 2);
+            const dropTh = targetTh ? targetTh.closest('th[data-sort]') : null;
+            if (dropTh && dropTh !== th) dropTh.classList.add('col-drag-over');
+        };
+
+        const onUp = (me) => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            if (colDragIndicator) { colDragIndicator.remove(); colDragIndicator = null; }
+            // Clean up highlight
+            theadEl.querySelectorAll('.col-drag-over').forEach(t => t.classList.remove('col-drag-over'));
+
+            if (!moved) return;
+            // Find drop target
+            const targetEl = document.elementFromPoint(me.clientX, thRect.top + thRect.height / 2);
+            const dropTh = targetEl ? targetEl.closest('th[data-sort]') : null;
+            if (dropTh && dropTh.dataset.sort !== key) {
+                const fromIdx = visibleColumns.indexOf(key);
+                const toIdx = visibleColumns.indexOf(dropTh.dataset.sort);
+                if (fromIdx !== -1 && toIdx !== -1) {
+                    // Move column in visibleColumns array
+                    visibleColumns.splice(fromIdx, 1);
+                    visibleColumns.splice(toIdx, 0, key);
+                    renderColgroup();
+                    renderPeerTableHead();
+                    renderPeerTable();
+                }
+            }
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }
+
+    theadEl.addEventListener('mousedown', handleTheadDragStart);
+
     // Sort on column header click
     theadEl.addEventListener('click', handleTheadClick);
     // Column resize via drag on th-resize handles
@@ -2559,7 +2639,7 @@
     // ── Table Settings gear popup (column toggles + transparency) ──
     const tableSettingsBtn = document.getElementById('btn-table-settings');
     let tableSettingsEl = null;
-    let panelOpacity = 60; // default percentage (0 = invisible, 100 = opaque)
+    let panelOpacity = 0; // default percentage (0 = invisible, 100 = opaque)
 
     if (tableSettingsBtn) {
         tableSettingsBtn.addEventListener('click', (e) => {

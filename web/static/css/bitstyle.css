@@ -788,7 +788,7 @@ html, body {
 .peer-panel-handle {
     display: flex;
     flex-direction: column;
-    background: rgba(10, 14, 20, 0.60);
+    background: rgba(10, 14, 20, 0);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid rgba(88, 166, 255, 0.12);
@@ -796,7 +796,7 @@ html, body {
     user-select: none;
     flex-shrink: 0;
 }
-.peer-panel-handle:hover { background: rgba(17, 24, 32, 0.80); }
+.peer-panel-handle:hover { background: rgba(17, 24, 32, 0.08); }
 
 /* Row 1: title + filters + buttons + traffic + autofit + minimize */
 .handle-row1 {
@@ -1088,7 +1088,7 @@ html, body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: rgba(10, 14, 20, 0.62);
+    background: rgba(10, 14, 20, 0);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
@@ -1129,6 +1129,25 @@ html, body {
     cursor: col-resize; z-index: 3;
 }
 .peer-table th .th-resize:hover { background: rgba(88, 166, 255, 0.2); }
+/* Column drag-to-reorder */
+.peer-table th.col-drag-over { background: rgba(88, 166, 255, 0.15); }
+.col-drag-indicator {
+    position: fixed;
+    z-index: 500;
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    background: rgba(10, 14, 20, 0.9);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    pointer-events: none;
+    white-space: nowrap;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
 
 .peer-table td {
     padding: 3px 8px;
@@ -1633,6 +1652,13 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+.connect-copy-note {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-left: 8px;
+    white-space: nowrap;
 }
 .connect-copy-btn {
     background: none;
