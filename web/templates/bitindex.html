@@ -5,156 +5,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M₿Core Dashboard</title>
     <link rel="stylesheet" href="/static/css/bitstyle.css">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Top bar -->
     <header id="topbar">
         <div class="topbar-left">
-            <span class="logo"><span class="logo-m">M</span><span class="logo-b">₿</span><span class="logo-core">Core</span> <span class="logo-dash">Dashboard</span></span>
+            <span class="logo" title="Peer info, map, and tools for Bitcoin Core"><span class="logo-m">M</span><span class="logo-b">&#x20bf;</span><span class="logo-core">Core</span> <span class="logo-dash">Dashboard</span></span>
             <span class="version">v5.3</span>
         </div>
-        <div class="topbar-center">
-            <a class="author-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener">Created by @mbhillrn</a>
-            <span class="btc-support" id="btc-support" title="Click to copy BTC address">Support (btc): <span class="btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
-        </div>
         <div class="topbar-right">
-            <span id="clock" class="topbar-clock"></span>
-            <span class="status-dot" id="status-dot"></span>
+            <span class="topbar-btc" id="topbar-btc" title="Bitcoin price — updates automatically">
+                <span class="topbar-btc-symbol" id="topbar-btc-symbol">&#x20bf;</span>
+                <span class="topbar-btc-price" id="topbar-btc-price">&mdash;</span>
+                <span class="topbar-btc-arrow" id="topbar-btc-arrow"></span>
+                <span class="topbar-btc-currency" id="topbar-btc-currency" title="Click to change currency">USD</span>
+            </span>
+            <span class="topbar-sep">|</span>
+            <span id="clock" class="topbar-clock" title="Current local time"></span>
+            <span class="status-dot" id="status-dot" title="Connection status"></span>
             <span class="status-text" id="status-text">Offline</span>
         </div>
     </header>
 
-    <!-- Frosted glass flight deck — network stats strip below header -->
+    <!-- Frosted glass flight deck -->
     <div id="flight-deck" class="flight-deck">
         <div class="fd-toggle" id="fd-toggle" title="Toggle network stats">&#9662;</div>
         <div class="fd-content" id="fd-content">
-            <div class="fd-net-chip" data-net="ipv4">
+            <div class="fd-net-chip" data-net="ipv4" title="Public IPv4 network">
                 <span class="fd-net-name" style="color:var(--net-ipv4)">IPv4</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
-                <span class="fd-net-score">Score: <span id="fd-ipv4-score">&mdash;</span></span>
-                <span class="fd-net-status" id="fd-ipv4-status" title="IPv4 network status"></span>
+                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
+                <span class="fd-net-score" title="Bitcoin Core local network score">Score: <span id="fd-ipv4-score">&mdash;</span></span>
+                <span class="fd-net-status" id="fd-ipv4-status"></span>
             </div>
-            <div class="fd-net-chip" data-net="ipv6">
+            <div class="fd-net-chip" data-net="ipv6" title="Public IPv6 network">
                 <span class="fd-net-name" style="color:var(--net-ipv6)">IPv6</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
-                <span class="fd-net-score">Score: <span id="fd-ipv6-score">&mdash;</span></span>
-                <span class="fd-net-status" id="fd-ipv6-status" title="IPv6 network status"></span>
+                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
+                <span class="fd-net-score" title="Bitcoin Core local network score">Score: <span id="fd-ipv6-score">&mdash;</span></span>
+                <span class="fd-net-status" id="fd-ipv6-status"></span>
             </div>
-            <div class="fd-net-chip" data-net="onion">
+            <div class="fd-net-chip" data-net="onion" title="Tor onion routing network">
                 <span class="fd-net-name" style="color:var(--net-tor)">Tor</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
-                <span class="fd-net-status" id="fd-tor-status" title="Tor network status"></span>
+                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
+                <span class="fd-net-status" id="fd-tor-status"></span>
             </div>
-            <div class="fd-net-chip" data-net="i2p">
+            <div class="fd-net-chip" data-net="i2p" title="I2P anonymous network">
                 <span class="fd-net-name" style="color:var(--net-i2p)">I2P</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
-                <span class="fd-net-status" id="fd-i2p-status" title="I2P network status"></span>
+                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
+                <span class="fd-net-status" id="fd-i2p-status"></span>
             </div>
-            <div class="fd-net-chip" data-net="cjdns">
+            <div class="fd-net-chip" data-net="cjdns" title="CJDNS encrypted mesh network">
                 <span class="fd-net-name" style="color:var(--net-cjdns)">CJDNS</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
-                <span class="fd-net-status" id="fd-cjdns-status" title="CJDNS network status"></span>
+                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
+                <span class="fd-net-status" id="fd-cjdns-status"></span>
             </div>
         </div>
     </div>
 
-    <!-- HUD overlay stats (floats over the map) -->
-    <div id="hud-top-left" class="hud-panel">
-        <div class="hud-label">PEERS</div>
-        <div class="hud-value" id="hud-peers">0</div>
+    <!-- Map text overlay (top-left, no visible panel) -->
+    <div id="map-overlay" class="map-overlay">
+        <div class="mo-row"><span class="mo-label">Peers</span> <span class="mo-value mo-value-big" id="mo-peers" title="Total Connected Peers">0</span></div>
+        <div class="mo-row"><span class="mo-label">Status</span> <span class="mo-value" id="mo-status" title="Node sync status">&mdash;</span></div>
+        <div class="mo-row"><span class="mo-label">Update in</span> <span class="mo-value" id="mo-countdown">&mdash;</span></div>
+        <div class="mo-row"><span class="mo-status-msg" id="mo-status-msg">Loading...</span></div>
     </div>
 
-    <div id="hud-top-right" class="hud-panel">
-        <div class="hud-label">BLOCK HEIGHT</div>
-        <div class="hud-value" id="hud-block">---</div>
-    </div>
-
-    <!-- Right-side panel tabs (monolith style) -->
-    <div id="sidebar-cards" class="sidebar-cards">
-        <!-- N = Node Info -->
-        <div class="sidebar-tab-group" id="tab-group-node" data-card="node-info">
-            <div class="sidebar-tab" data-toggle="node-info" title="Node Info">
-                <span class="tab-letter tab-letter-cinzel">N</span>
-            </div>
-            <div class="sidebar-panel" id="panel-node-info">
-                <div class="panel-header" data-toggle="node-info">
-                    <span class="panel-title">Node Info</span>
-                    <span class="panel-close">&times;</span>
-                </div>
-                <div class="panel-body" id="panel-body-node-info">
-                    <div class="info-row"><span class="info-label">Loading...</span></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- S = System -->
-        <div class="sidebar-tab-group" id="tab-group-system" data-card="system-info">
-            <div class="sidebar-tab" data-toggle="system-info" title="System Info">
-                <span class="tab-letter tab-letter-cinzel">S</span>
-            </div>
-            <div class="sidebar-panel" id="panel-system-info">
-                <div class="panel-header" data-toggle="system-info">
-                    <span class="panel-title">System</span>
-                    <span class="panel-close">&times;</span>
-                </div>
-                <div class="panel-body" id="panel-body-system-info">
-                    <div class="info-row"><span class="info-label">Loading...</span></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ₿ = Bitcoin Price -->
-        <div class="sidebar-tab-group" id="tab-group-btc" data-card="btc-info">
-            <div class="sidebar-tab sidebar-tab-btc" data-toggle="btc-info" title="Bitcoin Price">
-                <span class="tab-letter tab-letter-btc" id="tab-btc-letter">&#x20bf;</span>
-            </div>
-            <div class="sidebar-panel" id="panel-btc-info">
-                <div class="panel-header" data-toggle="btc-info">
-                    <span class="panel-title">Bitcoin</span>
-                    <span class="panel-close">&times;</span>
-                </div>
-                <div class="panel-body" id="panel-body-btc-info">
-                    <div class="btc-price-display" id="btc-price-display">&mdash;</div>
-                    <div class="btc-currency-row">
-                        <span class="btc-currency-code" id="btc-currency-code" title="Click to change currency">USD</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- R = Recent Updates -->
-        <div class="sidebar-tab-group" id="tab-group-recent" data-card="recent-info">
-            <div class="sidebar-tab" data-toggle="recent-info" title="Recent Updates">
-                <span class="tab-letter tab-letter-cinzel">R</span>
-            </div>
-            <div class="sidebar-panel" id="panel-recent-info">
-                <div class="panel-header" data-toggle="recent-info">
-                    <span class="panel-title">Recent Updates</span>
-                    <span class="panel-close">&times;</span>
-                </div>
-                <div class="panel-body panel-body-scroll" id="panel-body-recent-info">
-                    <div class="changes-empty">No recent changes</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- P = Peer Table toggle -->
-        <div class="sidebar-tab-group" id="tab-group-peers" data-card="peer-toggle">
-            <div class="sidebar-tab" id="tab-peer-toggle" title="Peer Table">
-                <span class="tab-letter tab-letter-cinzel">P</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Net popover (positioned near badges) -->
+    <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
 
-    <!-- Antarctica annotation (toggleable) -->
+    <!-- Antarctica annotation -->
     <div id="antarctica-note" class="antarctica-note hidden">
         <span class="ant-icon">&#9432;</span>
         <span class="ant-text">Tor, I2P &amp; CJDNS peers are placed at Antarctic research stations for visualization &mdash; their real locations are hidden by design.</span>
-        <button id="ant-close" class="ant-close">&times;</button>
+        <button id="ant-close" class="ant-close" title="Hide this message">&times;</button>
     </div>
 
     <!-- Full-screen canvas map -->
@@ -167,38 +90,47 @@
         <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
     </div>
 
-    <!-- Tooltip for hovering over nodes -->
+    <!-- Tooltip for hovering over map nodes -->
     <div id="node-tooltip" class="tooltip hidden"></div>
 
-    <!-- Currency selector dropdown (spawned dynamically) -->
-    <!-- Mempool modal (spawned dynamically) -->
-    <!-- Blockchain modal (spawned dynamically) -->
-    <!-- GeoDB dropdown (spawned dynamically) -->
-    <!-- Connect Peer modal (spawned dynamically) -->
-
-    <!-- Bottom peer panel (collapsible) -->
-    <div id="peer-panel" class="peer-panel collapsed">
+    <!-- Bottom peer panel (OPEN by default) -->
+    <div id="peer-panel" class="peer-panel">
         <div id="peer-panel-handle" class="peer-panel-handle">
-            <span class="handle-arrow" id="handle-arrow">&#9650;</span>
-            <span class="handle-title">Peer List</span>
-            <div class="handle-nets">
-                <span class="net-badge net-all active" data-net="all">All</span>
-                <span class="net-badge net-ipv4" data-net="ipv4">IPv4</span>
-                <span class="net-badge net-ipv6" data-net="ipv6">IPv6</span>
-                <span class="net-badge net-tor" data-net="onion">Tor</span>
-                <span class="net-badge net-i2p" data-net="i2p">I2P</span>
-                <span class="net-badge net-cjdns" data-net="cjdns">CJDNS</span>
+            <div class="handle-row1">
+                <span class="handle-title">Peer List</span>
+                <div class="handle-nets">
+                    <span class="net-badge net-all active" data-net="all" title="Click to show all peers">All</span>
+                    <span class="net-badge net-ipv4" data-net="ipv4" title="Click to filter by IPv4">IPv4</span>
+                    <span class="net-badge net-ipv6" data-net="ipv6" title="Click to filter by IPv6">IPv6</span>
+                    <span class="net-badge net-tor" data-net="onion" title="Click to filter by Tor/Onion">Tor</span>
+                    <span class="net-badge net-i2p" data-net="i2p" title="Click to filter by I2P">I2P</span>
+                    <span class="net-badge net-cjdns" data-net="cjdns" title="Click to filter by CJDNS">CJDNS</span>
+                </div>
+                <div class="handle-spacer"></div>
+                <button class="handle-btn handle-btn-accent" id="btn-node-info" title="View node, mempool, and blockchain info">Node Info</button>
+                <button class="handle-btn handle-btn-accent" id="btn-system-info" title="View system stats and MBCore DB info">System Info</button>
+                <button class="handle-btn handle-btn-green" id="btn-connect-peer" title="Connect to a peer">Connect Peer</button>
+                <button class="handle-btn handle-btn-warn" id="btn-bans" title="View and manage banned IPs">Ban Options</button>
+                <div class="handle-traffic" title="Real-time network throughput (all interfaces)">
+                    <div class="handle-traffic-row"><span class="ht-label">Net &#8595;</span><span class="ht-bar-bg"><span class="ht-bar ht-bar-in" id="ht-bar-in"></span></span><span class="ht-rate" id="ht-rate-in">&mdash;</span></div>
+                    <div class="handle-traffic-row"><span class="ht-label">Net &#8593;</span><span class="ht-bar-bg"><span class="ht-bar ht-bar-out" id="ht-bar-out"></span></span><span class="ht-rate" id="ht-rate-out">&mdash;</span></div>
+                </div>
+                <button class="handle-btn handle-btn-dim" id="btn-autofit" title="Toggle auto-fit columns">Auto-fit</button>
+                <button class="handle-btn handle-btn-dim" id="btn-minimize" title="Minimize peer list">&#9660;</button>
             </div>
-            <div class="handle-spacer"></div>
-            <button class="handle-connect-btn" id="btn-connect-peer" title="Connect to a peer">+ Connect</button>
+            <div class="handle-row2" id="handle-row2">
+                <span class="handle-title-spacer"></span>
+                <div class="handle-counts">
+                    <span class="hc-count hc-all" id="hc-all">0</span>
+                    <span class="hc-count hc-ipv4" id="hc-ipv4">0</span>
+                    <span class="hc-count hc-ipv6" id="hc-ipv6">0</span>
+                    <span class="hc-count hc-tor" id="hc-tor">0</span>
+                    <span class="hc-count hc-i2p" id="hc-i2p">0</span>
+                    <span class="hc-count hc-cjdns" id="hc-cjdns">0</span>
+                </div>
+            </div>
         </div>
         <div class="peer-panel-body">
-            <div class="peer-panel-toolbar">
-                <button class="toolbar-btn" id="btn-autofit" title="Toggle auto-fit columns">Auto-fit</button>
-                <button class="toolbar-btn" id="btn-bans" title="View banned IPs">Bans</button>
-                <div class="toolbar-spacer"></div>
-                <div class="peer-action-zone" id="peer-action-zone"></div>
-            </div>
             <div class="peer-table-wrap">
                 <table class="peer-table" id="peer-table">
                     <thead id="peer-thead"></thead>
@@ -207,6 +139,13 @@
             </div>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer id="footer" class="footer">
+        <span class="footer-author">Created by <a class="footer-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" title="Visit mbhillrn MBCore repository: GitHub">@mbhillrn</a></span>
+        <span class="footer-sep">|</span>
+        <span class="footer-btc" id="footer-btc" title="Click to copy BTC address to clipboard">Support (btc): <span class="footer-btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
+    </footer>
 
     <script src="/static/js/bitapp.js"></script>
 </body>

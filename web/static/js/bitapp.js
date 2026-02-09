@@ -242,13 +242,13 @@
     // BTC SUPPORT ADDRESS — Click to copy
     // ═══════════════════════════════════════════════════════════
 
-    const btcSupportEl = document.getElementById('btc-support');
-    if (btcSupportEl) {
-        btcSupportEl.addEventListener('click', () => {
+    const footerBtcEl = document.getElementById('footer-btc');
+    if (footerBtcEl) {
+        footerBtcEl.addEventListener('click', () => {
             navigator.clipboard.writeText('bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5').then(() => {
-                const orig = btcSupportEl.title;
-                btcSupportEl.title = 'Copied!';
-                setTimeout(() => { btcSupportEl.title = orig; }, 2000);
+                const orig = footerBtcEl.title;
+                footerBtcEl.title = 'Copied!';
+                setTimeout(() => { footerBtcEl.title = orig; }, 2000);
             });
         });
     }
@@ -317,24 +317,18 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // SIDEBAR PANEL TABS — New monolith tab system
+    // MINIMIZE BUTTON — Toggle peer panel collapsed state
     // ═══════════════════════════════════════════════════════════
 
-    document.querySelectorAll('.sidebar-tab[data-toggle], .panel-header[data-toggle], .panel-close').forEach(el => {
-        el.addEventListener('click', (e) => {
+    const minimizeBtn = document.getElementById('btn-minimize');
+    if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const group = el.closest('.sidebar-tab-group');
-            if (!group) return;
-            group.classList.toggle('open');
-        });
-    });
-
-    // P tab toggles peer panel
-    const peerToggleTab = document.getElementById('tab-peer-toggle');
-    const peerPanelEl = document.getElementById('peer-panel');
-    if (peerToggleTab && peerPanelEl) {
-        peerToggleTab.addEventListener('click', () => {
-            peerPanelEl.classList.toggle('collapsed');
+            const panel = document.getElementById('peer-panel');
+            if (panel) {
+                panel.classList.toggle('collapsed');
+                minimizeBtn.innerHTML = panel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
+            }
         });
     }
 
@@ -354,7 +348,7 @@
     const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','CNY','HKD','SGD'];
     let currencyDropdownEl = null;
 
-    const currCodeEl = document.getElementById('btc-currency-code');
+    const currCodeEl = document.getElementById('topbar-btc-currency');
     if (currCodeEl) {
         currCodeEl.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -699,6 +693,18 @@
     const connectPeerBtn = document.getElementById('btn-connect-peer');
     if (connectPeerBtn) {
         connectPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openConnectPeerModal(); });
+    }
+
+    // Node Info button handler
+    const nodeInfoBtn = document.getElementById('btn-node-info');
+    if (nodeInfoBtn) {
+        nodeInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+    }
+
+    // System Info button handler
+    const systemInfoBtn = document.getElementById('btn-system-info');
+    if (systemInfoBtn) {
+        systemInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1072,6 +1078,9 @@
             // Refresh the peer table panel
             renderPeerTable();
 
+            // Reset countdown timer
+            lastPeerFetchTime = Date.now();
+
         } catch (err) {
             console.error('[vNext] Failed to fetch peers:', err);
             updateConnectionStatus(false);
@@ -1093,16 +1102,12 @@
 
             lastNodeInfo = info;
 
-            // Update block height HUD
+            // Update block height (stored for modals and map overlay)
             if (info.last_block && info.last_block.height) {
                 lastBlockHeight = info.last_block.height;
-                pulseOnChange('hud-block', info.last_block.height);
             }
 
-            // Update Node Info panel
-            renderNodeInfoPanel(info);
-
-            // Update BTC price panel + tab
+            // Update BTC price in topbar
             updateBtcPricePanel(info);
 
             // Update flight deck scores
@@ -1120,72 +1125,178 @@
         }
     }
 
-    /** Render the Node Info sidebar panel */
-    function renderNodeInfoPanel(info) {
-        const body = document.getElementById('panel-body-node-info');
-        if (!body) return;
+    /** Open combined Node Info modal — node info + mempool + blockchain ALL in one */
+    function openNodeInfoModal() {
+        // Remove any existing
+        const existing = document.getElementById('node-info-modal');
+        if (existing) existing.remove();
 
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'node-info-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:560px"><div class="modal-header"><span class="modal-title">Node Info</span><button class="modal-close" id="node-info-close">&times;</button></div><div class="modal-body" id="node-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('node-info-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        // Build combined content from cached data + fresh API calls
+        const body = document.getElementById('node-info-body');
         let html = '';
-        const ver = info.subversion || '\u2014';
-        html += `<div class="info-row"><span class="info-label">Version</span><span class="info-val">${ver}</span></div>`;
-        const peers = info.connected != null ? info.connected : '\u2014';
-        html += `<div class="info-row"><span class="info-label">Peers</span><span class="info-val" id="ni-peers">${peers}</span></div>`;
 
-        if (info.blockchain) {
-            html += `<div class="info-row"><span class="info-label">Size (Disk)</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
-            html += `<div class="info-row"><span class="info-label">Node Type</span><span class="info-val">${info.blockchain.pruned ? 'Pruned' : 'Full'}</span></div>`;
-            html += `<div class="info-row"><span class="info-label">TX Index</span><span class="info-val">${info.blockchain.indexed ? 'Yes' : 'No'}</span></div>`;
-            html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val ${info.blockchain.ibd ? 'info-val-warn' : 'info-val-ok'}">${info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced'}</span></div>`;
+        // ── Section 1: Node Overview ──
+        html += '<div class="modal-section-title">Node</div>';
+        if (lastNodeInfo) {
+            const info = lastNodeInfo;
+            html += `<div class="modal-row"><span class="modal-label">Version</span><span class="modal-val">${info.subversion || '\u2014'}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Peers</span><span class="modal-val">${info.connected != null ? info.connected : '\u2014'}</span></div>`;
+            if (info.blockchain) {
+                html += `<div class="modal-row"><span class="modal-label">Size (Disk)</span><span class="modal-val">${info.blockchain.size_gb} GB</span></div>`;
+                html += `<div class="modal-row"><span class="modal-label">Node Type</span><span class="modal-val">${info.blockchain.pruned ? 'Pruned' : 'Full'}</span></div>`;
+                html += `<div class="modal-row"><span class="modal-label">TX Index</span><span class="modal-val">${info.blockchain.indexed ? 'Yes' : 'No'}</span></div>`;
+                html += `<div class="modal-row"><span class="modal-label">Status</span><span class="modal-val ${info.blockchain.ibd ? 'modal-val-warn' : 'modal-val-ok'}">${info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced'}</span></div>`;
+            }
+            if (info.last_block) {
+                const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
+                html += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014'}${t ? ' (' + t + ')' : ''}</span></div>`;
+            }
+            if (info.mempool_size != null) {
+                html += `<div class="modal-row"><span class="modal-label">Mempool Size</span><span class="modal-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+            }
+        } else {
+            html += '<div style="color:var(--text-muted);padding:4px 0">No node data yet</div>';
         }
-        if (info.mempool_size != null) {
-            html += `<div class="info-row"><span class="info-label">Mempool</span><span class="info-val info-val-link" id="ni-mempool">${info.mempool_size.toLocaleString()} tx</span></div>`;
-        }
-        if (info.last_block) {
-            const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
-            html += `<div class="info-row"><span class="info-label">Last Block</span><span class="info-val info-val-link" id="ni-lastblock">${info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014'}${t ? ' (' + t + ')' : ''}</span></div>`;
-        }
+
+        // ── Section 2: Mempool (loading async) ──
+        html += '<div class="modal-section-title">Mempool</div>';
+        html += '<div id="ni-mempool-section" style="color:var(--text-muted);padding:4px 0">Loading mempool data...</div>';
+
+        // ── Section 3: Blockchain (loading async) ──
+        html += '<div class="modal-section-title">Blockchain</div>';
+        html += '<div id="ni-blockchain-section" style="color:var(--text-muted);padding:4px 0">Loading blockchain data...</div>';
+
         body.innerHTML = html;
 
-        // Bind clickables
-        const mempoolLink = document.getElementById('ni-mempool');
-        if (mempoolLink) mempoolLink.addEventListener('click', openMempoolModal);
-        const blockLink = document.getElementById('ni-lastblock');
-        if (blockLink) blockLink.addEventListener('click', openBlockchainModal);
+        // Fetch mempool data
+        fetch(`/api/mempool?currency=${btcCurrency}`).then(r => r.json()).then(data => {
+            const section = document.getElementById('ni-mempool-section');
+            if (!section) return;
+            if (data.error) { section.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const mp = data.mempool;
+            if (!mp) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            const price = data.btc_price || 0;
+            let mhtml = '';
+            mhtml += `<div class="modal-row"><span class="modal-label">Pending Transactions</span><span class="modal-val modal-val-highlight">${(mp.size || 0).toLocaleString()}</span></div>`;
+            mhtml += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            mhtml += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            const totalFeesBTC = mp.total_fee || 0;
+            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            mhtml += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
+            mhtml += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
+            if (mp.mempoolminfee != null) {
+                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2);
+                mhtml += `<div class="modal-row"><span class="modal-label">Min Accepted Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.minrelaytxfee != null) {
+                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2);
+                mhtml += `<div class="modal-row"><span class="modal-label">Min Relay Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.fullrbf != null) {
+                const cls = mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn';
+                mhtml += `<div class="modal-row"><span class="modal-label">Full RBF</span><span class="modal-val ${cls}">${mp.fullrbf ? 'Enabled' : 'Disabled'}</span></div>`;
+            }
+            if (mp.unbroadcastcount != null) {
+                const cls = mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight';
+                mhtml += `<div class="modal-row"><span class="modal-label">Unbroadcast Txs</span><span class="modal-val ${cls}">${mp.unbroadcastcount}</span></div>`;
+            }
+            section.innerHTML = mhtml;
+        }).catch(err => {
+            const section = document.getElementById('ni-mempool-section');
+            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
 
-        // Pulse peers count
-        if (info.connected != null) pulseOnChange('ni-peers', info.connected);
+        // Fetch blockchain data
+        fetch('/api/blockchain').then(r => r.json()).then(data => {
+            const section = document.getElementById('ni-blockchain-section');
+            if (!section) return;
+            if (data.error) { section.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const bc = data.blockchain;
+            if (!bc) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            let bhtml = '';
+            bhtml += `<div class="modal-row"><span class="modal-label">Chain</span><span class="modal-val modal-val-highlight">${bc.chain || '\u2014'}</span></div>`;
+            bhtml += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${(bc.blocks || 0).toLocaleString()}</span></div>`;
+            if (bc.headers) {
+                const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
+                bhtml += `<div class="modal-row"><span class="modal-label">Sync Progress</span><span class="modal-val">${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)</span></div>`;
+            }
+            if (bc.bestblockhash) {
+                const short = bc.bestblockhash.substring(0, 20) + '...';
+                bhtml += `<div class="modal-row"><span class="modal-label">Best Block Hash</span><span class="modal-val" title="${bc.bestblockhash}">${short}</span></div>`;
+            }
+            if (bc.difficulty) {
+                const diff = parseFloat(bc.difficulty);
+                const humanDiff = diff > 1e12 ? (diff / 1e12).toFixed(2) + 'T' : diff.toLocaleString();
+                bhtml += `<div class="modal-row"><span class="modal-label">Difficulty</span><span class="modal-val" title="${bc.difficulty}">${humanDiff}</span></div>`;
+            }
+            if (bc.mediantime) {
+                bhtml += `<div class="modal-row"><span class="modal-label">Median Time</span><span class="modal-val">${new Date(bc.mediantime * 1000).toLocaleString()}</span></div>`;
+            }
+            bhtml += `<div class="modal-row"><span class="modal-label">IBD Status</span><span class="modal-val ${bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok'}">${bc.initialblockdownload ? 'Yes' : 'No'}</span></div>`;
+            if (bc.size_on_disk) {
+                bhtml += `<div class="modal-row"><span class="modal-label">Size on Disk</span><span class="modal-val">${(bc.size_on_disk / 1e9).toFixed(1)} GB</span></div>`;
+            }
+            bhtml += `<div class="modal-row"><span class="modal-label">Pruning</span><span class="modal-val">${bc.pruned ? 'Yes' : 'No'}</span></div>`;
+            if (bc.softforks && Object.keys(bc.softforks).length > 0) {
+                bhtml += '<div class="modal-section-title" style="margin-top:6px;padding-top:4px">Softforks</div>';
+                for (const [name, sf] of Object.entries(bc.softforks)) {
+                    const status = sf.active ? 'Active' : (sf.type || 'Defined');
+                    const cls = sf.active ? 'modal-val-ok' : '';
+                    bhtml += `<div class="modal-row"><span class="modal-label">${name}</span><span class="modal-val ${cls}">${status}</span></div>`;
+                }
+            }
+            section.innerHTML = bhtml;
+        }).catch(err => {
+            const section = document.getElementById('ni-blockchain-section');
+            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
     }
 
-    /** Update BTC Price panel + ₿ tab */
+    /** Update BTC Price in topbar + ₿ symbol coloring */
     function updateBtcPricePanel(info) {
-        const priceDisplay = document.getElementById('btc-price-display');
-        const tabLetter = document.getElementById('tab-btc-letter');
-        if (!priceDisplay) return;
+        const priceEl = document.getElementById('topbar-btc-price');
+        const symbolEl = document.getElementById('topbar-btc-symbol');
+        const arrowEl = document.getElementById('topbar-btc-arrow');
+        if (!priceEl) return;
 
         if (info.btc_price) {
             const price = parseFloat(info.btc_price);
-            priceDisplay.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            priceEl.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-            // Persistent coloring: flash lighter then stay colored
-            const dir = pulseOnChange('btc-price-display', price, 'persistent');
+            // Persistent coloring on price element
+            const dir = pulseOnChange('topbar-btc-price', price, 'persistent');
 
-            // Also animate the ₿ tab letter
-            if (tabLetter && dir) {
+            // Update ₿ symbol color (persistent: flash then stay green/red)
+            if (symbolEl && dir) {
                 const allCls = ['price-up','price-down','price-pulse-up','price-pulse-down'];
-                allCls.forEach(c => tabLetter.classList.remove(c));
-                void tabLetter.offsetWidth;
-                tabLetter.classList.add(dir > 0 ? 'price-pulse-up' : 'price-pulse-down');
+                allCls.forEach(c => symbolEl.classList.remove(c));
+                void symbolEl.offsetWidth;
+                symbolEl.classList.add(dir > 0 ? 'price-pulse-up' : 'price-pulse-down');
                 setTimeout(() => {
-                    tabLetter.classList.remove('price-pulse-up','price-pulse-down');
-                    tabLetter.classList.add(dir > 0 ? 'price-up' : 'price-down');
+                    symbolEl.classList.remove('price-pulse-up','price-pulse-down');
+                    symbolEl.classList.add(dir > 0 ? 'price-up' : 'price-down');
                 }, 2000);
             }
+
+            // Update arrow indicator
+            if (arrowEl && dir) {
+                arrowEl.textContent = dir > 0 ? '\u25B2' : '\u25BC';
+                arrowEl.className = 'topbar-btc-arrow ' + (dir > 0 ? 'arrow-up' : 'arrow-down');
+            }
         } else {
-            priceDisplay.textContent = '\u2014';
+            priceEl.textContent = '\u2014';
         }
 
         // Currency code display
-        const codeEl = document.getElementById('btc-currency-code');
+        const codeEl = document.getElementById('topbar-btc-currency');
         if (codeEl) codeEl.textContent = btcCurrency;
     }
 
@@ -1705,6 +1816,21 @@
     // Updated every frame from current node state.
     // ═══════════════════════════════════════════════════════════
 
+    // Countdown timer state
+    let lastPeerFetchTime = 0;
+    let countdownInterval = null;
+
+    function startCountdownTimer() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = setInterval(() => {
+            const cdEl = document.getElementById('mo-countdown');
+            if (!cdEl) return;
+            const elapsed = Date.now() - lastPeerFetchTime;
+            const remaining = Math.max(0, Math.ceil((CFG.pollInterval - elapsed) / 1000));
+            cdEl.textContent = remaining + 's';
+        }, 1000);
+    }
+
     function updateHUD() {
         // Count alive nodes by network type
         const netCounts = { ipv4: 0, ipv6: 0, onion: 0, i2p: 0, cjdns: 0 };
@@ -1715,33 +1841,45 @@
             if (netCounts.hasOwnProperty(n.net)) netCounts[n.net]++;
         }
 
-        // Peer count
-        document.getElementById('hud-peers').textContent = total;
-
-        // Block height (from /api/info, not faked)
-        const blockEl = document.getElementById('hud-block');
-        if (lastBlockHeight !== null) {
-            blockEl.textContent = lastBlockHeight.toLocaleString();
-        } else {
-            blockEl.textContent = '---';
+        // Map overlay — peer count
+        const moPeers = document.getElementById('mo-peers');
+        if (moPeers) {
+            moPeers.textContent = total;
+            pulseOnChange('mo-peers', total, 'white');
         }
 
-        // "All" badge with total count
-        const allBadge = document.querySelector('.net-all');
-        if (allBadge) {
-            allBadge.textContent = `All ${total}`;
-        }
-
-        // Network badges with live counts
-        for (const net of Object.keys(NET_COLORS)) {
-            // Map "onion" -> "tor" for the CSS class
-            const cssClass = net === 'onion' ? 'tor' : net;
-            const badge = document.querySelector(`.net-${cssClass}`);
-            if (badge) {
-                const label = NET_DISPLAY[net] || net.toUpperCase();
-                badge.textContent = `${label} ${netCounts[net]}`;
+        // Map overlay — status
+        const moStatus = document.getElementById('mo-status');
+        if (moStatus && lastNodeInfo) {
+            if (lastNodeInfo.blockchain && lastNodeInfo.blockchain.ibd) {
+                moStatus.textContent = 'Syncing (IBD)';
+                moStatus.style.color = 'var(--warn)';
+            } else {
+                moStatus.textContent = 'Synced';
+                moStatus.style.color = 'var(--ok)';
             }
         }
+
+        // Map overlay — status message
+        const moMsg = document.getElementById('mo-status-msg');
+        if (moMsg && total > 0) {
+            moMsg.textContent = 'Connected';
+            moMsg.classList.add('loaded');
+        }
+
+        // Handle count row (row 2) — counts under each badge
+        const hcAll = document.getElementById('hc-all');
+        const hcIpv4 = document.getElementById('hc-ipv4');
+        const hcIpv6 = document.getElementById('hc-ipv6');
+        const hcTor = document.getElementById('hc-tor');
+        const hcI2p = document.getElementById('hc-i2p');
+        const hcCjdns = document.getElementById('hc-cjdns');
+        if (hcAll) { hcAll.textContent = total; pulseOnChange('hc-all', total, 'white'); }
+        if (hcIpv4) { hcIpv4.textContent = netCounts.ipv4; pulseOnChange('hc-ipv4', netCounts.ipv4); }
+        if (hcIpv6) { hcIpv6.textContent = netCounts.ipv6; pulseOnChange('hc-ipv6', netCounts.ipv6); }
+        if (hcTor) { hcTor.textContent = netCounts.onion; pulseOnChange('hc-tor', netCounts.onion); }
+        if (hcI2p) { hcI2p.textContent = netCounts.i2p; pulseOnChange('hc-i2p', netCounts.i2p); }
+        if (hcCjdns) { hcCjdns.textContent = netCounts.cjdns; pulseOnChange('hc-cjdns', netCounts.cjdns); }
     }
 
     /** Position the Antarctica annotation on the map landmass */
@@ -2009,7 +2147,6 @@
     let theadEl = document.getElementById('peer-thead');
     let tbodyEl = document.getElementById('peer-tbody');
     const handleCountEl = { textContent: '' };  // peer count now shown in badge only
-    const actionZoneEl = document.getElementById('peer-action-zone');
 
     // Panel toggle
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
@@ -2606,13 +2743,26 @@
         showDisconnectDialog(peerId, net || 'ipv4');
     }
 
-    /** Show a temporary result message in the toolbar */
+    /** Show a temporary result notification */
     function showActionResult(msg, success) {
-        const el = document.createElement('span');
-        el.className = `action-result ${success ? 'ok' : 'err'}`;
+        // Remove existing notification
+        const existing = document.getElementById('action-notification');
+        if (existing) existing.remove();
+
+        const el = document.createElement('div');
+        el.id = 'action-notification';
+        el.style.cssText = `position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:400;padding:8px 16px;border-radius:6px;font-size:11px;font-weight:600;pointer-events:none;backdrop-filter:blur(12px);border:1px solid;`;
+        if (success) {
+            el.style.color = 'var(--ok)';
+            el.style.borderColor = 'rgba(63,185,80,0.4)';
+            el.style.background = 'rgba(10,14,20,0.92)';
+        } else {
+            el.style.color = 'var(--err)';
+            el.style.borderColor = 'rgba(248,81,73,0.4)';
+            el.style.background = 'rgba(10,14,20,0.92)';
+        }
         el.textContent = msg;
-        actionZoneEl.innerHTML = '';
-        actionZoneEl.appendChild(el);
+        document.body.appendChild(el);
         setTimeout(() => { if (el.parentNode) el.remove(); }, 5000);
     }
 
@@ -3039,11 +3189,7 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // SIDEBAR CARDS — (Legacy toggle removed — new tab system in place above)
-    // ═══════════════════════════════════════════════════════════
-
-    // ═══════════════════════════════════════════════════════════
-    // SYSTEM INFO CARD — CPU/RAM from /api/stats
+    // SYSTEM INFO — CPU/RAM from /api/stats (data stored for modal)
     // ═══════════════════════════════════════════════════════════
 
     async function fetchSystemStats() {
@@ -3057,66 +3203,138 @@
         }
     }
 
-    function renderSystemInfoCard(stats) {
-        const body = document.getElementById('panel-body-system-info');
-        if (!body) return;
+    /** Store latest system stats for modal use */
+    let lastSystemStats = null;
 
+    function renderSystemInfoCard(stats) {
+        // Just store the stats — modal reads them when opened
+        lastSystemStats = stats;
+    }
+
+    /** Open combined System Info modal — system stats + GeoDB + traffic + recent changes */
+    function openSystemInfoModal() {
+        const existing = document.getElementById('system-info-modal');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'system-info-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:520px"><div class="modal-header"><span class="modal-title">System Info</span><button class="modal-close" id="system-info-close">&times;</button></div><div class="modal-body" id="system-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('system-info-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        const body = document.getElementById('system-info-body');
+        let html = '';
+
+        // ── Section 1: System Stats ──
+        html += '<div class="modal-section-title">System</div>';
+        const stats = lastSystemStats || {};
         const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
         const memPct = stats.mem_pct != null ? Math.round(stats.mem_pct) : null;
         const memUsed = stats.mem_used_mb;
         const memTotal = stats.mem_total_mb;
 
-        let html = '';
-
-        // CPU bar
-        html += '<div class="info-row">';
-        html += '<span class="info-label">CPU</span>';
+        html += '<div class="info-row"><span class="info-label">CPU</span>';
         if (cpuPct != null) {
-            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text" id="si-cpu">${cpuPct}%</span></span>`;
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
         } else {
-            html += '<span class="info-val">&mdash;</span>';
+            html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
 
-        // RAM bar
-        html += '<div class="info-row">';
-        html += '<span class="info-label">RAM</span>';
+        html += '<div class="info-row"><span class="info-label">RAM</span>';
         if (memPct != null) {
             const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
-            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text" id="si-ram">${memStr}</span></span>`;
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text">${memStr}</span></span>`;
         } else {
-            html += '<span class="info-val">&mdash;</span>';
+            html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
 
-        // MBCore DB entry
-        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
-            const geoStats = lastNodeInfo.geo_db_stats;
-            const entries = geoStats.entries || 0;
-            const statusText = geoStats.status || 'unknown';
-            html += `<div class="info-row"><span class="info-label">MBCore DB</span><span class="info-val info-val-link" id="si-geodb">${entries.toLocaleString()} entries (${statusText})</span></div>`;
-        }
-
-        // Network traffic bars
+        // Network traffic
         if (lastNetTraffic) {
             const rx = lastNetTraffic.rx_bps || 0;
             const tx = lastNetTraffic.tx_bps || 0;
             const maxBps = Math.max(rx, tx, 1);
             const rxPct = Math.min(100, (rx / maxBps) * 100);
             const txPct = Math.min(100, (tx / maxBps) * 100);
-            html += `<div class="info-row"><span class="info-label">NET &darr;</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
-            html += `<div class="info-row"><span class="info-label">NET &uarr;</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
+            html += `<div class="info-row"><span class="info-label">NET \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
+            html += `<div class="info-row"><span class="info-label">NET \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
         }
+
+        // ── Section 2: MBCore DB ──
+        html += '<div class="modal-section-title">MBCore DB</div>';
+        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
+            const geoStats = lastNodeInfo.geo_db_stats;
+            const statusText = geoStats.status || 'unknown';
+            const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
+            html += `<div class="modal-row"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
+            if (geoStats.entries != null) html += `<div class="modal-row"><span class="modal-label">Entries</span><span class="modal-val">${geoStats.entries.toLocaleString()}</span></div>`;
+            if (geoStats.size_bytes != null) html += `<div class="modal-row"><span class="modal-label">Size</span><span class="modal-val">${(geoStats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
+            if (geoStats.oldest_age_days != null) html += `<div class="modal-row"><span class="modal-label">Oldest Entry</span><span class="modal-val">${geoStats.oldest_age_days} days</span></div>`;
+            if (geoStats.path) html += `<div class="modal-row"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:200px" title="${geoStats.path}">${geoStats.path}</span></div>`;
+            const alCls = geoStats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
+            html += `<div class="modal-row"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${geoStats.auto_lookup ? 'On' : 'Off'}</span></div>`;
+            const auCls = geoStats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
+            html += `<div class="modal-row"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${geoStats.auto_update ? 'On' : 'Off'}</span></div>`;
+            html += '<button class="geodb-update-btn" id="si-geodb-update-btn">Update Database</button>';
+            html += '<div class="geodb-result" id="si-geodb-result"></div>';
+        } else {
+            html += '<div style="color:var(--text-muted);padding:4px 0">No GeoDB data available</div>';
+        }
+
+        // ── Section 3: Recent Changes ──
+        html += '<div class="modal-section-title">Recent Changes</div>';
+        html += '<div id="si-changes-section" style="color:var(--text-muted);padding:4px 0">Loading...</div>';
 
         body.innerHTML = html;
 
-        // Pulse CPU/RAM
-        if (cpuPct != null) pulseOnChange('si-cpu', cpuPct);
-        if (memPct != null) pulseOnChange('si-ram', memPct);
+        // Bind GeoDB update button
+        const geodbBtn = document.getElementById('si-geodb-update-btn');
+        if (geodbBtn) {
+            geodbBtn.addEventListener('click', async () => {
+                const resultEl = document.getElementById('si-geodb-result');
+                resultEl.textContent = 'Updating...';
+                resultEl.style.color = 'var(--text-secondary)';
+                try {
+                    const resp = await fetch('/api/geodb/update', { method: 'POST' });
+                    const data = await resp.json();
+                    resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                    resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
+                } catch (err) {
+                    resultEl.textContent = 'Error: ' + err.message;
+                    resultEl.style.color = 'var(--err)';
+                }
+            });
+        }
 
-        // Bind GeoDB click
-        const geodbLink = document.getElementById('si-geodb');
-        if (geodbLink) geodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(geodbLink); });
+        // Fetch recent changes
+        fetch('/api/changes').then(r => r.json()).then(changes => {
+            const section = document.getElementById('si-changes-section');
+            if (!section) return;
+            if (!changes || changes.length === 0) {
+                section.innerHTML = '<div class="changes-empty">No recent changes</div>';
+                return;
+            }
+            const recent = changes.slice(-5).reverse();
+            let chtml = '';
+            for (const c of recent) {
+                const isConnect = c.type === 'connected';
+                const dotClass = isConnect ? 'connected' : 'disconnected';
+                const ip = c.peer ? (c.peer.ip || '') : '';
+                const port = c.peer ? (c.peer.port || '') : '';
+                const net = c.peer ? (c.peer.network || 'ipv4') : 'ipv4';
+                const label = ip ? `${ip}:${port}` : '\u2014';
+                const d = new Date(c.time * 1000);
+                const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+                chtml += `<div class="change-entry" data-ip="${ip}" data-connected="${isConnect}" data-net="${net}"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
+            }
+            section.innerHTML = chtml;
+        }).catch(err => {
+            const section = document.getElementById('si-changes-section');
+            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3134,73 +3352,11 @@
         }
     }
 
+    // Changes are now rendered inside the System Info modal
+    // renderChangesCard just stores the data for on-demand rendering
+    let lastChanges = null;
     function renderChangesCard(changes) {
-        const body = document.getElementById('panel-body-recent-info');
-        if (!body) return;
-
-        if (!changes || changes.length === 0) {
-            body.innerHTML = '<div class="changes-empty">No recent changes</div>';
-            return;
-        }
-
-        // Show most recent 12 changes
-        const recent = changes.slice(-12).reverse();
-        let html = '';
-        for (const c of recent) {
-            const isConnect = c.type === 'connected';
-            const dotClass = isConnect ? 'connected' : 'disconnected';
-            const ip = c.peer ? (c.peer.ip || '') : '';
-            const port = c.peer ? (c.peer.port || '') : '';
-            const net = c.peer ? (c.peer.network || 'ipv4') : 'ipv4';
-            const label = ip ? `${ip}:${port}` : '\u2014';
-            const d = new Date(c.time * 1000);
-            const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-            html += `<div class="change-entry" data-ip="${ip}" data-connected="${isConnect}" data-net="${net}"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
-        }
-        body.innerHTML = html;
-
-        // Click-to-zoom: fly to peer, or show message for disconnected/private
-        body.querySelectorAll('.change-entry').forEach(entry => {
-            entry.addEventListener('click', () => {
-                const isConnected = entry.dataset.connected === 'true';
-                const net = entry.dataset.net;
-                const isPrivate = (net === 'onion' || net === 'i2p' || net === 'cjdns');
-
-                if (!isConnected) {
-                    showPrivateNetPopup('This peer has been disconnected.');
-                    return;
-                }
-                if (isPrivate) {
-                    const netName = NET_DISPLAY[net] || net.toUpperCase();
-                    showPrivateNetPopup(`${netName} peers are not locatable. If visibility is enabled, check Antarctica.`);
-                    return;
-                }
-
-                // Find the peer node by IP match
-                const ip = entry.dataset.ip;
-                const node = nodes.find(n => n.alive && n.ip === ip);
-                if (node) {
-                    // Zoom to peer
-                    const p = project(node.lon, node.lat);
-                    targetView.x = (p.x - 0.5) * W;
-                    targetView.y = (p.y - 0.5) * H;
-                    targetView.zoom = 3;
-                    highlightedPeerId = node.peerId;
-                    pinnedNode = node;
-                    setTimeout(() => {
-                        const offsets = getWrapOffsets();
-                        for (const off of offsets) {
-                            const s = worldToScreen(node.lon + off, node.lat);
-                            if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
-                                showTooltip(node, s.x, s.y, true);
-                                hoveredNode = node;
-                                break;
-                            }
-                        }
-                    }, 600);
-                }
-            });
-        });
+        lastChanges = changes;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3214,9 +3370,31 @@
             const resp = await fetch('/api/netspeed');
             if (!resp.ok) return;
             lastNetTraffic = await resp.json();
+            updateHandleTrafficBars();
         } catch (err) {
             console.error('[vNext] Failed to fetch netspeed:', err);
         }
+    }
+
+    /** Update the traffic bars in the peer panel handle */
+    function updateHandleTrafficBars() {
+        if (!lastNetTraffic) return;
+        const rx = lastNetTraffic.rx_bps || 0;
+        const tx = lastNetTraffic.tx_bps || 0;
+        // Scale bars relative to a reasonable max (10 MB/s) or the actual max if higher
+        const refMax = Math.max(rx, tx, 1024 * 100); // at least 100 KB/s reference
+        const rxPct = Math.min(100, (rx / refMax) * 100);
+        const txPct = Math.min(100, (tx / refMax) * 100);
+
+        const barIn = document.getElementById('ht-bar-in');
+        const barOut = document.getElementById('ht-bar-out');
+        const rateIn = document.getElementById('ht-rate-in');
+        const rateOut = document.getElementById('ht-rate-out');
+
+        if (barIn) barIn.style.width = rxPct + '%';
+        if (barOut) barOut.style.width = txPct + '%';
+        if (rateIn) rateIn.textContent = formatBps(rx);
+        if (rateOut) rateOut.textContent = formatBps(tx);
     }
 
     /** Format bytes/sec to human-readable string */
@@ -3245,8 +3423,10 @@
         loadCityData();
 
         // Fetch real peer data immediately, then poll every 10s
+        lastPeerFetchTime = Date.now();
         fetchPeers();
         setInterval(fetchPeers, CFG.pollInterval);
+        startCountdownTimer();
 
         // Fetch node info (block height, BTC price, etc) immediately, then poll
         fetchInfo();
