@@ -189,6 +189,545 @@
     let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
     // ═══════════════════════════════════════════════════════════
+    // PULSE ON CHANGE — Number animation system
+    // Ported from legacy dashboard.js with all 4 modes
+    // ═══════════════════════════════════════════════════════════
+
+    const prevValues = {};  // elementId -> previous numeric value
+
+    function pulseOnChange(elementId, newValue, mode) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const numNew = parseFloat(String(newValue).replace(/[^0-9.\-]/g, ''));
+        if (isNaN(numNew)) { prevValues[elementId] = null; return; }
+        const prev = prevValues[elementId];
+        prevValues[elementId] = numNew;
+        if (prev === null || prev === undefined) return;
+        if (numNew === prev) return;
+        const up = numNew > prev;
+        const allClasses = ['pulse-up','pulse-down','pulse-up-long','pulse-down-long','pulse-white','price-up','price-down','price-pulse-up','price-pulse-down'];
+        allClasses.forEach(c => el.classList.remove(c));
+        void el.offsetWidth;  // force reflow
+        if (mode === 'white') {
+            el.classList.add('pulse-white');
+            setTimeout(() => el.classList.remove('pulse-white'), 1500);
+        } else if (mode === 'long') {
+            el.classList.add(up ? 'pulse-up-long' : 'pulse-down-long');
+            setTimeout(() => el.classList.remove('pulse-up-long','pulse-down-long'), 5000);
+        } else if (mode === 'persistent') {
+            el.classList.add(up ? 'price-pulse-up' : 'price-pulse-down');
+            setTimeout(() => {
+                el.classList.remove('price-pulse-up','price-pulse-down');
+                el.classList.add(up ? 'price-up' : 'price-down');
+            }, 2000);
+        } else {
+            el.classList.add(up ? 'pulse-up' : 'pulse-down');
+            setTimeout(() => el.classList.remove('pulse-up','pulse-down'), 1500);
+        }
+        return up ? 1 : -1;
+    }
+
+    function showDeltaIndicator(parentEl, delta) {
+        if (!parentEl || delta === 0) return;
+        const existing = parentEl.querySelector('.delta-indicator');
+        if (existing) existing.remove();
+        const span = document.createElement('span');
+        span.className = 'delta-indicator ' + (delta > 0 ? 'delta-up' : 'delta-down');
+        span.textContent = (delta > 0 ? '+' : '') + delta;
+        parentEl.appendChild(span);
+        setTimeout(() => span.remove(), 2500);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BTC SUPPORT ADDRESS — Click to copy
+    // ═══════════════════════════════════════════════════════════
+
+    const footerBtcEl = document.getElementById('footer-btc');
+    if (footerBtcEl) {
+        footerBtcEl.addEventListener('click', () => {
+            navigator.clipboard.writeText('bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5').then(() => {
+                const orig = footerBtcEl.title;
+                footerBtcEl.title = 'Copied!';
+                setTimeout(() => { footerBtcEl.title = orig; }, 2000);
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FLIGHT DECK — Toggle + Network stats
+    // ═══════════════════════════════════════════════════════════
+
+    const flightDeck = document.getElementById('flight-deck');
+    const fdToggle = document.getElementById('fd-toggle');
+    if (fdToggle && flightDeck) {
+        fdToggle.addEventListener('click', () => {
+            flightDeck.classList.toggle('collapsed');
+            fdToggle.textContent = flightDeck.classList.contains('collapsed') ? '\u25B4' : '\u25BE';
+        });
+    }
+
+    // Previous flight deck counts for delta indicators
+    const fdPrevCounts = {};
+
+    function updateFlightDeck(peerNodes) {
+        const counts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
+        for (const n of peerNodes) {
+            if (!n.alive) continue;
+            const net = n.net || 'ipv4';
+            if (!counts[net]) continue;
+            if (n.direction === 'IN') counts[net].in++;
+            else counts[net].out++;
+        }
+        const netMap = { ipv4:'ipv4', ipv6:'ipv6', onion:'tor', i2p:'i2p', cjdns:'cjdns' };
+        for (const [net, label] of Object.entries(netMap)) {
+            const c = counts[net];
+            const inEl = document.getElementById(`fd-${label}-in`);
+            const outEl = document.getElementById(`fd-${label}-out`);
+            if (inEl) {
+                const oldIn = fdPrevCounts[`${net}-in`] || 0;
+                inEl.textContent = c.in;
+                if (oldIn !== c.in && fdPrevCounts[`${net}-in`] !== undefined) {
+                    pulseOnChange(`fd-${label}-in`, c.in);
+                    showDeltaIndicator(inEl.parentElement, c.in - oldIn);
+                }
+                fdPrevCounts[`${net}-in`] = c.in;
+            }
+            if (outEl) {
+                const oldOut = fdPrevCounts[`${net}-out`] || 0;
+                outEl.textContent = c.out;
+                if (oldOut !== c.out && fdPrevCounts[`${net}-out`] !== undefined) {
+                    pulseOnChange(`fd-${label}-out`, c.out);
+                    showDeltaIndicator(outEl.parentElement, c.out - oldOut);
+                }
+                fdPrevCounts[`${net}-out`] = c.out;
+            }
+            // Status badge (enabled if count > 0)
+            const statusEl = document.getElementById(`fd-${label}-status`);
+            if (statusEl) {
+                const total = c.in + c.out;
+                if (total > 0) {
+                    statusEl.textContent = 'Enabled';
+                    statusEl.className = 'fd-net-status enabled';
+                } else {
+                    statusEl.textContent = 'Not configured';
+                    statusEl.className = 'fd-net-status not-configured';
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MINIMIZE BUTTON — Toggle peer panel collapsed state
+    // ═══════════════════════════════════════════════════════════
+
+    const minimizeBtn = document.getElementById('btn-minimize');
+    if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const panel = document.getElementById('peer-panel');
+            if (panel) {
+                panel.classList.toggle('collapsed');
+                minimizeBtn.innerHTML = panel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
+            }
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BTC PRICE STATE
+    // ═══════════════════════════════════════════════════════════
+
+    let btcCurrency = 'USD';
+    let btcPriceInterval = 10;  // seconds
+    let lastBtcPrice = null;
+    let btcPriceTimer = null;
+
+    // ═══════════════════════════════════════════════════════════
+    // CURRENCY SELECTOR DROPDOWN
+    // ═══════════════════════════════════════════════════════════
+
+    const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','CNY','HKD','SGD'];
+    let currencyDropdownEl = null;
+
+    const currCodeEl = document.getElementById('topbar-btc-currency');
+    if (currCodeEl) {
+        currCodeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (currencyDropdownEl) { closeCurrencyDropdown(); return; }
+            openCurrencyDropdown();
+        });
+    }
+
+    function openCurrencyDropdown() {
+        closeCurrencyDropdown();
+        const dd = document.createElement('div');
+        dd.className = 'currency-dropdown';
+        dd.id = 'currency-dropdown';
+        let html = '<div class="curr-title">Select Currency</div><div class="curr-grid">';
+        for (const c of CURRENCIES) {
+            html += `<button class="curr-btn${c === btcCurrency ? ' active' : ''}" data-curr="${c}">${c}</button>`;
+        }
+        html += '</div>';
+        html += `<div class="curr-freq"><span>Update every</span><input type="number" id="curr-freq-input" value="${btcPriceInterval}" min="5" max="99"><span>sec</span></div>`;
+        dd.innerHTML = html;
+        document.body.appendChild(dd);
+        currencyDropdownEl = dd;
+
+        // Position near the currency code element
+        const rect = currCodeEl.getBoundingClientRect();
+        dd.style.left = Math.max(8, rect.left - 60) + 'px';
+        dd.style.top = (rect.bottom + 6) + 'px';
+
+        dd.querySelectorAll('.curr-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btcCurrency = btn.dataset.curr;
+                currCodeEl.textContent = btcCurrency;
+                dd.querySelectorAll('.curr-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                fetchInfo();
+            });
+        });
+
+        const freqInput = document.getElementById('curr-freq-input');
+        if (freqInput) {
+            freqInput.addEventListener('change', () => {
+                const v = clamp(parseInt(freqInput.value) || 10, 5, 99);
+                freqInput.value = v;
+                btcPriceInterval = v;
+                // Restart info poll with new interval
+                if (btcPriceTimer) clearInterval(btcPriceTimer);
+                btcPriceTimer = setInterval(fetchInfo, btcPriceInterval * 1000);
+            });
+        }
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', closeCurrencyOnOutside);
+        }, 0);
+    }
+
+    function closeCurrencyOnOutside(e) {
+        if (currencyDropdownEl && !currencyDropdownEl.contains(e.target) && e.target !== currCodeEl) {
+            closeCurrencyDropdown();
+        }
+    }
+
+    function closeCurrencyDropdown() {
+        if (currencyDropdownEl) {
+            currencyDropdownEl.remove();
+            currencyDropdownEl = null;
+        }
+        document.removeEventListener('click', closeCurrencyOnOutside);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MEMPOOL MODAL
+    // ═══════════════════════════════════════════════════════════
+
+    function openMempoolModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'mempool-modal';
+        overlay.innerHTML = `<div class="modal-box"><div class="modal-header"><span class="modal-title">Mempool Info</span><button class="modal-close" id="mempool-close">&times;</button></div><div class="modal-body" id="mempool-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('mempool-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        fetch(`/api/mempool?currency=${btcCurrency}`).then(r => r.json()).then(data => {
+            const body = document.getElementById('mempool-body');
+            if (!body) return;
+            if (data.error) { body.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const mp = data.mempool;
+            if (!mp) { body.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            const price = data.btc_price || 0;
+            let html = '';
+            html += `<div class="modal-row"><span class="modal-label">Pending Transactions</span><span class="modal-val modal-val-highlight">${(mp.size || 0).toLocaleString()}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            const totalFeesBTC = mp.total_fee || 0;
+            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            html += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
+            if (mp.mempoolminfee != null) {
+                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2);
+                html += `<div class="modal-row"><span class="modal-label">Min Accepted Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.minrelaytxfee != null) {
+                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2);
+                html += `<div class="modal-row"><span class="modal-label">Min Relay Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.incrementalrelayfee != null) {
+                const satVb = (mp.incrementalrelayfee * 1e8 / 1000).toFixed(2);
+                html += `<div class="modal-row"><span class="modal-label">RBF Increment</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.unbroadcastcount != null) {
+                const cls = mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight';
+                html += `<div class="modal-row"><span class="modal-label">Unbroadcast Txs</span><span class="modal-val ${cls}">${mp.unbroadcastcount}</span></div>`;
+            }
+            if (mp.fullrbf != null) {
+                const cls = mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn';
+                html += `<div class="modal-row"><span class="modal-label">Full RBF</span><span class="modal-val ${cls}">${mp.fullrbf ? 'Enabled' : 'Disabled'}</span></div>`;
+            }
+            body.innerHTML = html;
+        }).catch(err => {
+            const body = document.getElementById('mempool-body');
+            if (body) body.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BLOCKCHAIN MODAL
+    // ═══════════════════════════════════════════════════════════
+
+    function openBlockchainModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'blockchain-modal';
+        overlay.innerHTML = `<div class="modal-box"><div class="modal-header"><span class="modal-title">Blockchain Info</span><button class="modal-close" id="blockchain-close">&times;</button></div><div class="modal-body" id="blockchain-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('blockchain-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        fetch('/api/blockchain').then(r => r.json()).then(data => {
+            const body = document.getElementById('blockchain-body');
+            if (!body) return;
+            if (data.error) { body.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const bc = data.blockchain;
+            if (!bc) { body.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            let html = '';
+            html += `<div class="modal-row"><span class="modal-label">Chain</span><span class="modal-val modal-val-highlight">${bc.chain || '—'}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${(bc.blocks || 0).toLocaleString()}</span></div>`;
+            if (bc.headers) {
+                const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
+                html += `<div class="modal-row"><span class="modal-label">Sync Progress</span><span class="modal-val">${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)</span></div>`;
+            }
+            if (bc.bestblockhash) {
+                const short = bc.bestblockhash.substring(0, 20) + '...';
+                html += `<div class="modal-row"><span class="modal-label">Best Block Hash</span><span class="modal-val" title="${bc.bestblockhash}">${short}</span></div>`;
+            }
+            if (bc.difficulty) {
+                const diff = parseFloat(bc.difficulty);
+                const humanDiff = diff > 1e12 ? (diff / 1e12).toFixed(2) + 'T' : diff.toLocaleString();
+                html += `<div class="modal-row"><span class="modal-label">Difficulty</span><span class="modal-val" title="${bc.difficulty}">${humanDiff}</span></div>`;
+            }
+            if (bc.mediantime) {
+                html += `<div class="modal-row"><span class="modal-label">Median Time</span><span class="modal-val">${new Date(bc.mediantime * 1000).toLocaleString()}</span></div>`;
+            }
+            if (bc.chainwork) {
+                const short = bc.chainwork.substring(0, 20) + '...';
+                html += `<div class="modal-row"><span class="modal-label">Chain Work</span><span class="modal-val" title="${bc.chainwork}">${short}</span></div>`;
+            }
+            html += `<div class="modal-row"><span class="modal-label">IBD Status</span><span class="modal-val ${bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok'}">${bc.initialblockdownload ? 'Yes' : 'No'}</span></div>`;
+            if (bc.size_on_disk) {
+                html += `<div class="modal-row"><span class="modal-label">Size on Disk</span><span class="modal-val">${(bc.size_on_disk / 1e9).toFixed(1)} GB</span></div>`;
+            }
+            html += `<div class="modal-row"><span class="modal-label">Pruning</span><span class="modal-val">${bc.pruned ? 'Yes' : 'No'}</span></div>`;
+            if (bc.pruned && bc.pruneheight) {
+                html += `<div class="modal-row"><span class="modal-label">Prune Height</span><span class="modal-val">${bc.pruneheight.toLocaleString()}</span></div>`;
+            }
+            // Softforks
+            if (bc.softforks && Object.keys(bc.softforks).length > 0) {
+                html += '<div class="modal-section-title">Softforks</div>';
+                for (const [name, sf] of Object.entries(bc.softforks)) {
+                    const status = sf.active ? 'Active' : (sf.type || 'Defined');
+                    const cls = sf.active ? 'modal-val-ok' : '';
+                    html += `<div class="modal-row"><span class="modal-label">${name}</span><span class="modal-val ${cls}">${status}</span></div>`;
+                }
+            }
+            body.innerHTML = html;
+        }).catch(err => {
+            const body = document.getElementById('blockchain-body');
+            if (body) body.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // GEODB MANAGEMENT DROPDOWN
+    // ═══════════════════════════════════════════════════════════
+
+    let geodbDropdownEl = null;
+
+    function openGeoDBDropdown(anchorEl) {
+        closeGeoDBDropdown();
+        const dd = document.createElement('div');
+        dd.className = 'currency-dropdown';
+        dd.id = 'geodb-dropdown';
+        dd.style.minWidth = '240px';
+        dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">Loading...</div>';
+        document.body.appendChild(dd);
+        geodbDropdownEl = dd;
+
+        if (anchorEl) {
+            const rect = anchorEl.getBoundingClientRect();
+            dd.style.left = Math.max(8, rect.left - 60) + 'px';
+            dd.style.top = (rect.bottom + 6) + 'px';
+        }
+
+        // Populate from lastNodeInfo
+        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
+            renderGeoDBDropdown(lastNodeInfo.geo_db_stats);
+        } else {
+            dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">No GeoDB data</div>';
+        }
+
+        setTimeout(() => { document.addEventListener('click', closeGeoDBOnOutside); }, 0);
+    }
+
+    function renderGeoDBDropdown(stats) {
+        const dd = document.getElementById('geodb-dropdown');
+        if (!dd) return;
+        const statusText = stats.status || 'unknown';
+        const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
+        let html = '<div class="curr-title">MBCore DB</div>';
+        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
+        if (stats.entries != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Entries</span><span class="modal-val">${stats.entries.toLocaleString()}</span></div>`;
+        if (stats.size_bytes != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Size</span><span class="modal-val">${(stats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
+        if (stats.oldest_age_days != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Oldest Entry</span><span class="modal-val">${stats.oldest_age_days} days</span></div>`;
+        if (stats.path) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:160px" title="${stats.path}">${stats.path}</span></div>`;
+        const alCls = stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
+        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${stats.auto_lookup ? 'On' : 'Off'}</span></div>`;
+        const auCls = stats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
+        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${stats.auto_update ? 'On' : 'Off'}</span></div>`;
+        html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
+        html += '<div class="geodb-result" id="geodb-result"></div>';
+        dd.innerHTML = html;
+
+        document.getElementById('geodb-update-btn').addEventListener('click', async () => {
+            const resultEl = document.getElementById('geodb-result');
+            resultEl.textContent = 'Updating...';
+            resultEl.style.color = 'var(--text-secondary)';
+            try {
+                const resp = await fetch('/api/geodb/update', { method: 'POST' });
+                const data = await resp.json();
+                resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
+            } catch (err) {
+                resultEl.textContent = 'Error: ' + err.message;
+                resultEl.style.color = 'var(--err)';
+            }
+        });
+    }
+
+    function closeGeoDBOnOutside(e) {
+        if (geodbDropdownEl && !geodbDropdownEl.contains(e.target)) {
+            closeGeoDBDropdown();
+        }
+    }
+
+    function closeGeoDBDropdown() {
+        if (geodbDropdownEl) { geodbDropdownEl.remove(); geodbDropdownEl = null; }
+        document.removeEventListener('click', closeGeoDBOnOutside);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CONNECT PEER MODAL
+    // ═══════════════════════════════════════════════════════════
+
+    function openConnectPeerModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'connect-peer-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
+            <div class="modal-header"><span class="modal-title">Connect Peer</span><button class="modal-close" id="connect-close">&times;</button></div>
+            <div class="modal-body">
+                <div class="connect-instructions">Enter a peer address to connect. Bitcoin Core will attempt a one-time connection.</div>
+                <div class="connect-example">IPv4: 1.2.3.4:8333</div>
+                <div class="connect-example">IPv6: [2001:db8::1]:8333</div>
+                <div class="connect-example">Tor: abc...xyz.onion:8333</div>
+                <div class="connect-example">I2P: abc...xyz.b32.i2p:0</div>
+                <div class="connect-example">CJDNS: [fc00::1]:8333</div>
+                <div class="connect-input-row">
+                    <input type="text" class="connect-input" id="connect-addr-input" placeholder="Enter peer address...">
+                    <button class="connect-btn" id="connect-go-btn">Connect</button>
+                </div>
+                <div class="connect-result" id="connect-result"></div>
+                <div class="connect-cli-hint">For a permanent connection, use:<div class="connect-cli-cmd" id="connect-cli-cmd"><span>bitcoin-cli addnode &lt;address&gt; add</span><button class="connect-copy-btn" id="connect-copy-cli">Copy</button></div></div>
+            </div>
+        </div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('connect-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        const input = document.getElementById('connect-addr-input');
+        const goBtn = document.getElementById('connect-go-btn');
+        const resultEl = document.getElementById('connect-result');
+        const cliCmd = document.getElementById('connect-cli-cmd');
+        const copyBtn = document.getElementById('connect-copy-cli');
+
+        goBtn.addEventListener('click', async () => {
+            const addr = input.value.trim();
+            if (!addr) { resultEl.textContent = 'Please enter an address'; resultEl.className = 'connect-result err'; return; }
+            resultEl.textContent = 'Connecting...';
+            resultEl.className = 'connect-result';
+            try {
+                const resp = await fetch('/api/peer/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr }) });
+                const data = await resp.json();
+                if (data.success) {
+                    resultEl.textContent = `Connection attempt sent to ${data.address}`;
+                    resultEl.className = 'connect-result ok';
+                    cliCmd.querySelector('span').textContent = `bitcoin-cli addnode "${data.address}" add`;
+                    setTimeout(fetchPeers, 2000);
+                } else {
+                    resultEl.textContent = data.error || 'Failed';
+                    resultEl.className = 'connect-result err';
+                }
+            } catch (err) {
+                resultEl.textContent = 'Error: ' + err.message;
+                resultEl.className = 'connect-result err';
+            }
+        });
+
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') goBtn.click(); });
+
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const txt = cliCmd.querySelector('span').textContent;
+                navigator.clipboard.writeText(txt).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+                });
+            });
+        }
+    }
+
+    // Connect Peer button handler
+    const connectPeerBtn = document.getElementById('btn-connect-peer');
+    if (connectPeerBtn) {
+        connectPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openConnectPeerModal(); });
+    }
+
+    // Node Info button handler
+    const nodeInfoBtn = document.getElementById('btn-node-info');
+    if (nodeInfoBtn) {
+        nodeInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+    }
+
+    // System Info button handler
+    const systemInfoBtn = document.getElementById('btn-system-info');
+    if (systemInfoBtn) {
+        systemInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PRIVATE NETWORK POPUP (for peer list clicks)
+    // ═══════════════════════════════════════════════════════════
+
+    function showPrivateNetPopup(msg) {
+        // Remove existing
+        const existing = document.getElementById('private-net-popup');
+        if (existing) existing.remove();
+        const popup = document.createElement('div');
+        popup.className = 'private-net-popup';
+        popup.id = 'private-net-popup';
+        popup.innerHTML = `<div>${msg}</div><button class="close-popup">OK</button>`;
+        popup.style.left = '50%';
+        popup.style.top = '40%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        document.body.appendChild(popup);
+        popup.querySelector('.close-popup').addEventListener('click', () => popup.remove());
+        setTimeout(() => popup.remove(), 8000);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════════════════════════
 
@@ -533,8 +1072,14 @@
             // Update connection status in the topbar
             updateConnectionStatus(peers.length > 0);
 
+            // Update flight deck network counts
+            updateFlightDeck(nodes);
+
             // Refresh the peer table panel
             renderPeerTable();
+
+            // Reset countdown timer
+            lastPeerFetchTime = Date.now();
 
         } catch (err) {
             console.error('[vNext] Failed to fetch peers:', err);
@@ -551,75 +1096,208 @@
 
     async function fetchInfo() {
         try {
-            const resp = await fetch('/api/info?currency=USD');
+            const resp = await fetch(`/api/info?currency=${btcCurrency}`);
             if (!resp.ok) return;
             const info = await resp.json();
 
             lastNodeInfo = info;
 
-            // Update block height HUD
+            // Update block height (stored for modals and map overlay)
             if (info.last_block && info.last_block.height) {
                 lastBlockHeight = info.last_block.height;
             }
 
-            // Update Node Info card
-            renderNodeInfoCard(info);
+            // Update BTC price in topbar
+            updateBtcPricePanel(info);
 
-            // Update BTC price ticker
-            const priceEl = document.getElementById('hud-price');
-            if (priceEl && info.btc_price) {
-                const price = parseFloat(info.btc_price);
-                priceEl.textContent = `BTC $${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${info.btc_currency || 'USD'}`;
+            // Update flight deck scores
+            if (info.network_scores) {
+                const s4 = info.network_scores.ipv4;
+                const s6 = info.network_scores.ipv6;
+                const score4El = document.getElementById('fd-ipv4-score');
+                const score6El = document.getElementById('fd-ipv6-score');
+                if (score4El) { score4El.textContent = s4 != null ? s4 : '\u2014'; pulseOnChange('fd-ipv4-score', s4 || 0, 'long'); }
+                if (score6El) { score6El.textContent = s6 != null ? s6 : '\u2014'; pulseOnChange('fd-ipv6-score', s6 || 0, 'long'); }
             }
+
         } catch (err) {
             console.error('[vNext] Failed to fetch info:', err);
         }
     }
 
-    /** Render the Node Info sidebar card from /api/info data */
-    function renderNodeInfoCard(info) {
-        const card = document.getElementById('node-info-card');
-        if (!card) return;
+    /** Open combined Node Info modal — node info + mempool + blockchain ALL in one */
+    function openNodeInfoModal() {
+        // Remove any existing
+        const existing = document.getElementById('node-info-modal');
+        if (existing) existing.remove();
 
-        const body = card.querySelector('.info-card-body');
-        if (!body) return;
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'node-info-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:560px"><div class="modal-header"><span class="modal-title">Node Info</span><button class="modal-close" id="node-info-close">&times;</button></div><div class="modal-body" id="node-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('node-info-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
+        // Build combined content from cached data + fresh API calls
+        const body = document.getElementById('node-info-body');
         let html = '';
 
-        // Bitcoin Core version
-        const ver = info.subversion || '—';
-        html += `<div class="info-row"><span class="info-label">Version</span><span class="info-val">${ver}</span></div>`;
-
-        // Peer count
-        const peers = info.connected != null ? info.connected : '—';
-        html += `<div class="info-row"><span class="info-label">Peers</span><span class="info-val">${peers}</span></div>`;
-
-        // Blockchain size
-        if (info.blockchain) {
-            html += `<div class="info-row"><span class="info-label" title="On-disk blockchain storage usage">Blockchain Size (Disk)</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
-
-            // Node type (Full / Pruned)
-            const nodeType = info.blockchain.pruned ? 'Pruned' : 'Full';
-            html += `<div class="info-row"><span class="info-label">Node Type</span><span class="info-val">${nodeType}</span></div>`;
-
-            // Indexed status
-            const indexed = info.blockchain.indexed ? 'Yes' : 'No';
-            html += `<div class="info-row"><span class="info-label">TX Index</span><span class="info-val">${indexed}</span></div>`;
-
-            // Sync / IBD status
-            if (info.blockchain.ibd) {
-                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-warn">Syncing (IBD)</span></div>`;
-            } else {
-                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-ok">Synced</span></div>`;
+        // ── Section 1: Node Overview ──
+        html += '<div class="modal-section-title">Node</div>';
+        if (lastNodeInfo) {
+            const info = lastNodeInfo;
+            html += `<div class="modal-row"><span class="modal-label">Version</span><span class="modal-val">${info.subversion || '\u2014'}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Peers</span><span class="modal-val">${info.connected != null ? info.connected : '\u2014'}</span></div>`;
+            if (info.blockchain) {
+                html += `<div class="modal-row"><span class="modal-label">Size (Disk)</span><span class="modal-val">${info.blockchain.size_gb} GB</span></div>`;
+                html += `<div class="modal-row"><span class="modal-label">Node Type</span><span class="modal-val">${info.blockchain.pruned ? 'Pruned' : 'Full'}</span></div>`;
+                html += `<div class="modal-row"><span class="modal-label">TX Index</span><span class="modal-val">${info.blockchain.indexed ? 'Yes' : 'No'}</span></div>`;
+                html += `<div class="modal-row"><span class="modal-label">Status</span><span class="modal-val ${info.blockchain.ibd ? 'modal-val-warn' : 'modal-val-ok'}">${info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced'}</span></div>`;
             }
+            if (info.last_block) {
+                const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
+                html += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014'}${t ? ' (' + t + ')' : ''}</span></div>`;
+            }
+            if (info.mempool_size != null) {
+                html += `<div class="modal-row"><span class="modal-label">Mempool Size</span><span class="modal-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+            }
+        } else {
+            html += '<div style="color:var(--text-muted);padding:4px 0">No node data yet</div>';
         }
 
-        // Mempool
-        if (info.mempool_size != null) {
-            html += `<div class="info-row"><span class="info-label">Mempool</span><span class="info-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
-        }
+        // ── Section 2: Mempool (loading async) ──
+        html += '<div class="modal-section-title">Mempool</div>';
+        html += '<div id="ni-mempool-section" style="color:var(--text-muted);padding:4px 0">Loading mempool data...</div>';
+
+        // ── Section 3: Blockchain (loading async) ──
+        html += '<div class="modal-section-title">Blockchain</div>';
+        html += '<div id="ni-blockchain-section" style="color:var(--text-muted);padding:4px 0">Loading blockchain data...</div>';
 
         body.innerHTML = html;
+
+        // Fetch mempool data
+        fetch(`/api/mempool?currency=${btcCurrency}`).then(r => r.json()).then(data => {
+            const section = document.getElementById('ni-mempool-section');
+            if (!section) return;
+            if (data.error) { section.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const mp = data.mempool;
+            if (!mp) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            const price = data.btc_price || 0;
+            let mhtml = '';
+            mhtml += `<div class="modal-row"><span class="modal-label">Pending Transactions</span><span class="modal-val modal-val-highlight">${(mp.size || 0).toLocaleString()}</span></div>`;
+            mhtml += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            mhtml += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            const totalFeesBTC = mp.total_fee || 0;
+            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            mhtml += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
+            mhtml += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
+            if (mp.mempoolminfee != null) {
+                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2);
+                mhtml += `<div class="modal-row"><span class="modal-label">Min Accepted Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.minrelaytxfee != null) {
+                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2);
+                mhtml += `<div class="modal-row"><span class="modal-label">Min Relay Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.fullrbf != null) {
+                const cls = mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn';
+                mhtml += `<div class="modal-row"><span class="modal-label">Full RBF</span><span class="modal-val ${cls}">${mp.fullrbf ? 'Enabled' : 'Disabled'}</span></div>`;
+            }
+            if (mp.unbroadcastcount != null) {
+                const cls = mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight';
+                mhtml += `<div class="modal-row"><span class="modal-label">Unbroadcast Txs</span><span class="modal-val ${cls}">${mp.unbroadcastcount}</span></div>`;
+            }
+            section.innerHTML = mhtml;
+        }).catch(err => {
+            const section = document.getElementById('ni-mempool-section');
+            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
+
+        // Fetch blockchain data
+        fetch('/api/blockchain').then(r => r.json()).then(data => {
+            const section = document.getElementById('ni-blockchain-section');
+            if (!section) return;
+            if (data.error) { section.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const bc = data.blockchain;
+            if (!bc) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            let bhtml = '';
+            bhtml += `<div class="modal-row"><span class="modal-label">Chain</span><span class="modal-val modal-val-highlight">${bc.chain || '\u2014'}</span></div>`;
+            bhtml += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${(bc.blocks || 0).toLocaleString()}</span></div>`;
+            if (bc.headers) {
+                const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
+                bhtml += `<div class="modal-row"><span class="modal-label">Sync Progress</span><span class="modal-val">${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)</span></div>`;
+            }
+            if (bc.bestblockhash) {
+                const short = bc.bestblockhash.substring(0, 20) + '...';
+                bhtml += `<div class="modal-row"><span class="modal-label">Best Block Hash</span><span class="modal-val" title="${bc.bestblockhash}">${short}</span></div>`;
+            }
+            if (bc.difficulty) {
+                const diff = parseFloat(bc.difficulty);
+                const humanDiff = diff > 1e12 ? (diff / 1e12).toFixed(2) + 'T' : diff.toLocaleString();
+                bhtml += `<div class="modal-row"><span class="modal-label">Difficulty</span><span class="modal-val" title="${bc.difficulty}">${humanDiff}</span></div>`;
+            }
+            if (bc.mediantime) {
+                bhtml += `<div class="modal-row"><span class="modal-label">Median Time</span><span class="modal-val">${new Date(bc.mediantime * 1000).toLocaleString()}</span></div>`;
+            }
+            bhtml += `<div class="modal-row"><span class="modal-label">IBD Status</span><span class="modal-val ${bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok'}">${bc.initialblockdownload ? 'Yes' : 'No'}</span></div>`;
+            if (bc.size_on_disk) {
+                bhtml += `<div class="modal-row"><span class="modal-label">Size on Disk</span><span class="modal-val">${(bc.size_on_disk / 1e9).toFixed(1)} GB</span></div>`;
+            }
+            bhtml += `<div class="modal-row"><span class="modal-label">Pruning</span><span class="modal-val">${bc.pruned ? 'Yes' : 'No'}</span></div>`;
+            if (bc.softforks && Object.keys(bc.softforks).length > 0) {
+                bhtml += '<div class="modal-section-title" style="margin-top:6px;padding-top:4px">Softforks</div>';
+                for (const [name, sf] of Object.entries(bc.softforks)) {
+                    const status = sf.active ? 'Active' : (sf.type || 'Defined');
+                    const cls = sf.active ? 'modal-val-ok' : '';
+                    bhtml += `<div class="modal-row"><span class="modal-label">${name}</span><span class="modal-val ${cls}">${status}</span></div>`;
+                }
+            }
+            section.innerHTML = bhtml;
+        }).catch(err => {
+            const section = document.getElementById('ni-blockchain-section');
+            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
+    }
+
+    /** Update BTC Price in topbar + ₿ symbol coloring */
+    function updateBtcPricePanel(info) {
+        const priceEl = document.getElementById('topbar-btc-price');
+        const symbolEl = document.getElementById('topbar-btc-symbol');
+        const arrowEl = document.getElementById('topbar-btc-arrow');
+        if (!priceEl) return;
+
+        if (info.btc_price) {
+            const price = parseFloat(info.btc_price);
+            priceEl.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+            // Persistent coloring on price element
+            const dir = pulseOnChange('topbar-btc-price', price, 'persistent');
+
+            // Update ₿ symbol color (persistent: flash then stay green/red)
+            if (symbolEl && dir) {
+                const allCls = ['price-up','price-down','price-pulse-up','price-pulse-down'];
+                allCls.forEach(c => symbolEl.classList.remove(c));
+                void symbolEl.offsetWidth;
+                symbolEl.classList.add(dir > 0 ? 'price-pulse-up' : 'price-pulse-down');
+                setTimeout(() => {
+                    symbolEl.classList.remove('price-pulse-up','price-pulse-down');
+                    symbolEl.classList.add(dir > 0 ? 'price-up' : 'price-down');
+                }, 2000);
+            }
+
+            // Update arrow indicator
+            if (arrowEl && dir) {
+                arrowEl.textContent = dir > 0 ? '\u25B2' : '\u25BC';
+                arrowEl.className = 'topbar-btc-arrow ' + (dir > 0 ? 'arrow-up' : 'arrow-down');
+            }
+        } else {
+            priceEl.textContent = '\u2014';
+        }
+
+        // Currency code display
+        const codeEl = document.getElementById('topbar-btc-currency');
+        if (codeEl) codeEl.textContent = btcCurrency;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1138,6 +1816,21 @@
     // Updated every frame from current node state.
     // ═══════════════════════════════════════════════════════════
 
+    // Countdown timer state
+    let lastPeerFetchTime = 0;
+    let countdownInterval = null;
+
+    function startCountdownTimer() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = setInterval(() => {
+            const cdEl = document.getElementById('mo-countdown');
+            if (!cdEl) return;
+            const elapsed = Date.now() - lastPeerFetchTime;
+            const remaining = Math.max(0, Math.ceil((CFG.pollInterval - elapsed) / 1000));
+            cdEl.textContent = remaining + 's';
+        }, 1000);
+    }
+
     function updateHUD() {
         // Count alive nodes by network type
         const netCounts = { ipv4: 0, ipv6: 0, onion: 0, i2p: 0, cjdns: 0 };
@@ -1148,33 +1841,45 @@
             if (netCounts.hasOwnProperty(n.net)) netCounts[n.net]++;
         }
 
-        // Peer count
-        document.getElementById('hud-peers').textContent = total;
-
-        // Block height (from /api/info, not faked)
-        const blockEl = document.getElementById('hud-block');
-        if (lastBlockHeight !== null) {
-            blockEl.textContent = lastBlockHeight.toLocaleString();
-        } else {
-            blockEl.textContent = '---';
+        // Map overlay — peer count
+        const moPeers = document.getElementById('mo-peers');
+        if (moPeers) {
+            moPeers.textContent = total;
+            pulseOnChange('mo-peers', total, 'white');
         }
 
-        // "All" badge with total count
-        const allBadge = document.querySelector('.net-all');
-        if (allBadge) {
-            allBadge.textContent = `All ${total}`;
-        }
-
-        // Network badges with live counts
-        for (const net of Object.keys(NET_COLORS)) {
-            // Map "onion" -> "tor" for the CSS class
-            const cssClass = net === 'onion' ? 'tor' : net;
-            const badge = document.querySelector(`.net-${cssClass}`);
-            if (badge) {
-                const label = NET_DISPLAY[net] || net.toUpperCase();
-                badge.textContent = `${label} ${netCounts[net]}`;
+        // Map overlay — status
+        const moStatus = document.getElementById('mo-status');
+        if (moStatus && lastNodeInfo) {
+            if (lastNodeInfo.blockchain && lastNodeInfo.blockchain.ibd) {
+                moStatus.textContent = 'Syncing (IBD)';
+                moStatus.style.color = 'var(--warn)';
+            } else {
+                moStatus.textContent = 'Synced';
+                moStatus.style.color = 'var(--ok)';
             }
         }
+
+        // Map overlay — status message
+        const moMsg = document.getElementById('mo-status-msg');
+        if (moMsg && total > 0) {
+            moMsg.textContent = 'Connected';
+            moMsg.classList.add('loaded');
+        }
+
+        // Handle count row (row 2) — counts under each badge
+        const hcAll = document.getElementById('hc-all');
+        const hcIpv4 = document.getElementById('hc-ipv4');
+        const hcIpv6 = document.getElementById('hc-ipv6');
+        const hcTor = document.getElementById('hc-tor');
+        const hcI2p = document.getElementById('hc-i2p');
+        const hcCjdns = document.getElementById('hc-cjdns');
+        if (hcAll) { hcAll.textContent = total; pulseOnChange('hc-all', total, 'white'); }
+        if (hcIpv4) { hcIpv4.textContent = netCounts.ipv4; pulseOnChange('hc-ipv4', netCounts.ipv4); }
+        if (hcIpv6) { hcIpv6.textContent = netCounts.ipv6; pulseOnChange('hc-ipv6', netCounts.ipv6); }
+        if (hcTor) { hcTor.textContent = netCounts.onion; pulseOnChange('hc-tor', netCounts.onion); }
+        if (hcI2p) { hcI2p.textContent = netCounts.i2p; pulseOnChange('hc-i2p', netCounts.i2p); }
+        if (hcCjdns) { hcCjdns.textContent = netCounts.cjdns; pulseOnChange('hc-cjdns', netCounts.cjdns); }
     }
 
     /** Position the Antarctica annotation on the map landmass */
@@ -1441,8 +2146,7 @@
     const panelEl = document.getElementById('peer-panel');
     let theadEl = document.getElementById('peer-thead');
     let tbodyEl = document.getElementById('peer-tbody');
-    const handleCountEl = document.getElementById('handle-count');
-    const actionZoneEl = document.getElementById('peer-action-zone');
+    const handleCountEl = { textContent: '' };  // peer count now shown in badge only
 
     // Panel toggle
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
@@ -1854,6 +2558,16 @@
         const row = e.target.closest('tr[data-id]');
         if (!row) return;
         const peerId = parseInt(row.dataset.id);
+        const rowNet = row.dataset.net;
+
+        // Private networks: don't pan/zoom, show info popup instead
+        const isPrivateNet = (rowNet === 'onion' || rowNet === 'i2p' || rowNet === 'cjdns');
+        if (isPrivateNet) {
+            const netName = NET_DISPLAY[rowNet] || rowNet.toUpperCase();
+            showPrivateNetPopup(`${netName} peers cannot be geolocated and are placed in Antarctica for visualization.`);
+            return;
+        }
+
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
             // Select this peer: reset map to world view, then zoom into the peer.
@@ -2029,13 +2743,26 @@
         showDisconnectDialog(peerId, net || 'ipv4');
     }
 
-    /** Show a temporary result message in the toolbar */
+    /** Show a temporary result notification */
     function showActionResult(msg, success) {
-        const el = document.createElement('span');
-        el.className = `action-result ${success ? 'ok' : 'err'}`;
+        // Remove existing notification
+        const existing = document.getElementById('action-notification');
+        if (existing) existing.remove();
+
+        const el = document.createElement('div');
+        el.id = 'action-notification';
+        el.style.cssText = `position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:400;padding:8px 16px;border-radius:6px;font-size:11px;font-weight:600;pointer-events:none;backdrop-filter:blur(12px);border:1px solid;`;
+        if (success) {
+            el.style.color = 'var(--ok)';
+            el.style.borderColor = 'rgba(63,185,80,0.4)';
+            el.style.background = 'rgba(10,14,20,0.92)';
+        } else {
+            el.style.color = 'var(--err)';
+            el.style.borderColor = 'rgba(248,81,73,0.4)';
+            el.style.background = 'rgba(10,14,20,0.92)';
+        }
         el.textContent = msg;
-        actionZoneEl.innerHTML = '';
-        actionZoneEl.appendChild(el);
+        document.body.appendChild(el);
         setTimeout(() => { if (el.parentNode) el.remove(); }, 5000);
     }
 
@@ -2355,13 +3082,15 @@
             }
         });
 
-        // Show Antarctica annotation when any private network is in the enabled set
-        // (unless the user has manually dismissed it this session)
-        const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
-        if (hasPrivate && !antNoteDismissed) {
-            antNote.classList.remove('hidden');
-        } else {
-            antNote.classList.add('hidden');
+        // Show Antarctica annotation when any private network is enabled
+        // Once dismissed, stays closed for the entire session
+        if (!antNoteDismissed) {
+            const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
+            if (hasPrivate) {
+                antNote.classList.remove('hidden');
+            } else {
+                antNote.classList.add('hidden');
+            }
         }
     }
 
@@ -2386,7 +3115,6 @@
                     enabledNets.add(net);
                 }
             }
-            antNoteDismissed = false;  // reset dismiss on filter change
             updateBadgeStates();
             renderPeerTable();
         });
@@ -2461,20 +3189,7 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // SIDEBAR CARDS — Collapsible tab system
-    // ═══════════════════════════════════════════════════════════
-
-    // Tab click → expand; Header click → collapse
-    document.querySelectorAll('[data-toggle]').forEach(el => {
-        el.addEventListener('click', () => {
-            const card = el.closest('.info-card');
-            if (!card) return;
-            card.classList.toggle('collapsed');
-        });
-    });
-
-    // ═══════════════════════════════════════════════════════════
-    // SYSTEM INFO CARD — CPU/RAM from /api/stats
+    // SYSTEM INFO — CPU/RAM from /api/stats (data stored for modal)
     // ═══════════════════════════════════════════════════════════
 
     async function fetchSystemStats() {
@@ -2488,49 +3203,138 @@
         }
     }
 
-    function renderSystemInfoCard(stats) {
-        const card = document.getElementById('system-info-card');
-        if (!card) return;
-        const body = card.querySelector('.info-card-body');
-        if (!body) return;
+    /** Store latest system stats for modal use */
+    let lastSystemStats = null;
 
+    function renderSystemInfoCard(stats) {
+        // Just store the stats — modal reads them when opened
+        lastSystemStats = stats;
+    }
+
+    /** Open combined System Info modal — system stats + GeoDB + traffic + recent changes */
+    function openSystemInfoModal() {
+        const existing = document.getElementById('system-info-modal');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'system-info-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:520px"><div class="modal-header"><span class="modal-title">System Info</span><button class="modal-close" id="system-info-close">&times;</button></div><div class="modal-body" id="system-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('system-info-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        const body = document.getElementById('system-info-body');
+        let html = '';
+
+        // ── Section 1: System Stats ──
+        html += '<div class="modal-section-title">System</div>';
+        const stats = lastSystemStats || {};
         const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
         const memPct = stats.mem_pct != null ? Math.round(stats.mem_pct) : null;
         const memUsed = stats.mem_used_mb;
         const memTotal = stats.mem_total_mb;
 
-        let html = '';
-
-        // CPU bar
-        html += '<div class="info-row">';
-        html += '<span class="info-label">CPU</span>';
+        html += '<div class="info-row"><span class="info-label">CPU</span>';
         if (cpuPct != null) {
             html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
         } else {
-            html += '<span class="info-val">&mdash;</span>';
+            html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
 
-        // RAM bar
-        html += '<div class="info-row">';
-        html += '<span class="info-label">RAM</span>';
+        html += '<div class="info-row"><span class="info-label">RAM</span>';
         if (memPct != null) {
             const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
             html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text">${memStr}</span></span>`;
         } else {
-            html += '<span class="info-val">&mdash;</span>';
+            html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
 
-        // Network traffic bars (from /api/netspeed)
+        // Network traffic
         if (lastNetTraffic) {
             const rx = lastNetTraffic.rx_bps || 0;
             const tx = lastNetTraffic.tx_bps || 0;
-            html += `<div class="info-row"><span class="info-label">NET &darr;</span><span class="info-val" style="color:var(--ok)">${formatBps(rx)}</span></div>`;
-            html += `<div class="info-row"><span class="info-label">NET &uarr;</span><span class="info-val" style="color:var(--net-ipv6)">${formatBps(tx)}</span></div>`;
+            const maxBps = Math.max(rx, tx, 1);
+            const rxPct = Math.min(100, (rx / maxBps) * 100);
+            const txPct = Math.min(100, (tx / maxBps) * 100);
+            html += `<div class="info-row"><span class="info-label">NET \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
+            html += `<div class="info-row"><span class="info-label">NET \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
         }
 
+        // ── Section 2: MBCore DB ──
+        html += '<div class="modal-section-title">MBCore DB</div>';
+        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
+            const geoStats = lastNodeInfo.geo_db_stats;
+            const statusText = geoStats.status || 'unknown';
+            const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
+            html += `<div class="modal-row"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
+            if (geoStats.entries != null) html += `<div class="modal-row"><span class="modal-label">Entries</span><span class="modal-val">${geoStats.entries.toLocaleString()}</span></div>`;
+            if (geoStats.size_bytes != null) html += `<div class="modal-row"><span class="modal-label">Size</span><span class="modal-val">${(geoStats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
+            if (geoStats.oldest_age_days != null) html += `<div class="modal-row"><span class="modal-label">Oldest Entry</span><span class="modal-val">${geoStats.oldest_age_days} days</span></div>`;
+            if (geoStats.path) html += `<div class="modal-row"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:200px" title="${geoStats.path}">${geoStats.path}</span></div>`;
+            const alCls = geoStats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
+            html += `<div class="modal-row"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${geoStats.auto_lookup ? 'On' : 'Off'}</span></div>`;
+            const auCls = geoStats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
+            html += `<div class="modal-row"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${geoStats.auto_update ? 'On' : 'Off'}</span></div>`;
+            html += '<button class="geodb-update-btn" id="si-geodb-update-btn">Update Database</button>';
+            html += '<div class="geodb-result" id="si-geodb-result"></div>';
+        } else {
+            html += '<div style="color:var(--text-muted);padding:4px 0">No GeoDB data available</div>';
+        }
+
+        // ── Section 3: Recent Changes ──
+        html += '<div class="modal-section-title">Recent Changes</div>';
+        html += '<div id="si-changes-section" style="color:var(--text-muted);padding:4px 0">Loading...</div>';
+
         body.innerHTML = html;
+
+        // Bind GeoDB update button
+        const geodbBtn = document.getElementById('si-geodb-update-btn');
+        if (geodbBtn) {
+            geodbBtn.addEventListener('click', async () => {
+                const resultEl = document.getElementById('si-geodb-result');
+                resultEl.textContent = 'Updating...';
+                resultEl.style.color = 'var(--text-secondary)';
+                try {
+                    const resp = await fetch('/api/geodb/update', { method: 'POST' });
+                    const data = await resp.json();
+                    resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                    resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
+                } catch (err) {
+                    resultEl.textContent = 'Error: ' + err.message;
+                    resultEl.style.color = 'var(--err)';
+                }
+            });
+        }
+
+        // Fetch recent changes
+        fetch('/api/changes').then(r => r.json()).then(changes => {
+            const section = document.getElementById('si-changes-section');
+            if (!section) return;
+            if (!changes || changes.length === 0) {
+                section.innerHTML = '<div class="changes-empty">No recent changes</div>';
+                return;
+            }
+            const recent = changes.slice(-5).reverse();
+            let chtml = '';
+            for (const c of recent) {
+                const isConnect = c.type === 'connected';
+                const dotClass = isConnect ? 'connected' : 'disconnected';
+                const ip = c.peer ? (c.peer.ip || '') : '';
+                const port = c.peer ? (c.peer.port || '') : '';
+                const net = c.peer ? (c.peer.network || 'ipv4') : 'ipv4';
+                const label = ip ? `${ip}:${port}` : '\u2014';
+                const d = new Date(c.time * 1000);
+                const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+                chtml += `<div class="change-entry" data-ip="${ip}" data-connected="${isConnect}" data-net="${net}"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
+            }
+            section.innerHTML = chtml;
+        }).catch(err => {
+            const section = document.getElementById('si-changes-section');
+            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2548,32 +3352,11 @@
         }
     }
 
+    // Changes are now rendered inside the System Info modal
+    // renderChangesCard just stores the data for on-demand rendering
+    let lastChanges = null;
     function renderChangesCard(changes) {
-        const card = document.getElementById('changes-card');
-        if (!card) return;
-        const body = card.querySelector('.info-card-body');
-        if (!body) return;
-
-        if (!changes || changes.length === 0) {
-            body.innerHTML = '<div class="changes-empty">No recent changes</div>';
-            return;
-        }
-
-        // Show most recent 8 changes
-        const recent = changes.slice(-8).reverse();
-        let html = '';
-        for (const c of recent) {
-            const isConnect = c.type === 'connected';
-            const dotClass = isConnect ? 'connected' : 'disconnected';
-            const ip = c.peer ? (c.peer.ip || '') : '';
-            const port = c.peer ? (c.peer.port || '') : '';
-            const label = ip ? `${ip}:${port}` : '—';
-            // Format time as HH:MM:SS
-            const d = new Date(c.time * 1000);
-            const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-            html += `<div class="change-entry"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
-        }
-        body.innerHTML = html;
+        lastChanges = changes;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2587,9 +3370,31 @@
             const resp = await fetch('/api/netspeed');
             if (!resp.ok) return;
             lastNetTraffic = await resp.json();
+            updateHandleTrafficBars();
         } catch (err) {
             console.error('[vNext] Failed to fetch netspeed:', err);
         }
+    }
+
+    /** Update the traffic bars in the peer panel handle */
+    function updateHandleTrafficBars() {
+        if (!lastNetTraffic) return;
+        const rx = lastNetTraffic.rx_bps || 0;
+        const tx = lastNetTraffic.tx_bps || 0;
+        // Scale bars relative to a reasonable max (10 MB/s) or the actual max if higher
+        const refMax = Math.max(rx, tx, 1024 * 100); // at least 100 KB/s reference
+        const rxPct = Math.min(100, (rx / refMax) * 100);
+        const txPct = Math.min(100, (tx / refMax) * 100);
+
+        const barIn = document.getElementById('ht-bar-in');
+        const barOut = document.getElementById('ht-bar-out');
+        const rateIn = document.getElementById('ht-rate-in');
+        const rateOut = document.getElementById('ht-rate-out');
+
+        if (barIn) barIn.style.width = rxPct + '%';
+        if (barOut) barOut.style.width = txPct + '%';
+        if (rateIn) rateIn.textContent = formatBps(rx);
+        if (rateOut) rateOut.textContent = formatBps(tx);
     }
 
     /** Format bytes/sec to human-readable string */
@@ -2618,12 +3423,14 @@
         loadCityData();
 
         // Fetch real peer data immediately, then poll every 10s
+        lastPeerFetchTime = Date.now();
         fetchPeers();
         setInterval(fetchPeers, CFG.pollInterval);
+        startCountdownTimer();
 
-        // Fetch node info (block height etc) immediately, then poll every 15s
+        // Fetch node info (block height, BTC price, etc) immediately, then poll
         fetchInfo();
-        setInterval(fetchInfo, CFG.infoPollInterval);
+        btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
 
         // Fetch system stats (CPU/RAM) immediately, then poll every 10s
         fetchSystemStats();
