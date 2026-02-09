@@ -189,6 +189,539 @@
     let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
     // ═══════════════════════════════════════════════════════════
+    // PULSE ON CHANGE — Number animation system
+    // Ported from legacy dashboard.js with all 4 modes
+    // ═══════════════════════════════════════════════════════════
+
+    const prevValues = {};  // elementId -> previous numeric value
+
+    function pulseOnChange(elementId, newValue, mode) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const numNew = parseFloat(String(newValue).replace(/[^0-9.\-]/g, ''));
+        if (isNaN(numNew)) { prevValues[elementId] = null; return; }
+        const prev = prevValues[elementId];
+        prevValues[elementId] = numNew;
+        if (prev === null || prev === undefined) return;
+        if (numNew === prev) return;
+        const up = numNew > prev;
+        const allClasses = ['pulse-up','pulse-down','pulse-up-long','pulse-down-long','pulse-white','price-up','price-down','price-pulse-up','price-pulse-down'];
+        allClasses.forEach(c => el.classList.remove(c));
+        void el.offsetWidth;  // force reflow
+        if (mode === 'white') {
+            el.classList.add('pulse-white');
+            setTimeout(() => el.classList.remove('pulse-white'), 1500);
+        } else if (mode === 'long') {
+            el.classList.add(up ? 'pulse-up-long' : 'pulse-down-long');
+            setTimeout(() => el.classList.remove('pulse-up-long','pulse-down-long'), 5000);
+        } else if (mode === 'persistent') {
+            el.classList.add(up ? 'price-pulse-up' : 'price-pulse-down');
+            setTimeout(() => {
+                el.classList.remove('price-pulse-up','price-pulse-down');
+                el.classList.add(up ? 'price-up' : 'price-down');
+            }, 2000);
+        } else {
+            el.classList.add(up ? 'pulse-up' : 'pulse-down');
+            setTimeout(() => el.classList.remove('pulse-up','pulse-down'), 1500);
+        }
+        return up ? 1 : -1;
+    }
+
+    function showDeltaIndicator(parentEl, delta) {
+        if (!parentEl || delta === 0) return;
+        const existing = parentEl.querySelector('.delta-indicator');
+        if (existing) existing.remove();
+        const span = document.createElement('span');
+        span.className = 'delta-indicator ' + (delta > 0 ? 'delta-up' : 'delta-down');
+        span.textContent = (delta > 0 ? '+' : '') + delta;
+        parentEl.appendChild(span);
+        setTimeout(() => span.remove(), 2500);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BTC SUPPORT ADDRESS — Click to copy
+    // ═══════════════════════════════════════════════════════════
+
+    const btcSupportEl = document.getElementById('btc-support');
+    if (btcSupportEl) {
+        btcSupportEl.addEventListener('click', () => {
+            navigator.clipboard.writeText('bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5').then(() => {
+                const orig = btcSupportEl.title;
+                btcSupportEl.title = 'Copied!';
+                setTimeout(() => { btcSupportEl.title = orig; }, 2000);
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FLIGHT DECK — Toggle + Network stats
+    // ═══════════════════════════════════════════════════════════
+
+    const flightDeck = document.getElementById('flight-deck');
+    const fdToggle = document.getElementById('fd-toggle');
+    if (fdToggle && flightDeck) {
+        fdToggle.addEventListener('click', () => {
+            flightDeck.classList.toggle('collapsed');
+            fdToggle.textContent = flightDeck.classList.contains('collapsed') ? '\u25B4' : '\u25BE';
+        });
+    }
+
+    // Previous flight deck counts for delta indicators
+    const fdPrevCounts = {};
+
+    function updateFlightDeck(peerNodes) {
+        const counts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
+        for (const n of peerNodes) {
+            if (!n.alive) continue;
+            const net = n.net || 'ipv4';
+            if (!counts[net]) continue;
+            if (n.direction === 'IN') counts[net].in++;
+            else counts[net].out++;
+        }
+        const netMap = { ipv4:'ipv4', ipv6:'ipv6', onion:'tor', i2p:'i2p', cjdns:'cjdns' };
+        for (const [net, label] of Object.entries(netMap)) {
+            const c = counts[net];
+            const inEl = document.getElementById(`fd-${label}-in`);
+            const outEl = document.getElementById(`fd-${label}-out`);
+            if (inEl) {
+                const oldIn = fdPrevCounts[`${net}-in`] || 0;
+                inEl.textContent = c.in;
+                if (oldIn !== c.in && fdPrevCounts[`${net}-in`] !== undefined) {
+                    pulseOnChange(`fd-${label}-in`, c.in);
+                    showDeltaIndicator(inEl.parentElement, c.in - oldIn);
+                }
+                fdPrevCounts[`${net}-in`] = c.in;
+            }
+            if (outEl) {
+                const oldOut = fdPrevCounts[`${net}-out`] || 0;
+                outEl.textContent = c.out;
+                if (oldOut !== c.out && fdPrevCounts[`${net}-out`] !== undefined) {
+                    pulseOnChange(`fd-${label}-out`, c.out);
+                    showDeltaIndicator(outEl.parentElement, c.out - oldOut);
+                }
+                fdPrevCounts[`${net}-out`] = c.out;
+            }
+            // Status badge (enabled if count > 0)
+            const statusEl = document.getElementById(`fd-${label}-status`);
+            if (statusEl) {
+                const total = c.in + c.out;
+                if (total > 0) {
+                    statusEl.textContent = 'Enabled';
+                    statusEl.className = 'fd-net-status enabled';
+                } else {
+                    statusEl.textContent = 'Not configured';
+                    statusEl.className = 'fd-net-status not-configured';
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SIDEBAR PANEL TABS — New monolith tab system
+    // ═══════════════════════════════════════════════════════════
+
+    document.querySelectorAll('.sidebar-tab[data-toggle], .panel-header[data-toggle], .panel-close').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const group = el.closest('.sidebar-tab-group');
+            if (!group) return;
+            group.classList.toggle('open');
+        });
+    });
+
+    // P tab toggles peer panel
+    const peerToggleTab = document.getElementById('tab-peer-toggle');
+    const peerPanelEl = document.getElementById('peer-panel');
+    if (peerToggleTab && peerPanelEl) {
+        peerToggleTab.addEventListener('click', () => {
+            peerPanelEl.classList.toggle('collapsed');
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BTC PRICE STATE
+    // ═══════════════════════════════════════════════════════════
+
+    let btcCurrency = 'USD';
+    let btcPriceInterval = 10;  // seconds
+    let lastBtcPrice = null;
+    let btcPriceTimer = null;
+
+    // ═══════════════════════════════════════════════════════════
+    // CURRENCY SELECTOR DROPDOWN
+    // ═══════════════════════════════════════════════════════════
+
+    const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','CNY','HKD','SGD'];
+    let currencyDropdownEl = null;
+
+    const currCodeEl = document.getElementById('btc-currency-code');
+    if (currCodeEl) {
+        currCodeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (currencyDropdownEl) { closeCurrencyDropdown(); return; }
+            openCurrencyDropdown();
+        });
+    }
+
+    function openCurrencyDropdown() {
+        closeCurrencyDropdown();
+        const dd = document.createElement('div');
+        dd.className = 'currency-dropdown';
+        dd.id = 'currency-dropdown';
+        let html = '<div class="curr-title">Select Currency</div><div class="curr-grid">';
+        for (const c of CURRENCIES) {
+            html += `<button class="curr-btn${c === btcCurrency ? ' active' : ''}" data-curr="${c}">${c}</button>`;
+        }
+        html += '</div>';
+        html += `<div class="curr-freq"><span>Update every</span><input type="number" id="curr-freq-input" value="${btcPriceInterval}" min="5" max="99"><span>sec</span></div>`;
+        dd.innerHTML = html;
+        document.body.appendChild(dd);
+        currencyDropdownEl = dd;
+
+        // Position near the currency code element
+        const rect = currCodeEl.getBoundingClientRect();
+        dd.style.left = Math.max(8, rect.left - 60) + 'px';
+        dd.style.top = (rect.bottom + 6) + 'px';
+
+        dd.querySelectorAll('.curr-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btcCurrency = btn.dataset.curr;
+                currCodeEl.textContent = btcCurrency;
+                dd.querySelectorAll('.curr-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                fetchInfo();
+            });
+        });
+
+        const freqInput = document.getElementById('curr-freq-input');
+        if (freqInput) {
+            freqInput.addEventListener('change', () => {
+                const v = clamp(parseInt(freqInput.value) || 10, 5, 99);
+                freqInput.value = v;
+                btcPriceInterval = v;
+                // Restart info poll with new interval
+                if (btcPriceTimer) clearInterval(btcPriceTimer);
+                btcPriceTimer = setInterval(fetchInfo, btcPriceInterval * 1000);
+            });
+        }
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', closeCurrencyOnOutside);
+        }, 0);
+    }
+
+    function closeCurrencyOnOutside(e) {
+        if (currencyDropdownEl && !currencyDropdownEl.contains(e.target) && e.target !== currCodeEl) {
+            closeCurrencyDropdown();
+        }
+    }
+
+    function closeCurrencyDropdown() {
+        if (currencyDropdownEl) {
+            currencyDropdownEl.remove();
+            currencyDropdownEl = null;
+        }
+        document.removeEventListener('click', closeCurrencyOnOutside);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MEMPOOL MODAL
+    // ═══════════════════════════════════════════════════════════
+
+    function openMempoolModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'mempool-modal';
+        overlay.innerHTML = `<div class="modal-box"><div class="modal-header"><span class="modal-title">Mempool Info</span><button class="modal-close" id="mempool-close">&times;</button></div><div class="modal-body" id="mempool-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('mempool-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        fetch(`/api/mempool?currency=${btcCurrency}`).then(r => r.json()).then(data => {
+            const body = document.getElementById('mempool-body');
+            if (!body) return;
+            if (data.error) { body.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const mp = data.mempool;
+            if (!mp) { body.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            const price = data.btc_price || 0;
+            let html = '';
+            html += `<div class="modal-row"><span class="modal-label">Pending Transactions</span><span class="modal-val modal-val-highlight">${(mp.size || 0).toLocaleString()}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            const totalFeesBTC = mp.total_fee || 0;
+            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            html += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
+            if (mp.mempoolminfee != null) {
+                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2);
+                html += `<div class="modal-row"><span class="modal-label">Min Accepted Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.minrelaytxfee != null) {
+                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2);
+                html += `<div class="modal-row"><span class="modal-label">Min Relay Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.incrementalrelayfee != null) {
+                const satVb = (mp.incrementalrelayfee * 1e8 / 1000).toFixed(2);
+                html += `<div class="modal-row"><span class="modal-label">RBF Increment</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+            }
+            if (mp.unbroadcastcount != null) {
+                const cls = mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight';
+                html += `<div class="modal-row"><span class="modal-label">Unbroadcast Txs</span><span class="modal-val ${cls}">${mp.unbroadcastcount}</span></div>`;
+            }
+            if (mp.fullrbf != null) {
+                const cls = mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn';
+                html += `<div class="modal-row"><span class="modal-label">Full RBF</span><span class="modal-val ${cls}">${mp.fullrbf ? 'Enabled' : 'Disabled'}</span></div>`;
+            }
+            body.innerHTML = html;
+        }).catch(err => {
+            const body = document.getElementById('mempool-body');
+            if (body) body.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // BLOCKCHAIN MODAL
+    // ═══════════════════════════════════════════════════════════
+
+    function openBlockchainModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'blockchain-modal';
+        overlay.innerHTML = `<div class="modal-box"><div class="modal-header"><span class="modal-title">Blockchain Info</span><button class="modal-close" id="blockchain-close">&times;</button></div><div class="modal-body" id="blockchain-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('blockchain-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        fetch('/api/blockchain').then(r => r.json()).then(data => {
+            const body = document.getElementById('blockchain-body');
+            if (!body) return;
+            if (data.error) { body.innerHTML = `<div style="color:var(--err)">${data.error}</div>`; return; }
+            const bc = data.blockchain;
+            if (!bc) { body.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
+            let html = '';
+            html += `<div class="modal-row"><span class="modal-label">Chain</span><span class="modal-val modal-val-highlight">${bc.chain || '—'}</span></div>`;
+            html += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${(bc.blocks || 0).toLocaleString()}</span></div>`;
+            if (bc.headers) {
+                const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
+                html += `<div class="modal-row"><span class="modal-label">Sync Progress</span><span class="modal-val">${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)</span></div>`;
+            }
+            if (bc.bestblockhash) {
+                const short = bc.bestblockhash.substring(0, 20) + '...';
+                html += `<div class="modal-row"><span class="modal-label">Best Block Hash</span><span class="modal-val" title="${bc.bestblockhash}">${short}</span></div>`;
+            }
+            if (bc.difficulty) {
+                const diff = parseFloat(bc.difficulty);
+                const humanDiff = diff > 1e12 ? (diff / 1e12).toFixed(2) + 'T' : diff.toLocaleString();
+                html += `<div class="modal-row"><span class="modal-label">Difficulty</span><span class="modal-val" title="${bc.difficulty}">${humanDiff}</span></div>`;
+            }
+            if (bc.mediantime) {
+                html += `<div class="modal-row"><span class="modal-label">Median Time</span><span class="modal-val">${new Date(bc.mediantime * 1000).toLocaleString()}</span></div>`;
+            }
+            if (bc.chainwork) {
+                const short = bc.chainwork.substring(0, 20) + '...';
+                html += `<div class="modal-row"><span class="modal-label">Chain Work</span><span class="modal-val" title="${bc.chainwork}">${short}</span></div>`;
+            }
+            html += `<div class="modal-row"><span class="modal-label">IBD Status</span><span class="modal-val ${bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok'}">${bc.initialblockdownload ? 'Yes' : 'No'}</span></div>`;
+            if (bc.size_on_disk) {
+                html += `<div class="modal-row"><span class="modal-label">Size on Disk</span><span class="modal-val">${(bc.size_on_disk / 1e9).toFixed(1)} GB</span></div>`;
+            }
+            html += `<div class="modal-row"><span class="modal-label">Pruning</span><span class="modal-val">${bc.pruned ? 'Yes' : 'No'}</span></div>`;
+            if (bc.pruned && bc.pruneheight) {
+                html += `<div class="modal-row"><span class="modal-label">Prune Height</span><span class="modal-val">${bc.pruneheight.toLocaleString()}</span></div>`;
+            }
+            // Softforks
+            if (bc.softforks && Object.keys(bc.softforks).length > 0) {
+                html += '<div class="modal-section-title">Softforks</div>';
+                for (const [name, sf] of Object.entries(bc.softforks)) {
+                    const status = sf.active ? 'Active' : (sf.type || 'Defined');
+                    const cls = sf.active ? 'modal-val-ok' : '';
+                    html += `<div class="modal-row"><span class="modal-label">${name}</span><span class="modal-val ${cls}">${status}</span></div>`;
+                }
+            }
+            body.innerHTML = html;
+        }).catch(err => {
+            const body = document.getElementById('blockchain-body');
+            if (body) body.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // GEODB MANAGEMENT DROPDOWN
+    // ═══════════════════════════════════════════════════════════
+
+    let geodbDropdownEl = null;
+
+    function openGeoDBDropdown(anchorEl) {
+        closeGeoDBDropdown();
+        const dd = document.createElement('div');
+        dd.className = 'currency-dropdown';
+        dd.id = 'geodb-dropdown';
+        dd.style.minWidth = '240px';
+        dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">Loading...</div>';
+        document.body.appendChild(dd);
+        geodbDropdownEl = dd;
+
+        if (anchorEl) {
+            const rect = anchorEl.getBoundingClientRect();
+            dd.style.left = Math.max(8, rect.left - 60) + 'px';
+            dd.style.top = (rect.bottom + 6) + 'px';
+        }
+
+        // Populate from lastNodeInfo
+        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
+            renderGeoDBDropdown(lastNodeInfo.geo_db_stats);
+        } else {
+            dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">No GeoDB data</div>';
+        }
+
+        setTimeout(() => { document.addEventListener('click', closeGeoDBOnOutside); }, 0);
+    }
+
+    function renderGeoDBDropdown(stats) {
+        const dd = document.getElementById('geodb-dropdown');
+        if (!dd) return;
+        const statusText = stats.status || 'unknown';
+        const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
+        let html = '<div class="curr-title">MBCore DB</div>';
+        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
+        if (stats.entries != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Entries</span><span class="modal-val">${stats.entries.toLocaleString()}</span></div>`;
+        if (stats.size_bytes != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Size</span><span class="modal-val">${(stats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
+        if (stats.oldest_age_days != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Oldest Entry</span><span class="modal-val">${stats.oldest_age_days} days</span></div>`;
+        if (stats.path) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:160px" title="${stats.path}">${stats.path}</span></div>`;
+        const alCls = stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
+        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${stats.auto_lookup ? 'On' : 'Off'}</span></div>`;
+        const auCls = stats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
+        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${stats.auto_update ? 'On' : 'Off'}</span></div>`;
+        html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
+        html += '<div class="geodb-result" id="geodb-result"></div>';
+        dd.innerHTML = html;
+
+        document.getElementById('geodb-update-btn').addEventListener('click', async () => {
+            const resultEl = document.getElementById('geodb-result');
+            resultEl.textContent = 'Updating...';
+            resultEl.style.color = 'var(--text-secondary)';
+            try {
+                const resp = await fetch('/api/geodb/update', { method: 'POST' });
+                const data = await resp.json();
+                resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
+            } catch (err) {
+                resultEl.textContent = 'Error: ' + err.message;
+                resultEl.style.color = 'var(--err)';
+            }
+        });
+    }
+
+    function closeGeoDBOnOutside(e) {
+        if (geodbDropdownEl && !geodbDropdownEl.contains(e.target)) {
+            closeGeoDBDropdown();
+        }
+    }
+
+    function closeGeoDBDropdown() {
+        if (geodbDropdownEl) { geodbDropdownEl.remove(); geodbDropdownEl = null; }
+        document.removeEventListener('click', closeGeoDBOnOutside);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CONNECT PEER MODAL
+    // ═══════════════════════════════════════════════════════════
+
+    function openConnectPeerModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'connect-peer-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
+            <div class="modal-header"><span class="modal-title">Connect Peer</span><button class="modal-close" id="connect-close">&times;</button></div>
+            <div class="modal-body">
+                <div class="connect-instructions">Enter a peer address to connect. Bitcoin Core will attempt a one-time connection.</div>
+                <div class="connect-example">IPv4: 1.2.3.4:8333</div>
+                <div class="connect-example">IPv6: [2001:db8::1]:8333</div>
+                <div class="connect-example">Tor: abc...xyz.onion:8333</div>
+                <div class="connect-example">I2P: abc...xyz.b32.i2p:0</div>
+                <div class="connect-example">CJDNS: [fc00::1]:8333</div>
+                <div class="connect-input-row">
+                    <input type="text" class="connect-input" id="connect-addr-input" placeholder="Enter peer address...">
+                    <button class="connect-btn" id="connect-go-btn">Connect</button>
+                </div>
+                <div class="connect-result" id="connect-result"></div>
+                <div class="connect-cli-hint">For a permanent connection, use:<div class="connect-cli-cmd" id="connect-cli-cmd"><span>bitcoin-cli addnode &lt;address&gt; add</span><button class="connect-copy-btn" id="connect-copy-cli">Copy</button></div></div>
+            </div>
+        </div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('connect-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        const input = document.getElementById('connect-addr-input');
+        const goBtn = document.getElementById('connect-go-btn');
+        const resultEl = document.getElementById('connect-result');
+        const cliCmd = document.getElementById('connect-cli-cmd');
+        const copyBtn = document.getElementById('connect-copy-cli');
+
+        goBtn.addEventListener('click', async () => {
+            const addr = input.value.trim();
+            if (!addr) { resultEl.textContent = 'Please enter an address'; resultEl.className = 'connect-result err'; return; }
+            resultEl.textContent = 'Connecting...';
+            resultEl.className = 'connect-result';
+            try {
+                const resp = await fetch('/api/peer/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr }) });
+                const data = await resp.json();
+                if (data.success) {
+                    resultEl.textContent = `Connection attempt sent to ${data.address}`;
+                    resultEl.className = 'connect-result ok';
+                    cliCmd.querySelector('span').textContent = `bitcoin-cli addnode "${data.address}" add`;
+                    setTimeout(fetchPeers, 2000);
+                } else {
+                    resultEl.textContent = data.error || 'Failed';
+                    resultEl.className = 'connect-result err';
+                }
+            } catch (err) {
+                resultEl.textContent = 'Error: ' + err.message;
+                resultEl.className = 'connect-result err';
+            }
+        });
+
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') goBtn.click(); });
+
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const txt = cliCmd.querySelector('span').textContent;
+                navigator.clipboard.writeText(txt).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+                });
+            });
+        }
+    }
+
+    // Connect Peer button handler
+    const connectPeerBtn = document.getElementById('btn-connect-peer');
+    if (connectPeerBtn) {
+        connectPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openConnectPeerModal(); });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PRIVATE NETWORK POPUP (for peer list clicks)
+    // ═══════════════════════════════════════════════════════════
+
+    function showPrivateNetPopup(msg) {
+        // Remove existing
+        const existing = document.getElementById('private-net-popup');
+        if (existing) existing.remove();
+        const popup = document.createElement('div');
+        popup.className = 'private-net-popup';
+        popup.id = 'private-net-popup';
+        popup.innerHTML = `<div>${msg}</div><button class="close-popup">OK</button>`;
+        popup.style.left = '50%';
+        popup.style.top = '40%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        document.body.appendChild(popup);
+        popup.querySelector('.close-popup').addEventListener('click', () => popup.remove());
+        setTimeout(() => popup.remove(), 8000);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════════════════════════
 
@@ -533,6 +1066,9 @@
             // Update connection status in the topbar
             updateConnectionStatus(peers.length > 0);
 
+            // Update flight deck network counts
+            updateFlightDeck(nodes);
+
             // Refresh the peer table panel
             renderPeerTable();
 
@@ -551,7 +1087,7 @@
 
     async function fetchInfo() {
         try {
-            const resp = await fetch('/api/info?currency=USD');
+            const resp = await fetch(`/api/info?currency=${btcCurrency}`);
             if (!resp.ok) return;
             const info = await resp.json();
 
@@ -560,66 +1096,97 @@
             // Update block height HUD
             if (info.last_block && info.last_block.height) {
                 lastBlockHeight = info.last_block.height;
+                pulseOnChange('hud-block', info.last_block.height);
             }
 
-            // Update Node Info card
-            renderNodeInfoCard(info);
+            // Update Node Info panel
+            renderNodeInfoPanel(info);
 
-            // Update BTC price ticker
-            const priceEl = document.getElementById('hud-price');
-            if (priceEl && info.btc_price) {
-                const price = parseFloat(info.btc_price);
-                priceEl.textContent = `BTC $${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${info.btc_currency || 'USD'}`;
+            // Update BTC price panel + tab
+            updateBtcPricePanel(info);
+
+            // Update flight deck scores
+            if (info.network_scores) {
+                const s4 = info.network_scores.ipv4;
+                const s6 = info.network_scores.ipv6;
+                const score4El = document.getElementById('fd-ipv4-score');
+                const score6El = document.getElementById('fd-ipv6-score');
+                if (score4El) { score4El.textContent = s4 != null ? s4 : '\u2014'; pulseOnChange('fd-ipv4-score', s4 || 0, 'long'); }
+                if (score6El) { score6El.textContent = s6 != null ? s6 : '\u2014'; pulseOnChange('fd-ipv6-score', s6 || 0, 'long'); }
             }
+
         } catch (err) {
             console.error('[vNext] Failed to fetch info:', err);
         }
     }
 
-    /** Render the Node Info sidebar card from /api/info data */
-    function renderNodeInfoCard(info) {
-        const card = document.getElementById('node-info-card');
-        if (!card) return;
-
-        const body = card.querySelector('.info-card-body');
+    /** Render the Node Info sidebar panel */
+    function renderNodeInfoPanel(info) {
+        const body = document.getElementById('panel-body-node-info');
         if (!body) return;
 
         let html = '';
-
-        // Bitcoin Core version
-        const ver = info.subversion || '—';
+        const ver = info.subversion || '\u2014';
         html += `<div class="info-row"><span class="info-label">Version</span><span class="info-val">${ver}</span></div>`;
+        const peers = info.connected != null ? info.connected : '\u2014';
+        html += `<div class="info-row"><span class="info-label">Peers</span><span class="info-val" id="ni-peers">${peers}</span></div>`;
 
-        // Peer count
-        const peers = info.connected != null ? info.connected : '—';
-        html += `<div class="info-row"><span class="info-label">Peers</span><span class="info-val">${peers}</span></div>`;
-
-        // Blockchain size
         if (info.blockchain) {
-            html += `<div class="info-row"><span class="info-label" title="On-disk blockchain storage usage">Blockchain Size (Disk)</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
-
-            // Node type (Full / Pruned)
-            const nodeType = info.blockchain.pruned ? 'Pruned' : 'Full';
-            html += `<div class="info-row"><span class="info-label">Node Type</span><span class="info-val">${nodeType}</span></div>`;
-
-            // Indexed status
-            const indexed = info.blockchain.indexed ? 'Yes' : 'No';
-            html += `<div class="info-row"><span class="info-label">TX Index</span><span class="info-val">${indexed}</span></div>`;
-
-            // Sync / IBD status
-            if (info.blockchain.ibd) {
-                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-warn">Syncing (IBD)</span></div>`;
-            } else {
-                html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val info-val-ok">Synced</span></div>`;
-            }
+            html += `<div class="info-row"><span class="info-label">Size (Disk)</span><span class="info-val">${info.blockchain.size_gb} GB</span></div>`;
+            html += `<div class="info-row"><span class="info-label">Node Type</span><span class="info-val">${info.blockchain.pruned ? 'Pruned' : 'Full'}</span></div>`;
+            html += `<div class="info-row"><span class="info-label">TX Index</span><span class="info-val">${info.blockchain.indexed ? 'Yes' : 'No'}</span></div>`;
+            html += `<div class="info-row"><span class="info-label">Status</span><span class="info-val ${info.blockchain.ibd ? 'info-val-warn' : 'info-val-ok'}">${info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced'}</span></div>`;
         }
-
-        // Mempool
         if (info.mempool_size != null) {
-            html += `<div class="info-row"><span class="info-label">Mempool</span><span class="info-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+            html += `<div class="info-row"><span class="info-label">Mempool</span><span class="info-val info-val-link" id="ni-mempool">${info.mempool_size.toLocaleString()} tx</span></div>`;
+        }
+        if (info.last_block) {
+            const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
+            html += `<div class="info-row"><span class="info-label">Last Block</span><span class="info-val info-val-link" id="ni-lastblock">${info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014'}${t ? ' (' + t + ')' : ''}</span></div>`;
+        }
+        body.innerHTML = html;
+
+        // Bind clickables
+        const mempoolLink = document.getElementById('ni-mempool');
+        if (mempoolLink) mempoolLink.addEventListener('click', openMempoolModal);
+        const blockLink = document.getElementById('ni-lastblock');
+        if (blockLink) blockLink.addEventListener('click', openBlockchainModal);
+
+        // Pulse peers count
+        if (info.connected != null) pulseOnChange('ni-peers', info.connected);
+    }
+
+    /** Update BTC Price panel + ₿ tab */
+    function updateBtcPricePanel(info) {
+        const priceDisplay = document.getElementById('btc-price-display');
+        const tabLetter = document.getElementById('tab-btc-letter');
+        if (!priceDisplay) return;
+
+        if (info.btc_price) {
+            const price = parseFloat(info.btc_price);
+            priceDisplay.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+            // Persistent coloring: flash lighter then stay colored
+            const dir = pulseOnChange('btc-price-display', price, 'persistent');
+
+            // Also animate the ₿ tab letter
+            if (tabLetter && dir) {
+                const allCls = ['price-up','price-down','price-pulse-up','price-pulse-down'];
+                allCls.forEach(c => tabLetter.classList.remove(c));
+                void tabLetter.offsetWidth;
+                tabLetter.classList.add(dir > 0 ? 'price-pulse-up' : 'price-pulse-down');
+                setTimeout(() => {
+                    tabLetter.classList.remove('price-pulse-up','price-pulse-down');
+                    tabLetter.classList.add(dir > 0 ? 'price-up' : 'price-down');
+                }, 2000);
+            }
+        } else {
+            priceDisplay.textContent = '\u2014';
         }
 
-        body.innerHTML = html;
+        // Currency code display
+        const codeEl = document.getElementById('btc-currency-code');
+        if (codeEl) codeEl.textContent = btcCurrency;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1441,7 +2008,7 @@
     const panelEl = document.getElementById('peer-panel');
     let theadEl = document.getElementById('peer-thead');
     let tbodyEl = document.getElementById('peer-tbody');
-    const handleCountEl = document.getElementById('handle-count');
+    const handleCountEl = { textContent: '' };  // peer count now shown in badge only
     const actionZoneEl = document.getElementById('peer-action-zone');
 
     // Panel toggle
@@ -1854,6 +2421,16 @@
         const row = e.target.closest('tr[data-id]');
         if (!row) return;
         const peerId = parseInt(row.dataset.id);
+        const rowNet = row.dataset.net;
+
+        // Private networks: don't pan/zoom, show info popup instead
+        const isPrivateNet = (rowNet === 'onion' || rowNet === 'i2p' || rowNet === 'cjdns');
+        if (isPrivateNet) {
+            const netName = NET_DISPLAY[rowNet] || rowNet.toUpperCase();
+            showPrivateNetPopup(`${netName} peers cannot be geolocated and are placed in Antarctica for visualization.`);
+            return;
+        }
+
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
             // Select this peer: reset map to world view, then zoom into the peer.
@@ -2355,13 +2932,15 @@
             }
         });
 
-        // Show Antarctica annotation when any private network is in the enabled set
-        // (unless the user has manually dismissed it this session)
-        const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
-        if (hasPrivate && !antNoteDismissed) {
-            antNote.classList.remove('hidden');
-        } else {
-            antNote.classList.add('hidden');
+        // Show Antarctica annotation when any private network is enabled
+        // Once dismissed, stays closed for the entire session
+        if (!antNoteDismissed) {
+            const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
+            if (hasPrivate) {
+                antNote.classList.remove('hidden');
+            } else {
+                antNote.classList.add('hidden');
+            }
         }
     }
 
@@ -2386,7 +2965,6 @@
                     enabledNets.add(net);
                 }
             }
-            antNoteDismissed = false;  // reset dismiss on filter change
             updateBadgeStates();
             renderPeerTable();
         });
@@ -2461,17 +3039,8 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // SIDEBAR CARDS — Collapsible tab system
+    // SIDEBAR CARDS — (Legacy toggle removed — new tab system in place above)
     // ═══════════════════════════════════════════════════════════
-
-    // Tab click → expand; Header click → collapse
-    document.querySelectorAll('[data-toggle]').forEach(el => {
-        el.addEventListener('click', () => {
-            const card = el.closest('.info-card');
-            if (!card) return;
-            card.classList.toggle('collapsed');
-        });
-    });
 
     // ═══════════════════════════════════════════════════════════
     // SYSTEM INFO CARD — CPU/RAM from /api/stats
@@ -2489,9 +3058,7 @@
     }
 
     function renderSystemInfoCard(stats) {
-        const card = document.getElementById('system-info-card');
-        if (!card) return;
-        const body = card.querySelector('.info-card-body');
+        const body = document.getElementById('panel-body-system-info');
         if (!body) return;
 
         const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
@@ -2505,7 +3072,7 @@
         html += '<div class="info-row">';
         html += '<span class="info-label">CPU</span>';
         if (cpuPct != null) {
-            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text" id="si-cpu">${cpuPct}%</span></span>`;
         } else {
             html += '<span class="info-val">&mdash;</span>';
         }
@@ -2516,21 +3083,40 @@
         html += '<span class="info-label">RAM</span>';
         if (memPct != null) {
             const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
-            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text">${memStr}</span></span>`;
+            html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${memPct}%"></span><span class="info-bar-text" id="si-ram">${memStr}</span></span>`;
         } else {
             html += '<span class="info-val">&mdash;</span>';
         }
         html += '</div>';
 
-        // Network traffic bars (from /api/netspeed)
+        // MBCore DB entry
+        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
+            const geoStats = lastNodeInfo.geo_db_stats;
+            const entries = geoStats.entries || 0;
+            const statusText = geoStats.status || 'unknown';
+            html += `<div class="info-row"><span class="info-label">MBCore DB</span><span class="info-val info-val-link" id="si-geodb">${entries.toLocaleString()} entries (${statusText})</span></div>`;
+        }
+
+        // Network traffic bars
         if (lastNetTraffic) {
             const rx = lastNetTraffic.rx_bps || 0;
             const tx = lastNetTraffic.tx_bps || 0;
-            html += `<div class="info-row"><span class="info-label">NET &darr;</span><span class="info-val" style="color:var(--ok)">${formatBps(rx)}</span></div>`;
-            html += `<div class="info-row"><span class="info-label">NET &uarr;</span><span class="info-val" style="color:var(--net-ipv6)">${formatBps(tx)}</span></div>`;
+            const maxBps = Math.max(rx, tx, 1);
+            const rxPct = Math.min(100, (rx / maxBps) * 100);
+            const txPct = Math.min(100, (tx / maxBps) * 100);
+            html += `<div class="info-row"><span class="info-label">NET &darr;</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
+            html += `<div class="info-row"><span class="info-label">NET &uarr;</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
         }
 
         body.innerHTML = html;
+
+        // Pulse CPU/RAM
+        if (cpuPct != null) pulseOnChange('si-cpu', cpuPct);
+        if (memPct != null) pulseOnChange('si-ram', memPct);
+
+        // Bind GeoDB click
+        const geodbLink = document.getElementById('si-geodb');
+        if (geodbLink) geodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(geodbLink); });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2549,9 +3135,7 @@
     }
 
     function renderChangesCard(changes) {
-        const card = document.getElementById('changes-card');
-        if (!card) return;
-        const body = card.querySelector('.info-card-body');
+        const body = document.getElementById('panel-body-recent-info');
         if (!body) return;
 
         if (!changes || changes.length === 0) {
@@ -2559,21 +3143,64 @@
             return;
         }
 
-        // Show most recent 8 changes
-        const recent = changes.slice(-8).reverse();
+        // Show most recent 12 changes
+        const recent = changes.slice(-12).reverse();
         let html = '';
         for (const c of recent) {
             const isConnect = c.type === 'connected';
             const dotClass = isConnect ? 'connected' : 'disconnected';
             const ip = c.peer ? (c.peer.ip || '') : '';
             const port = c.peer ? (c.peer.port || '') : '';
-            const label = ip ? `${ip}:${port}` : '—';
-            // Format time as HH:MM:SS
+            const net = c.peer ? (c.peer.network || 'ipv4') : 'ipv4';
+            const label = ip ? `${ip}:${port}` : '\u2014';
             const d = new Date(c.time * 1000);
-            const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-            html += `<div class="change-entry"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
+            const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+            html += `<div class="change-entry" data-ip="${ip}" data-connected="${isConnect}" data-net="${net}"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
         }
         body.innerHTML = html;
+
+        // Click-to-zoom: fly to peer, or show message for disconnected/private
+        body.querySelectorAll('.change-entry').forEach(entry => {
+            entry.addEventListener('click', () => {
+                const isConnected = entry.dataset.connected === 'true';
+                const net = entry.dataset.net;
+                const isPrivate = (net === 'onion' || net === 'i2p' || net === 'cjdns');
+
+                if (!isConnected) {
+                    showPrivateNetPopup('This peer has been disconnected.');
+                    return;
+                }
+                if (isPrivate) {
+                    const netName = NET_DISPLAY[net] || net.toUpperCase();
+                    showPrivateNetPopup(`${netName} peers are not locatable. If visibility is enabled, check Antarctica.`);
+                    return;
+                }
+
+                // Find the peer node by IP match
+                const ip = entry.dataset.ip;
+                const node = nodes.find(n => n.alive && n.ip === ip);
+                if (node) {
+                    // Zoom to peer
+                    const p = project(node.lon, node.lat);
+                    targetView.x = (p.x - 0.5) * W;
+                    targetView.y = (p.y - 0.5) * H;
+                    targetView.zoom = 3;
+                    highlightedPeerId = node.peerId;
+                    pinnedNode = node;
+                    setTimeout(() => {
+                        const offsets = getWrapOffsets();
+                        for (const off of offsets) {
+                            const s = worldToScreen(node.lon + off, node.lat);
+                            if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
+                                showTooltip(node, s.x, s.y, true);
+                                hoveredNode = node;
+                                break;
+                            }
+                        }
+                    }, 600);
+                }
+            });
+        });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2621,9 +3248,9 @@
         fetchPeers();
         setInterval(fetchPeers, CFG.pollInterval);
 
-        // Fetch node info (block height etc) immediately, then poll every 15s
+        // Fetch node info (block height, BTC price, etc) immediately, then poll
         fetchInfo();
-        setInterval(fetchInfo, CFG.infoPollInterval);
+        btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
 
         // Fetch system stats (CPU/RAM) immediately, then poll every 10s
         fetchSystemStats();

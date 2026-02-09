@@ -3,24 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MBCore vNext</title>
+    <title>M₿Core Dashboard</title>
     <link rel="stylesheet" href="/static/css/bitstyle.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Top bar -->
     <header id="topbar">
         <div class="topbar-left">
-            <span class="logo">MBCore</span>
-            <span class="version">vNext</span>
+            <span class="logo"><span class="logo-m">M</span><span class="logo-b">₿</span><span class="logo-core">Core</span> <span class="logo-dash">Dashboard</span></span>
+            <span class="version">v5.3</span>
         </div>
         <div class="topbar-center">
-            <span id="clock"></span>
+            <a class="author-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener">Created by @mbhillrn</a>
+            <span class="btc-support" id="btc-support" title="Click to copy BTC address">Support (btc): <span class="btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
         </div>
         <div class="topbar-right">
+            <span id="clock" class="topbar-clock"></span>
             <span class="status-dot" id="status-dot"></span>
             <span class="status-text" id="status-text">Offline</span>
         </div>
     </header>
+
+    <!-- Frosted glass flight deck — network stats strip below header -->
+    <div id="flight-deck" class="flight-deck">
+        <div class="fd-toggle" id="fd-toggle" title="Toggle network stats">&#9662;</div>
+        <div class="fd-content" id="fd-content">
+            <div class="fd-net-chip" data-net="ipv4">
+                <span class="fd-net-name" style="color:var(--net-ipv4)">IPv4</span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
+                <span class="fd-net-score">Score: <span id="fd-ipv4-score">&mdash;</span></span>
+                <span class="fd-net-status" id="fd-ipv4-status" title="IPv4 network status"></span>
+            </div>
+            <div class="fd-net-chip" data-net="ipv6">
+                <span class="fd-net-name" style="color:var(--net-ipv6)">IPv6</span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
+                <span class="fd-net-score">Score: <span id="fd-ipv6-score">&mdash;</span></span>
+                <span class="fd-net-status" id="fd-ipv6-status" title="IPv6 network status"></span>
+            </div>
+            <div class="fd-net-chip" data-net="onion">
+                <span class="fd-net-name" style="color:var(--net-tor)">Tor</span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
+                <span class="fd-net-status" id="fd-tor-status" title="Tor network status"></span>
+            </div>
+            <div class="fd-net-chip" data-net="i2p">
+                <span class="fd-net-name" style="color:var(--net-i2p)">I2P</span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
+                <span class="fd-net-status" id="fd-i2p-status" title="I2P network status"></span>
+            </div>
+            <div class="fd-net-chip" data-net="cjdns">
+                <span class="fd-net-name" style="color:var(--net-cjdns)">CJDNS</span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
+                <span class="fd-net-status" id="fd-cjdns-status" title="CJDNS network status"></span>
+            </div>
+        </div>
+    </div>
 
     <!-- HUD overlay stats (floats over the map) -->
     <div id="hud-top-left" class="hud-panel">
@@ -31,55 +68,92 @@
     <div id="hud-top-right" class="hud-panel">
         <div class="hud-label">BLOCK HEIGHT</div>
         <div class="hud-value" id="hud-block">---</div>
-        <div class="hud-price" id="hud-price"></div>
     </div>
 
-    <!-- Sidebar cards (compact docked tabs on right edge) -->
+    <!-- Right-side panel tabs (monolith style) -->
     <div id="sidebar-cards" class="sidebar-cards">
-        <div id="node-info-card" class="info-card collapsed" data-card="node-info">
-            <div class="info-card-tab" data-toggle="node-info" title="Node Info">N</div>
-            <div class="info-card-panel">
-                <div class="info-card-header" data-toggle="node-info">
-                    <span class="info-card-title">Node Info</span>
+        <!-- N = Node Info -->
+        <div class="sidebar-tab-group" id="tab-group-node" data-card="node-info">
+            <div class="sidebar-tab" data-toggle="node-info" title="Node Info">
+                <span class="tab-letter tab-letter-cinzel">N</span>
+            </div>
+            <div class="sidebar-panel" id="panel-node-info">
+                <div class="panel-header" data-toggle="node-info">
+                    <span class="panel-title">Node Info</span>
+                    <span class="panel-close">&times;</span>
                 </div>
-                <div class="info-card-body">
-                    <div class="info-row"><span class="info-label">Version</span><span class="info-val">&mdash;</span></div>
-                    <div class="info-row"><span class="info-label">Status</span><span class="info-val">Loading...</span></div>
+                <div class="panel-body" id="panel-body-node-info">
+                    <div class="info-row"><span class="info-label">Loading...</span></div>
                 </div>
             </div>
         </div>
-        <div id="changes-card" class="info-card collapsed" data-card="changes">
-            <div class="info-card-tab" data-toggle="changes" title="Recent Changes">C</div>
-            <div class="info-card-panel">
-                <div class="info-card-header" data-toggle="changes">
-                    <span class="info-card-title">Changes</span>
+
+        <!-- S = System -->
+        <div class="sidebar-tab-group" id="tab-group-system" data-card="system-info">
+            <div class="sidebar-tab" data-toggle="system-info" title="System Info">
+                <span class="tab-letter tab-letter-cinzel">S</span>
+            </div>
+            <div class="sidebar-panel" id="panel-system-info">
+                <div class="panel-header" data-toggle="system-info">
+                    <span class="panel-title">System</span>
+                    <span class="panel-close">&times;</span>
                 </div>
-                <div class="info-card-body">
+                <div class="panel-body" id="panel-body-system-info">
+                    <div class="info-row"><span class="info-label">Loading...</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ₿ = Bitcoin Price -->
+        <div class="sidebar-tab-group" id="tab-group-btc" data-card="btc-info">
+            <div class="sidebar-tab sidebar-tab-btc" data-toggle="btc-info" title="Bitcoin Price">
+                <span class="tab-letter tab-letter-btc" id="tab-btc-letter">&#x20bf;</span>
+            </div>
+            <div class="sidebar-panel" id="panel-btc-info">
+                <div class="panel-header" data-toggle="btc-info">
+                    <span class="panel-title">Bitcoin</span>
+                    <span class="panel-close">&times;</span>
+                </div>
+                <div class="panel-body" id="panel-body-btc-info">
+                    <div class="btc-price-display" id="btc-price-display">&mdash;</div>
+                    <div class="btc-currency-row">
+                        <span class="btc-currency-code" id="btc-currency-code" title="Click to change currency">USD</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- R = Recent Updates -->
+        <div class="sidebar-tab-group" id="tab-group-recent" data-card="recent-info">
+            <div class="sidebar-tab" data-toggle="recent-info" title="Recent Updates">
+                <span class="tab-letter tab-letter-cinzel">R</span>
+            </div>
+            <div class="sidebar-panel" id="panel-recent-info">
+                <div class="panel-header" data-toggle="recent-info">
+                    <span class="panel-title">Recent Updates</span>
+                    <span class="panel-close">&times;</span>
+                </div>
+                <div class="panel-body panel-body-scroll" id="panel-body-recent-info">
                     <div class="changes-empty">No recent changes</div>
                 </div>
             </div>
         </div>
-        <div id="system-info-card" class="info-card collapsed" data-card="system-info">
-            <div class="info-card-tab" data-toggle="system-info" title="System Info">S</div>
-            <div class="info-card-panel">
-                <div class="info-card-header" data-toggle="system-info">
-                    <span class="info-card-title">System</span>
-                </div>
-                <div class="info-card-body">
-                    <div class="info-row"><span class="info-label">CPU</span><span class="info-val">&mdash;</span></div>
-                    <div class="info-row"><span class="info-label">RAM</span><span class="info-val">&mdash;</span></div>
-                </div>
+
+        <!-- P = Peer Table toggle -->
+        <div class="sidebar-tab-group" id="tab-group-peers" data-card="peer-toggle">
+            <div class="sidebar-tab" id="tab-peer-toggle" title="Peer Table">
+                <span class="tab-letter tab-letter-cinzel">P</span>
             </div>
         </div>
     </div>
 
-    <!-- Net popover (positioned near badges in peer panel handle) -->
+    <!-- Net popover (positioned near badges) -->
     <div id="net-popover" class="net-popover hidden"></div>
 
     <!-- Antarctica annotation (toggleable) -->
     <div id="antarctica-note" class="antarctica-note hidden">
         <span class="ant-icon">&#9432;</span>
-        <span class="ant-text">Tor, I2P &amp; CJDNS peers are placed at Antarctic research stations for visualization — their real locations are hidden by design.</span>
+        <span class="ant-text">Tor, I2P &amp; CJDNS peers are placed at Antarctic research stations for visualization &mdash; their real locations are hidden by design.</span>
         <button id="ant-close" class="ant-close">&times;</button>
     </div>
 
@@ -88,18 +162,25 @@
 
     <!-- Zoom controls -->
     <div id="zoom-controls">
-        <button id="zoom-in" class="zoom-btn">+</button>
-        <button id="zoom-out" class="zoom-btn">&minus;</button>
+        <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
+        <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
         <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
     </div>
 
     <!-- Tooltip for hovering over nodes -->
     <div id="node-tooltip" class="tooltip hidden"></div>
 
+    <!-- Currency selector dropdown (spawned dynamically) -->
+    <!-- Mempool modal (spawned dynamically) -->
+    <!-- Blockchain modal (spawned dynamically) -->
+    <!-- GeoDB dropdown (spawned dynamically) -->
+    <!-- Connect Peer modal (spawned dynamically) -->
+
     <!-- Bottom peer panel (collapsible) -->
     <div id="peer-panel" class="peer-panel collapsed">
         <div id="peer-panel-handle" class="peer-panel-handle">
             <span class="handle-arrow" id="handle-arrow">&#9650;</span>
+            <span class="handle-title">Peer List</span>
             <div class="handle-nets">
                 <span class="net-badge net-all active" data-net="all">All</span>
                 <span class="net-badge net-ipv4" data-net="ipv4">IPv4</span>
@@ -108,7 +189,8 @@
                 <span class="net-badge net-i2p" data-net="i2p">I2P</span>
                 <span class="net-badge net-cjdns" data-net="cjdns">CJDNS</span>
             </div>
-            <span class="handle-count" id="handle-count">0</span>
+            <div class="handle-spacer"></div>
+            <button class="handle-connect-btn" id="btn-connect-peer" title="Connect to a peer">+ Connect</button>
         </div>
         <div class="peer-panel-body">
             <div class="peer-panel-toolbar">
