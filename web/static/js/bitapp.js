@@ -327,7 +327,8 @@
             const panel = document.getElementById('peer-panel');
             if (panel) {
                 panel.classList.toggle('collapsed');
-                minimizeBtn.innerHTML = panel.classList.contains('collapsed') ? '&#9650;' : '&#9660;';
+                const isCollapsed = panel.classList.contains('collapsed');
+                minimizeBtn.innerHTML = isCollapsed ? 'Show Table &#9650;' : 'Hide Table &#9660;';
             }
         });
     }
@@ -348,7 +349,7 @@
     const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','CNY','HKD','SGD'];
     let currencyDropdownEl = null;
 
-    const currCodeEl = document.getElementById('topbar-btc-currency');
+    const currCodeEl = document.getElementById('mo-btc-currency');
     if (currCodeEl) {
         currCodeEl.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -695,16 +696,40 @@
         connectPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openConnectPeerModal(); });
     }
 
-    // Node Info button handler
+    // Node Info button handler (old handle btn, kept for compatibility)
     const nodeInfoBtn = document.getElementById('btn-node-info');
     if (nodeInfoBtn) {
         nodeInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
     }
 
-    // System Info button handler
+    // System Info button handler (old handle btn, kept for compatibility)
     const systemInfoBtn = document.getElementById('btn-system-info');
     if (systemInfoBtn) {
         systemInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
+    }
+
+    // Map overlay link: Node Info
+    const moNodeInfoLink = document.getElementById('mo-node-info');
+    if (moNodeInfoLink) {
+        moNodeInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+    }
+
+    // Map overlay link: Mempool Info
+    const moMempoolInfoLink = document.getElementById('mo-mempool-info');
+    if (moMempoolInfoLink) {
+        moMempoolInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openMempoolModal(); });
+    }
+
+    // Map overlay link: Blockchain Info
+    const moBlockchainInfoLink = document.getElementById('mo-blockchain-info');
+    if (moBlockchainInfoLink) {
+        moBlockchainInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openBlockchainModal(); });
+    }
+
+    // Right overlay: MBCore DB link
+    const roGeodbLink = document.getElementById('ro-geodb-link');
+    if (roGeodbLink) {
+        roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(roGeodbLink); });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1110,6 +1135,12 @@
             // Update BTC price in topbar
             updateBtcPricePanel(info);
 
+            // Update right overlay MBCore DB count
+            if (info.geo_db_stats && info.geo_db_stats.entries != null) {
+                const geodbCountEl = document.getElementById('ro-geodb-count');
+                if (geodbCountEl) geodbCountEl.textContent = info.geo_db_stats.entries.toLocaleString();
+            }
+
             // Update flight deck scores
             if (info.network_scores) {
                 const s4 = info.network_scores.ipv4;
@@ -1260,43 +1291,32 @@
         });
     }
 
-    /** Update BTC Price in topbar + ₿ symbol coloring */
+    /** Update BTC Price in left map overlay + ₿ symbol coloring */
     function updateBtcPricePanel(info) {
-        const priceEl = document.getElementById('topbar-btc-price');
-        const symbolEl = document.getElementById('topbar-btc-symbol');
-        const arrowEl = document.getElementById('topbar-btc-arrow');
+        const priceEl = document.getElementById('mo-btc-price');
+        const symbolEl = document.getElementById('mo-btc-symbol');
+        const arrowEl = document.getElementById('mo-btc-arrow');
         if (!priceEl) return;
 
         if (info.btc_price) {
             const price = parseFloat(info.btc_price);
             priceEl.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-            // Persistent coloring on price element
-            const dir = pulseOnChange('topbar-btc-price', price, 'persistent');
+            // Persistent coloring on price element (red/green on change)
+            const dir = pulseOnChange('mo-btc-price', price, 'persistent');
 
-            // Update ₿ symbol color (persistent: flash then stay green/red)
-            if (symbolEl && dir) {
-                const allCls = ['price-up','price-down','price-pulse-up','price-pulse-down'];
-                allCls.forEach(c => symbolEl.classList.remove(c));
-                void symbolEl.offsetWidth;
-                symbolEl.classList.add(dir > 0 ? 'price-pulse-up' : 'price-pulse-down');
-                setTimeout(() => {
-                    symbolEl.classList.remove('price-pulse-up','price-pulse-down');
-                    symbolEl.classList.add(dir > 0 ? 'price-up' : 'price-down');
-                }, 2000);
-            }
-
-            // Update arrow indicator
+            // ₿ symbol stays gold normally — price text gets red/green
+            // Arrow indicator shows direction
             if (arrowEl && dir) {
                 arrowEl.textContent = dir > 0 ? '\u25B2' : '\u25BC';
-                arrowEl.className = 'topbar-btc-arrow ' + (dir > 0 ? 'arrow-up' : 'arrow-down');
+                arrowEl.className = 'mo-btc-arrow ' + (dir > 0 ? 'arrow-up' : 'arrow-down');
             }
         } else {
             priceEl.textContent = '\u2014';
         }
 
         // Currency code display
-        const codeEl = document.getElementById('topbar-btc-currency');
+        const codeEl = document.getElementById('mo-btc-currency');
         if (codeEl) codeEl.textContent = btcCurrency;
     }
 
@@ -1860,26 +1880,36 @@
             }
         }
 
-        // Map overlay — status message
+        // Map overlay — status message (like original: "Map Loaded!" / "Locating X peers...")
         const moMsg = document.getElementById('mo-status-msg');
-        if (moMsg && total > 0) {
-            moMsg.textContent = 'Connected';
-            moMsg.classList.add('loaded');
+        if (moMsg) {
+            // Count pending geolocation peers
+            let pendingGeo = 0;
+            for (const n of nodes) {
+                if (n.alive && n.location_status === 'pending') pendingGeo++;
+            }
+            if (pendingGeo > 0) {
+                moMsg.textContent = `Locating ${pendingGeo} peer${pendingGeo > 1 ? 's' : ''}...`;
+                moMsg.classList.remove('loaded');
+            } else if (total > 0) {
+                moMsg.textContent = 'Map Loaded!';
+                moMsg.classList.add('loaded');
+            }
         }
 
-        // Handle count row (row 2) — counts under each badge
-        const hcAll = document.getElementById('hc-all');
-        const hcIpv4 = document.getElementById('hc-ipv4');
-        const hcIpv6 = document.getElementById('hc-ipv6');
-        const hcTor = document.getElementById('hc-tor');
-        const hcI2p = document.getElementById('hc-i2p');
-        const hcCjdns = document.getElementById('hc-cjdns');
-        if (hcAll) { hcAll.textContent = total; pulseOnChange('hc-all', total, 'white'); }
-        if (hcIpv4) { hcIpv4.textContent = netCounts.ipv4; pulseOnChange('hc-ipv4', netCounts.ipv4); }
-        if (hcIpv6) { hcIpv6.textContent = netCounts.ipv6; pulseOnChange('hc-ipv6', netCounts.ipv6); }
-        if (hcTor) { hcTor.textContent = netCounts.onion; pulseOnChange('hc-tor', netCounts.onion); }
-        if (hcI2p) { hcI2p.textContent = netCounts.i2p; pulseOnChange('hc-i2p', netCounts.i2p); }
-        if (hcCjdns) { hcCjdns.textContent = netCounts.cjdns; pulseOnChange('hc-cjdns', netCounts.cjdns); }
+        // Badge counts (inside the filter badges)
+        const bcAll = document.getElementById('bc-all');
+        const bcIpv4 = document.getElementById('bc-ipv4');
+        const bcIpv6 = document.getElementById('bc-ipv6');
+        const bcTor = document.getElementById('bc-tor');
+        const bcI2p = document.getElementById('bc-i2p');
+        const bcCjdns = document.getElementById('bc-cjdns');
+        if (bcAll) { bcAll.textContent = total; pulseOnChange('bc-all', total, 'white'); }
+        if (bcIpv4) { bcIpv4.textContent = netCounts.ipv4; pulseOnChange('bc-ipv4', netCounts.ipv4); }
+        if (bcIpv6) { bcIpv6.textContent = netCounts.ipv6; pulseOnChange('bc-ipv6', netCounts.ipv6); }
+        if (bcTor) { bcTor.textContent = netCounts.onion; pulseOnChange('bc-tor', netCounts.onion); }
+        if (bcI2p) { bcI2p.textContent = netCounts.i2p; pulseOnChange('bc-i2p', netCounts.i2p); }
+        if (bcCjdns) { bcCjdns.textContent = netCounts.cjdns; pulseOnChange('bc-cjdns', netCounts.cjdns); }
     }
 
     /** Position the Antarctica annotation on the map landmass */
@@ -3207,8 +3237,34 @@
     let lastSystemStats = null;
 
     function renderSystemInfoCard(stats) {
-        // Just store the stats — modal reads them when opened
+        // Store the stats for modal use
         lastSystemStats = stats;
+
+        // Update right overlay CPU/RAM display
+        const cpuEl = document.getElementById('ro-cpu');
+        const ramEl = document.getElementById('ro-ram');
+        if (cpuEl && stats.cpu_pct != null) {
+            const cpuPct = Math.round(stats.cpu_pct);
+            cpuEl.textContent = cpuPct + '%';
+            pulseOnChange('ro-cpu', cpuPct, 'white');
+        }
+        if (ramEl && stats.mem_pct != null) {
+            const memPct = Math.round(stats.mem_pct);
+            const memUsed = stats.mem_used_mb;
+            const memTotal = stats.mem_total_mb;
+            if (memUsed && memTotal) {
+                ramEl.textContent = `${memPct}% (${memUsed}/${memTotal}MB)`;
+            } else {
+                ramEl.textContent = memPct + '%';
+            }
+            pulseOnChange('ro-ram', memPct, 'white');
+        }
+
+        // Update right overlay MBCore DB entry count
+        const geodbCountEl = document.getElementById('ro-geodb-count');
+        if (geodbCountEl && lastNodeInfo && lastNodeInfo.geo_db_stats && lastNodeInfo.geo_db_stats.entries != null) {
+            geodbCountEl.textContent = lastNodeInfo.geo_db_stats.entries.toLocaleString();
+        }
     }
 
     /** Open combined System Info modal — system stats + GeoDB + traffic + recent changes */
@@ -3376,20 +3432,41 @@
         }
     }
 
-    /** Update the traffic bars in the peer panel handle */
+    // History arrays for adaptive max (from original dashboard)
+    const netHistoryIn = [];
+    const netHistoryOut = [];
+    const NET_HISTORY_SIZE = 30;
+
+    function getAdaptiveMax(history) {
+        if (history.length < 3) return 50 * 1024;
+        const sorted = [...history].sort((a, b) => a - b);
+        const p90Index = Math.floor(sorted.length * 0.9);
+        const p90 = sorted[p90Index] || sorted[sorted.length - 1];
+        return Math.max(p90 * 1.2, 10 * 1024);
+    }
+
+    /** Update the traffic bars in the right overlay */
     function updateHandleTrafficBars() {
         if (!lastNetTraffic) return;
         const rx = lastNetTraffic.rx_bps || 0;
         const tx = lastNetTraffic.tx_bps || 0;
-        // Scale bars relative to a reasonable max (10 MB/s) or the actual max if higher
-        const refMax = Math.max(rx, tx, 1024 * 100); // at least 100 KB/s reference
-        const rxPct = Math.min(100, (rx / refMax) * 100);
-        const txPct = Math.min(100, (tx / refMax) * 100);
 
-        const barIn = document.getElementById('ht-bar-in');
-        const barOut = document.getElementById('ht-bar-out');
-        const rateIn = document.getElementById('ht-rate-in');
-        const rateOut = document.getElementById('ht-rate-out');
+        // Push to history for adaptive scaling (like original dashboard)
+        netHistoryIn.push(rx);
+        netHistoryOut.push(tx);
+        if (netHistoryIn.length > NET_HISTORY_SIZE) netHistoryIn.shift();
+        if (netHistoryOut.length > NET_HISTORY_SIZE) netHistoryOut.shift();
+
+        const maxIn = getAdaptiveMax(netHistoryIn);
+        const maxOut = getAdaptiveMax(netHistoryOut);
+
+        const rxPct = Math.min(100, (rx / maxIn) * 100);
+        const txPct = Math.min(100, (tx / maxOut) * 100);
+
+        const barIn = document.getElementById('ro-bar-in');
+        const barOut = document.getElementById('ro-bar-out');
+        const rateIn = document.getElementById('ro-rate-in');
+        const rateOut = document.getElementById('ro-rate-out');
 
         if (barIn) barIn.style.width = rxPct + '%';
         if (barOut) barOut.style.width = txPct + '%';

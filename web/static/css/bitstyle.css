@@ -86,15 +86,15 @@ html, body {
 #topbar {
     position: fixed;
     top: 0; left: 0; right: 0;
-    height: 38px;
+    height: 46px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
-    background: linear-gradient(180deg, rgba(10,14,20,0.96) 0%, rgba(10,14,20,0.82) 100%);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(88,166,255,0.08);
+    padding: 0 18px;
+    background: linear-gradient(180deg, rgba(10,14,20,0.97) 0%, rgba(10,14,20,0.88) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(88,166,255,0.10);
     z-index: 100;
     user-select: none;
 }
@@ -102,24 +102,25 @@ html, body {
 /* --- Logo --- */
 .topbar-left {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-end;
+    gap: 10px;
     flex-shrink: 0;
+    padding-bottom: 2px;
 }
 .logo {
     font-family: var(--font-display);
-    font-size: 32px;
+    font-size: 36px;
     font-weight: 700;
     letter-spacing: 0.5px;
     line-height: 1;
 }
 .logo-m {
     color: #4a90d9;
-    font-size: 32px;
+    font-size: 36px;
 }
 .logo-b {
     color: #7ec8e3;
-    font-size: 32px;
+    font-size: 36px;
 }
 .logo-core {
     color: #4a90d9;
@@ -127,23 +128,35 @@ html, body {
 .logo-dash {
     color: var(--text-secondary);
     font-weight: 400;
-    font-size: 18px;
+    font-size: 22px;
 }
 .version {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
     background: var(--bg-raised);
-    padding: 1px 5px;
-    border-radius: 3px;
+    padding: 2px 7px;
+    border-radius: 4px;
     font-family: var(--font-data);
+    margin-bottom: 2px;
+    border: 1px solid rgba(88,166,255,0.08);
 }
 
 /* --- Top bar right section --- */
 .topbar-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex-shrink: 0;
+}
+.topbar-clock {
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    font-family: var(--font-data);
+}
+.status-text {
+    font-size: 11px;
+    color: var(--text-secondary);
 }
 
 /* --- BTC Price in top bar --- */
@@ -203,13 +216,7 @@ html, body {
     font-size: 12px;
 }
 
-/* --- Clock & Status --- */
-.topbar-clock {
-    font-size: 12px;
-    color: var(--text-secondary);
-    letter-spacing: 0.5px;
-    font-family: var(--font-data);
-}
+/* --- Status Dot --- */
 .status-dot {
     width: 7px;
     height: 7px;
@@ -223,27 +230,27 @@ html, body {
     box-shadow: 0 0 8px var(--ok);
     animation: status-pulse 2s infinite;
 }
-.status-text {
-    font-size: 10px;
-    color: var(--text-secondary);
-}
 
 /* ==========================================================
    4. FROSTED GLASS FLIGHT DECK — Network stats strip
    ========================================================== */
 .flight-deck {
     position: fixed;
-    top: 38px;
-    left: 0; right: 0;
+    top: 48px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 90;
-    background: rgba(10, 14, 20, 0.75);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(88, 166, 255, 0.08);
+    background: rgba(10, 14, 20, 0.45);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(88, 166, 255, 0.08);
+    border-radius: 0 0 8px 8px;
+    border-top: none;
     transition: max-height 0.3s ease, opacity 0.3s ease;
     max-height: 60px;
     overflow: hidden;
     user-select: none;
+    padding: 0 4px;
 }
 .flight-deck.collapsed {
     max-height: 0;
@@ -284,12 +291,12 @@ html, body {
 }
 .fd-net-name {
     font-weight: 700;
-    font-size: 11px;
+    font-size: 13px;
     letter-spacing: 0.3px;
 }
 .fd-net-counts {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 13px;
     font-family: var(--font-data);
 }
 .fd-in, .fd-out {
@@ -300,7 +307,7 @@ html, body {
 }
 .fd-net-score {
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
 }
 .fd-net-score span { color: var(--text-secondary); font-weight: 600; }
 .fd-net-status {
@@ -388,18 +395,15 @@ html, body {
    ========================================================== */
 .map-overlay {
     position: fixed;
-    top: 100px;
-    left: 16px;
+    top: 56px;
+    left: 18px;
     z-index: 50;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     pointer-events: none;
     user-select: none;
-    /* NO background, NO border, NO backdrop-filter */
 }
-/* Adjust position when flight deck is collapsed */
-.flight-deck.collapsed ~ .map-overlay { top: 52px; }
 
 .mo-row {
     display: flex;
@@ -407,31 +411,189 @@ html, body {
     gap: 8px;
 }
 .mo-label {
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 1.2px;
     color: var(--text-muted);
-    text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
 }
 .mo-value {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--text-primary);
-    text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
 }
 .mo-value-big {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
-    text-shadow: 0 0 10px rgba(0,0,0,0.9);
+    text-shadow: 0 1px 8px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.7);
 }
 .mo-status-msg {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--warn);
-    text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
     transition: color var(--transition);
 }
 .mo-status-msg.loaded {
     color: var(--ok);
+}
+
+/* Clickable link items in map overlay */
+.mo-link-row {
+    pointer-events: auto;
+}
+.mo-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    transition: color var(--transition), text-shadow var(--transition);
+    letter-spacing: 0.3px;
+}
+.mo-link:hover {
+    color: #7dbeff;
+    text-shadow: 0 0 10px rgba(88,166,255,0.4), 0 1px 6px rgba(0,0,0,0.9);
+}
+
+/* BTC price in left overlay */
+.mo-btc-row {
+    margin-top: 4px;
+    pointer-events: auto;
+}
+.mo-btc {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: default;
+}
+.mo-btc-symbol {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f7931a;
+    line-height: 1;
+    text-shadow: 0 0 10px rgba(247,147,26,0.4), 0 1px 6px rgba(0,0,0,0.9);
+    transition: text-shadow 0.3s ease;
+}
+.mo-btc-price {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-data);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    transition: color 0.3s ease;
+}
+.mo-btc-arrow {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+}
+.mo-btc-arrow.arrow-up { color: var(--ok); }
+.mo-btc-arrow.arrow-down { color: var(--err); }
+.mo-btc-currency {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 2px 7px;
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 3px;
+    transition: all var(--transition);
+    font-family: var(--font-data);
+    text-shadow: none;
+}
+.mo-btc-currency:hover {
+    background: rgba(88,166,255,0.15);
+    border-color: var(--accent);
+}
+
+/* ==========================================================
+   6b. RIGHT OVERLAY — system stats panel (no background)
+   ========================================================== */
+.right-overlay {
+    position: fixed;
+    top: 56px;
+    right: 18px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    pointer-events: none;
+    user-select: none;
+    align-items: flex-end;
+}
+.ro-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ro-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    font-weight: 600;
+}
+.ro-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    font-family: var(--font-data);
+}
+.ro-traffic-row {
+    gap: 6px;
+}
+.ro-bar-bg {
+    width: 80px;
+    height: 7px;
+    background: rgba(88, 166, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+.ro-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s ease;
+    min-width: 0;
+    width: 0%;
+}
+.ro-bar-in  { background: var(--ok); box-shadow: 0 0 4px rgba(63,185,80,0.3); }
+.ro-bar-out { background: var(--net-ipv6); box-shadow: 0 0 4px rgba(240,113,120,0.3); }
+.ro-rate {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-family: var(--font-data);
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+    min-width: 60px;
+    text-align: right;
+}
+.ro-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    pointer-events: auto;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7);
+    transition: color var(--transition), text-shadow var(--transition);
+}
+.ro-link:hover {
+    color: #7dbeff;
+    text-shadow: 0 0 10px rgba(88,166,255,0.4), 0 1px 6px rgba(0,0,0,0.9);
+}
+.ro-geodb-count {
+    color: var(--text-primary);
+    font-family: var(--font-data);
+}
+.ro-controls {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    pointer-events: auto;
 }
 
 /* ==========================================================
@@ -493,27 +655,17 @@ html, body {
 .ant-close:hover { color: var(--text-secondary); }
 
 /* ==========================================================
-   9. ZOOM CONTROLS
+   9. ZOOM CONTROLS (inside right overlay)
    ========================================================== */
-#zoom-controls {
-    position: fixed;
-    right: 16px;
-    bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    z-index: 85;
-    transition: bottom 0.3s ease;
-}
 .zoom-btn {
     width: 32px;
     height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(10, 14, 20, 0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(10, 14, 20, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(88, 166, 255, 0.15);
     border-radius: var(--radius);
     color: var(--text-secondary);
@@ -525,13 +677,9 @@ html, body {
 .zoom-btn:hover {
     color: var(--accent);
     border-color: rgba(88, 166, 255, 0.35);
-    background: rgba(17, 24, 32, 0.95);
+    background: rgba(17, 24, 32, 0.85);
 }
 .zoom-btn:active { transform: scale(0.92); }
-
-/* Keep zoom controls above peer panel when open */
-.peer-panel:not(.collapsed) ~ #zoom-controls { bottom: 352px; }
-.peer-panel.collapsed ~ #zoom-controls { bottom: 82px; }
 
 /* ==========================================================
    10. TOOLTIP
@@ -594,11 +742,11 @@ html, body {
     transition: max-height 0.3s ease;
     pointer-events: auto;
 }
-/* Collapsed: only show handle (2-row handle ~ 58px) */
-.peer-panel.collapsed { max-height: 58px; }
+/* Collapsed: only show handle */
+.peer-panel.collapsed { max-height: 48px; }
 .peer-panel.collapsed .peer-panel-body { display: none; }
 
-/* --- Handle: 2-row layout --- */
+/* --- Handle --- */
 .peer-panel-handle {
     display: flex;
     flex-direction: column;
@@ -631,7 +779,7 @@ html, body {
 }
 
 .handle-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: 0.5px;
@@ -639,23 +787,31 @@ html, body {
     flex-shrink: 0;
 }
 
-/* --- Handle filter badges --- */
+/* --- Handle filter badges (counts inside) --- */
 .handle-nets {
     display: flex;
-    gap: 4px;
+    gap: 5px;
     align-items: center;
     pointer-events: auto;
 }
 .handle-nets .net-badge {
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 600;
-    padding: 1px 6px;
-    border-radius: 3px;
+    padding: 3px 10px;
+    border-radius: 4px;
     letter-spacing: 0.5px;
     opacity: 0.85;
     cursor: pointer;
     transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.handle-nets .net-badge .badge-count {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.9;
 }
 .handle-nets .net-badge:hover { opacity: 1; transform: translateY(-1px); }
 .handle-nets .net-badge.dimmed { opacity: 0.35; }
@@ -664,10 +820,10 @@ html, body {
 
 /* --- Handle buttons --- */
 .handle-btn {
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 600;
-    padding: 2px 10px;
-    border-radius: 3px;
+    padding: 4px 12px;
+    border-radius: 4px;
     cursor: pointer;
     font-family: inherit;
     transition: all var(--transition);
@@ -1317,17 +1473,16 @@ html, body {
 .footer {
     position: fixed;
     bottom: 0; left: 0; right: 0;
-    height: 24px;
+    height: 28px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 0 16px;
+    justify-content: space-between;
+    padding: 0 20px;
     background: rgba(10, 14, 20, 0.88);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-top: 1px solid rgba(88, 166, 255, 0.06);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
     z-index: 70;
     user-select: none;
@@ -1352,16 +1507,13 @@ html, body {
 .footer-btc-addr {
     font-family: var(--font-data);
     color: var(--text-dim);
-    font-size: 9px;
+    font-size: 10px;
     transition: color var(--transition);
 }
 .footer-btc:hover .footer-btc-addr { color: var(--accent); }
 
 /* Push peer panel above footer */
-.peer-panel { bottom: 24px; }
-/* Zoom controls account for footer */
-.peer-panel:not(.collapsed) ~ #zoom-controls { bottom: 376px; }
-.peer-panel.collapsed ~ #zoom-controls { bottom: 106px; }
+.peer-panel { bottom: 28px; }
 
 /* ==========================================================
    20. PRIVATE NET POPUP
