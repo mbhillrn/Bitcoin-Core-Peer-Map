@@ -113,7 +113,10 @@ html, body {
     font-weight: 700;
     letter-spacing: 0.5px;
     line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
 }
+.logo:hover .logo-dash { color: var(--text-primary); }
 .logo-m {
     color: #4a90d9;
     font-size: 36px;
@@ -139,7 +142,10 @@ html, body {
     font-family: var(--font-data);
     margin-bottom: 2px;
     border: 1px solid rgba(88,166,255,0.08);
+    text-decoration: none;
+    transition: color var(--transition), border-color var(--transition);
 }
+.version:hover { color: var(--accent); border-color: rgba(88,166,255,0.2); }
 
 /* --- Top bar right section --- */
 .topbar-right {
@@ -783,7 +789,7 @@ html, body {
 .peer-panel-handle {
     display: flex;
     flex-direction: column;
-    background: rgba(10, 14, 20, 0.70);
+    background: rgba(10, 14, 20, 0.60);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid rgba(88, 166, 255, 0.12);
@@ -989,7 +995,7 @@ html, body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: rgba(10, 14, 20, 0.72);
+    background: rgba(10, 14, 20, 0.62);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
@@ -1177,7 +1183,7 @@ html, body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 280px;
+    max-width: 360px;
 }
 .modal-val-highlight { color: var(--accent); font-weight: 700; }
 .modal-val-ok   { color: var(--ok); }
@@ -1342,7 +1348,7 @@ html, body {
     gap: 4px;
 }
 .dsp-input {
-    width: 48px;
+    width: 60px;
     padding: 2px 6px;
     font-size: 11px;
     font-family: var(--font-data);

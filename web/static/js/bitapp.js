@@ -652,78 +652,56 @@
     // GEODB MANAGEMENT DROPDOWN
     // ═══════════════════════════════════════════════════════════
 
-    let geodbDropdownEl = null;
+    /** Open MBCore DB as a centered modal (like Node Info) */
+    function openGeoDBDropdown() {
+        const existing = document.getElementById('geodb-modal');
+        if (existing) existing.remove();
 
-    function openGeoDBDropdown(anchorEl) {
-        closeGeoDBDropdown();
-        const dd = document.createElement('div');
-        dd.className = 'currency-dropdown';
-        dd.id = 'geodb-dropdown';
-        dd.style.minWidth = '240px';
-        dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">Loading...</div>';
-        document.body.appendChild(dd);
-        geodbDropdownEl = dd;
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'geodb-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:480px"><div class="modal-header"><span class="modal-title">MBCore DB</span><button class="modal-close" id="geodb-modal-close">&times;</button></div><div class="modal-body" id="geodb-modal-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('geodb-modal-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-        if (anchorEl) {
-            const rect = anchorEl.getBoundingClientRect();
-            dd.style.left = Math.max(8, rect.left - 60) + 'px';
-            dd.style.top = (rect.bottom + 6) + 'px';
-        }
+        const body = document.getElementById('geodb-modal-body');
 
-        // Populate from lastNodeInfo
         if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
-            renderGeoDBDropdown(lastNodeInfo.geo_db_stats);
+            const stats = lastNodeInfo.geo_db_stats;
+            const statusText = stats.status || 'unknown';
+            const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
+            let html = '';
+            html += `<div class="modal-row"><span class="modal-label" title="Database health status">Status</span><span class="geodb-status-badge ${statusCls}" title="${statusText.toUpperCase()}">${statusText.toUpperCase()}</span></div>`;
+            if (stats.entries != null) html += mrow('Entries', stats.entries.toLocaleString(), 'Total number of IP geolocation records in the database', `${stats.entries.toLocaleString()} records`);
+            if (stats.size_bytes != null) html += mrow('Size', (stats.size_bytes / 1e6).toFixed(1) + ' MB', 'Database file size on disk', `${(stats.size_bytes / 1e6).toFixed(1)} MB`);
+            if (stats.oldest_age_days != null) html += mrow('Oldest Entry', stats.oldest_age_days + ' days', 'Age of the oldest geolocation record', `${stats.oldest_age_days} days old`);
+            if (stats.path) html += `<div class="modal-row"><span class="modal-label" title="File system path to the database">Path</span><span class="modal-val" style="font-size:9px;max-width:260px" title="${stats.path}">${stats.path}</span></div>`;
+            const alVal = stats.auto_lookup ? 'On' : 'Off';
+            html += mrow('Auto-lookup', alVal, 'Automatically look up geolocation for new peer IPs', alVal, stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn');
+            const auVal = stats.auto_update ? 'On' : 'Off';
+            html += mrow('Auto-update', auVal, 'Automatically refresh stale geolocation entries', auVal, stats.auto_update ? 'modal-val-ok' : 'modal-val-warn');
+            html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
+            html += '<div class="geodb-result" id="geodb-result"></div>';
+            body.innerHTML = html;
+
+            document.getElementById('geodb-update-btn').addEventListener('click', async () => {
+                const resultEl = document.getElementById('geodb-result');
+                resultEl.textContent = 'Updating...';
+                resultEl.style.color = 'var(--text-secondary)';
+                try {
+                    const resp = await fetch('/api/geodb/update', { method: 'POST' });
+                    const data = await resp.json();
+                    resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                    resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
+                } catch (err) {
+                    resultEl.textContent = 'Error: ' + err.message;
+                    resultEl.style.color = 'var(--err)';
+                }
+            });
         } else {
-            dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">No GeoDB data</div>';
+            body.innerHTML = '<div style="color:var(--text-muted);padding:8px 0;text-align:center">No GeoDB data available</div>';
         }
-
-        setTimeout(() => { document.addEventListener('click', closeGeoDBOnOutside); }, 0);
-    }
-
-    function renderGeoDBDropdown(stats) {
-        const dd = document.getElementById('geodb-dropdown');
-        if (!dd) return;
-        const statusText = stats.status || 'unknown';
-        const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
-        let html = '<div class="curr-title">MBCore DB</div>';
-        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
-        if (stats.entries != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Entries</span><span class="modal-val">${stats.entries.toLocaleString()}</span></div>`;
-        if (stats.size_bytes != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Size</span><span class="modal-val">${(stats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
-        if (stats.oldest_age_days != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Oldest Entry</span><span class="modal-val">${stats.oldest_age_days} days</span></div>`;
-        if (stats.path) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:160px" title="${stats.path}">${stats.path}</span></div>`;
-        const alCls = stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
-        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${stats.auto_lookup ? 'On' : 'Off'}</span></div>`;
-        const auCls = stats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
-        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${stats.auto_update ? 'On' : 'Off'}</span></div>`;
-        html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
-        html += '<div class="geodb-result" id="geodb-result"></div>';
-        dd.innerHTML = html;
-
-        document.getElementById('geodb-update-btn').addEventListener('click', async () => {
-            const resultEl = document.getElementById('geodb-result');
-            resultEl.textContent = 'Updating...';
-            resultEl.style.color = 'var(--text-secondary)';
-            try {
-                const resp = await fetch('/api/geodb/update', { method: 'POST' });
-                const data = await resp.json();
-                resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
-                resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
-            } catch (err) {
-                resultEl.textContent = 'Error: ' + err.message;
-                resultEl.style.color = 'var(--err)';
-            }
-        });
-    }
-
-    function closeGeoDBOnOutside(e) {
-        if (geodbDropdownEl && !geodbDropdownEl.contains(e.target)) {
-            closeGeoDBDropdown();
-        }
-    }
-
-    function closeGeoDBDropdown() {
-        if (geodbDropdownEl) { geodbDropdownEl.remove(); geodbDropdownEl = null; }
-        document.removeEventListener('click', closeGeoDBOnOutside);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -835,7 +813,7 @@
     // Right overlay: MBCORE DB link
     const roGeodbLink = document.getElementById('ro-geodb-link');
     if (roGeodbLink) {
-        roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(roGeodbLink); });
+        roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(); });
     }
 
     // Left overlay: CPU/RAM/NET rows → click opens system info modal
@@ -1280,6 +1258,14 @@
     }
 
     /** Open combined Node Info modal — node info + mempool + blockchain ALL in one */
+    /** Helper to build a modal row with hover tooltips on both label and value */
+    function mrow(label, value, labelTip, valueTip, valClass) {
+        const lt = labelTip ? ` title="${labelTip}"` : '';
+        const vt = valueTip ? ` title="${valueTip}"` : ` title="${value}"`;
+        const cls = valClass ? ` ${valClass}` : '';
+        return `<div class="modal-row"><span class="modal-label"${lt}>${label}</span><span class="modal-val${cls}"${vt}>${value}</span></div>`;
+    }
+
     function openNodeInfoModal() {
         // Remove any existing
         const existing = document.getElementById('node-info-modal');
@@ -1288,12 +1274,11 @@
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'node-info-modal';
-        overlay.innerHTML = `<div class="modal-box" style="max-width:560px"><div class="modal-header"><span class="modal-title">Node Info</span><button class="modal-close" id="node-info-close">&times;</button></div><div class="modal-body" id="node-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        overlay.innerHTML = `<div class="modal-box" style="max-width:640px"><div class="modal-header"><span class="modal-title">Node Info</span><button class="modal-close" id="node-info-close">&times;</button></div><div class="modal-body" id="node-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
         document.body.appendChild(overlay);
         document.getElementById('node-info-close').addEventListener('click', () => overlay.remove());
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-        // Build combined content from cached data + fresh API calls
         const body = document.getElementById('node-info-body');
         let html = '';
 
@@ -1301,20 +1286,24 @@
         html += '<div class="modal-section-title">Node</div>';
         if (lastNodeInfo) {
             const info = lastNodeInfo;
-            html += `<div class="modal-row"><span class="modal-label">Version</span><span class="modal-val">${info.subversion || '\u2014'}</span></div>`;
-            html += `<div class="modal-row"><span class="modal-label">Peers</span><span class="modal-val">${info.connected != null ? info.connected : '\u2014'}</span></div>`;
+            const ver = info.subversion || '\u2014';
+            html += mrow('Version', ver, 'Bitcoin Core user agent string', ver);
+            html += mrow('Peers', info.connected != null ? info.connected : '\u2014', 'Total number of connected peers', info.connected != null ? `${info.connected} peers connected` : '');
             if (info.blockchain) {
-                html += `<div class="modal-row"><span class="modal-label">Size (Disk)</span><span class="modal-val">${info.blockchain.size_gb} GB</span></div>`;
-                html += `<div class="modal-row"><span class="modal-label">Node Type</span><span class="modal-val">${info.blockchain.pruned ? 'Pruned' : 'Full'}</span></div>`;
-                html += `<div class="modal-row"><span class="modal-label">TX Index</span><span class="modal-val">${info.blockchain.indexed ? 'Yes' : 'No'}</span></div>`;
-                html += `<div class="modal-row"><span class="modal-label">Status</span><span class="modal-val ${info.blockchain.ibd ? 'modal-val-warn' : 'modal-val-ok'}">${info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced'}</span></div>`;
+                html += mrow('Size (Disk)', `${info.blockchain.size_gb} GB`, 'Total blockchain data stored on disk', `${info.blockchain.size_gb} GB`);
+                html += mrow('Node Type', info.blockchain.pruned ? 'Pruned' : 'Full', 'Whether this node stores all blocks (Full) or only recent ones (Pruned)', info.blockchain.pruned ? 'Pruned node \u2014 older blocks deleted to save space' : 'Full node \u2014 all blocks stored');
+                html += mrow('TX Index', info.blockchain.indexed ? 'Yes' : 'No', 'Transaction index allows looking up any TX by its hash', info.blockchain.indexed ? 'Enabled \u2014 all transactions are indexed' : 'Disabled');
+                const syncVal = info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced';
+                html += mrow('Status', syncVal, 'Whether the node has finished initial block download', syncVal, info.blockchain.ibd ? 'modal-val-warn' : 'modal-val-ok');
             }
             if (info.last_block) {
                 const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
-                html += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014'}${t ? ' (' + t + ')' : ''}</span></div>`;
+                const heightStr = info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014';
+                const display = heightStr + (t ? ` (${t})` : '');
+                html += mrow('Block Height', display, 'Latest block height seen by this node', display, 'modal-val-ok');
             }
             if (info.mempool_size != null) {
-                html += `<div class="modal-row"><span class="modal-label">Mempool Size</span><span class="modal-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+                html += mrow('Mempool Size', `${info.mempool_size.toLocaleString()} tx`, 'Number of unconfirmed transactions in the mempool', `${info.mempool_size.toLocaleString()} transactions`);
             }
         } else {
             html += '<div style="color:var(--text-muted);padding:4px 0">No node data yet</div>';
@@ -1339,28 +1328,32 @@
             if (!mp) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
             const price = data.btc_price || 0;
             let mhtml = '';
-            mhtml += `<div class="modal-row"><span class="modal-label">Pending Transactions</span><span class="modal-val modal-val-highlight">${(mp.size || 0).toLocaleString()}</span></div>`;
-            mhtml += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
-            mhtml += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            const pendingVal = (mp.size || 0).toLocaleString();
+            mhtml += mrow('Pending TXs', pendingVal, 'Unconfirmed transactions waiting to be mined', `${pendingVal} transactions`, 'modal-val-highlight');
+            const dataSz = ((mp.bytes || 0) / 1e6).toFixed(2) + ' MB';
+            mhtml += mrow('Data Size', dataSz, 'Raw serialized size of all mempool transactions', dataSz);
+            const memUsg = ((mp.usage || 0) / 1e6).toFixed(2) + ' MB';
+            mhtml += mrow('Memory Usage', memUsg, 'Actual RAM used by the mempool', memUsg);
             const totalFeesBTC = mp.total_fee || 0;
             const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
-            mhtml += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
-            mhtml += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
+            const feesVal = totalFeesBTC.toFixed(8) + ' BTC' + totalFeesFiat;
+            mhtml += mrow('Total Fees', feesVal, 'Sum of all fees from pending transactions', feesVal);
+            const maxMp = ((mp.maxmempool || 0) / 1e6).toFixed(0) + ' MB';
+            mhtml += mrow('Max Size', maxMp, 'Maximum allowed mempool size before evicting low-fee transactions', maxMp);
             if (mp.mempoolminfee != null) {
-                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2);
-                mhtml += `<div class="modal-row"><span class="modal-label">Min Accepted Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2) + ' sat/vB';
+                mhtml += mrow('Min Accepted Fee', satVb, 'Minimum fee rate to enter the mempool (rises when mempool is full)', satVb);
             }
             if (mp.minrelaytxfee != null) {
-                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2);
-                mhtml += `<div class="modal-row"><span class="modal-label">Min Relay Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2) + ' sat/vB';
+                mhtml += mrow('Min Relay Fee', satVb, 'Minimum fee rate for a transaction to be relayed to other nodes', satVb);
             }
             if (mp.fullrbf != null) {
-                const cls = mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn';
-                mhtml += `<div class="modal-row"><span class="modal-label">Full RBF</span><span class="modal-val ${cls}">${mp.fullrbf ? 'Enabled' : 'Disabled'}</span></div>`;
+                const val = mp.fullrbf ? 'Enabled' : 'Disabled';
+                mhtml += mrow('Full RBF', val, 'Replace-by-fee policy \u2014 whether any transaction can be replaced by a higher-fee version', val, mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn');
             }
             if (mp.unbroadcastcount != null) {
-                const cls = mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight';
-                mhtml += `<div class="modal-row"><span class="modal-label">Unbroadcast Txs</span><span class="modal-val ${cls}">${mp.unbroadcastcount}</span></div>`;
+                mhtml += mrow('Unbroadcast TXs', mp.unbroadcastcount.toString(), 'Transactions submitted locally but not yet seen relayed back by any peer', `${mp.unbroadcastcount} transactions`, mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight');
             }
             section.innerHTML = mhtml;
         }).catch(err => {
@@ -1376,35 +1369,38 @@
             const bc = data.blockchain;
             if (!bc) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
             let bhtml = '';
-            bhtml += `<div class="modal-row"><span class="modal-label">Chain</span><span class="modal-val modal-val-highlight">${bc.chain || '\u2014'}</span></div>`;
-            bhtml += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${(bc.blocks || 0).toLocaleString()}</span></div>`;
+            bhtml += mrow('Chain', bc.chain || '\u2014', 'Bitcoin network this node is connected to', bc.chain || '', 'modal-val-highlight');
+            bhtml += mrow('Block Height', (bc.blocks || 0).toLocaleString(), 'Number of validated blocks in the local chain', `${(bc.blocks || 0).toLocaleString()} blocks`, 'modal-val-ok');
             if (bc.headers) {
                 const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
-                bhtml += `<div class="modal-row"><span class="modal-label">Sync Progress</span><span class="modal-val">${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)</span></div>`;
+                const syncVal = `${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)`;
+                bhtml += mrow('Sync Progress', syncVal, 'Validated blocks vs known block headers \u2014 100% means fully synced', syncVal);
             }
             if (bc.bestblockhash) {
-                const short = bc.bestblockhash.substring(0, 20) + '...';
-                bhtml += `<div class="modal-row"><span class="modal-label">Best Block Hash</span><span class="modal-val" title="${bc.bestblockhash}">${short}</span></div>`;
+                const short = bc.bestblockhash.substring(0, 24) + '\u2026';
+                bhtml += mrow('Best Block Hash', short, 'Hash of the most recent validated block', bc.bestblockhash);
             }
             if (bc.difficulty) {
                 const diff = parseFloat(bc.difficulty);
                 const humanDiff = diff > 1e12 ? (diff / 1e12).toFixed(2) + 'T' : diff.toLocaleString();
-                bhtml += `<div class="modal-row"><span class="modal-label">Difficulty</span><span class="modal-val" title="${bc.difficulty}">${humanDiff}</span></div>`;
+                bhtml += mrow('Difficulty', humanDiff, 'Current mining difficulty \u2014 adjusts every 2,016 blocks', bc.difficulty.toString());
             }
             if (bc.mediantime) {
-                bhtml += `<div class="modal-row"><span class="modal-label">Median Time</span><span class="modal-val">${new Date(bc.mediantime * 1000).toLocaleString()}</span></div>`;
+                const mtVal = new Date(bc.mediantime * 1000).toLocaleString();
+                bhtml += mrow('Median Time', mtVal, 'Median timestamp of the last 11 blocks \u2014 used for time-locked transactions', mtVal);
             }
-            bhtml += `<div class="modal-row"><span class="modal-label">IBD Status</span><span class="modal-val ${bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok'}">${bc.initialblockdownload ? 'Yes' : 'No'}</span></div>`;
+            const ibdVal = bc.initialblockdownload ? 'Yes' : 'No';
+            bhtml += mrow('IBD Status', ibdVal, 'Initial Block Download \u2014 whether the node is still catching up to the network', ibdVal, bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok');
             if (bc.size_on_disk) {
-                bhtml += `<div class="modal-row"><span class="modal-label">Size on Disk</span><span class="modal-val">${(bc.size_on_disk / 1e9).toFixed(1)} GB</span></div>`;
+                const diskVal = (bc.size_on_disk / 1e9).toFixed(1) + ' GB';
+                bhtml += mrow('Size on Disk', diskVal, 'Total blockchain data stored on disk', diskVal);
             }
-            bhtml += `<div class="modal-row"><span class="modal-label">Pruning</span><span class="modal-val">${bc.pruned ? 'Yes' : 'No'}</span></div>`;
+            bhtml += mrow('Pruning', bc.pruned ? 'Yes' : 'No', 'Whether old blocks are deleted to save disk space', bc.pruned ? 'Pruned \u2014 old blocks removed' : 'Not pruned \u2014 all blocks stored');
             if (bc.softforks && Object.keys(bc.softforks).length > 0) {
                 bhtml += '<div class="modal-section-title" style="margin-top:6px;padding-top:4px">Softforks</div>';
                 for (const [name, sf] of Object.entries(bc.softforks)) {
                     const status = sf.active ? 'Active' : (sf.type || 'Defined');
-                    const cls = sf.active ? 'modal-val-ok' : '';
-                    bhtml += `<div class="modal-row"><span class="modal-label">${name}</span><span class="modal-val ${cls}">${status}</span></div>`;
+                    bhtml += mrow(name, status, `Consensus rule upgrade: ${name}`, `${name}: ${status} (${sf.type || 'bip9'})`, sf.active ? 'modal-val-ok' : '');
                 }
             }
             section.innerHTML = bhtml;
@@ -2304,9 +2300,10 @@
     let tbodyEl = document.getElementById('peer-tbody');
     const handleCountEl = { textContent: '' };  // peer count now shown in badge only
 
-    // Panel toggle
+    // Panel toggle (clicking the title bar)
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
         panelEl.classList.toggle('collapsed');
+        setTimeout(repositionMapControls, 350);
     });
 
     /** Get sorted copy of lastPeers based on current sort state.
@@ -3389,8 +3386,8 @@
 
         let html = '<div class="dsp-title">Display Settings</div>';
         html += '<div class="dsp-section">Update Frequency</div>';
-        html += `<div class="dsp-row"><span class="dsp-label">Peer refresh</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
-        html += `<div class="dsp-row"><span class="dsp-label">Info refresh</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += `<div class="dsp-row"><span class="dsp-label" title="How often peer list is fetched from Bitcoin Core">Peer list</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += `<div class="dsp-row"><span class="dsp-label" title="How often node info and BTC price are refreshed">Node info &amp; price</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
         html += '<div class="dsp-section">Show / Hide</div>';
         rightItems.forEach(item => {
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
@@ -3586,10 +3583,6 @@
             html += `<div class="info-row"><span class="info-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" class="si-dash-toggle" data-target="${item.id}" ${vis ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
 
-        // ── Section 5: Recent Changes ──
-        html += '<div class="modal-section-title">Recent Changes</div>';
-        html += '<div id="si-changes-section" style="color:var(--text-muted);padding:4px 0">Loading...</div>';
-
         body.innerHTML = html;
 
         // ── Bind NET bar mode radios ──
@@ -3629,33 +3622,6 @@
                 const target = document.getElementById(cb.dataset.target);
                 if (target) target.style.display = cb.checked ? '' : 'none';
             });
-        });
-
-        // ── Fetch recent changes ──
-        fetch('/api/changes').then(r => r.json()).then(changes => {
-            const section = document.getElementById('si-changes-section');
-            if (!section) return;
-            if (!changes || changes.length === 0) {
-                section.innerHTML = '<div class="changes-empty">No recent changes</div>';
-                return;
-            }
-            const recent = changes.slice(-5).reverse();
-            let chtml = '';
-            for (const c of recent) {
-                const isConnect = c.type === 'connected';
-                const dotClass = isConnect ? 'connected' : 'disconnected';
-                const ip = c.peer ? (c.peer.ip || '') : '';
-                const port = c.peer ? (c.peer.port || '') : '';
-                const net = c.peer ? (c.peer.network || 'ipv4') : 'ipv4';
-                const label = ip ? `${ip}:${port}` : '\u2014';
-                const d = new Date(c.time * 1000);
-                const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-                chtml += `<div class="change-entry" data-ip="${ip}" data-connected="${isConnect}" data-net="${net}"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
-            }
-            section.innerHTML = chtml;
-        }).catch(err => {
-            const section = document.getElementById('si-changes-section');
-            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
         });
     }
 
