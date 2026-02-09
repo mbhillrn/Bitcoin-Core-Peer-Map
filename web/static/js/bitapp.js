@@ -53,10 +53,10 @@
 
         // ── Pulse behaviour by direction ──
         // Base rates — new peers get additional "nervousness" on top
-        pulseSpeedInbound: 0.0012,   // slower, calm breathing for inbound
-        pulseSpeedOutbound: 0.0024,  // faster, sharper pulse for outbound
-        pulseDepthInbound: 0.25,     // subtle amplitude for inbound
-        pulseDepthOutbound: 0.45,    // more pronounced for outbound
+        pulseSpeedInbound: 0.0014,   // slower, calm breathing for inbound
+        pulseSpeedOutbound: 0.0026,  // faster, sharper pulse for outbound
+        pulseDepthInbound: 0.32,     // gentle but visible amplitude for inbound
+        pulseDepthOutbound: 0.48,    // more pronounced for outbound
         // Nervousness: young peers pulse faster, veterans are steady
         nervousnessMax: 0.003,     // extra pulse speed added to young peers
         nervousnessRampSec: 1800,  // seconds for nervousness to decay to zero (30 min)
@@ -239,19 +239,9 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // BTC SUPPORT ADDRESS — Click to copy
+    // BTC SUPPORT ADDRESS — Selectable text (no click handler)
     // ═══════════════════════════════════════════════════════════
-
-    const footerBtcEl = document.getElementById('footer-btc');
-    if (footerBtcEl) {
-        footerBtcEl.addEventListener('click', () => {
-            navigator.clipboard.writeText('bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5').then(() => {
-                const orig = footerBtcEl.title;
-                footerBtcEl.title = 'Copied!';
-                setTimeout(() => { footerBtcEl.title = orig; }, 2000);
-            });
-        });
-    }
+    // Address is plain selectable text — users can highlight and copy manually.
 
     // ═══════════════════════════════════════════════════════════
     // FLIGHT DECK — Toggle + Network stats
@@ -269,6 +259,9 @@
     // Previous flight deck counts for delta indicators
     const fdPrevCounts = {};
 
+    // Cached flight deck counts for tooltip use
+    let fdCachedCounts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
+
     function updateFlightDeck(peerNodes) {
         const counts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
         for (const n of peerNodes) {
@@ -278,6 +271,7 @@
             if (n.direction === 'IN') counts[net].in++;
             else counts[net].out++;
         }
+        fdCachedCounts = counts;
         const netMap = { ipv4:'ipv4', ipv6:'ipv6', onion:'tor', i2p:'i2p', cjdns:'cjdns' };
         for (const [net, label] of Object.entries(netMap)) {
             const c = counts[net];
@@ -301,26 +295,116 @@
                 }
                 fdPrevCounts[`${net}-out`] = c.out;
             }
-            // Status badge (enabled if count > 0)
-            const statusEl = document.getElementById(`fd-${label}-status`);
-            if (statusEl) {
+            // Green/red dot indicator (enabled = has peers, disabled = no peers)
+            const dotEl = document.getElementById(`fd-${label}-dot`);
+            if (dotEl) {
                 const total = c.in + c.out;
                 if (total > 0) {
-                    statusEl.textContent = 'Enabled';
-                    statusEl.className = 'fd-net-status enabled';
+                    dotEl.className = 'fd-net-dot enabled';
                 } else {
-                    statusEl.textContent = 'Not configured';
-                    statusEl.className = 'fd-net-status not-configured';
+                    dotEl.className = 'fd-net-dot disabled';
                 }
             }
         }
     }
 
     // ═══════════════════════════════════════════════════════════
+    // FLIGHT DECK HOVER TOOLTIPS — Detailed network info on hover
+    // ═══════════════════════════════════════════════════════════
+
+    const fdTooltipEl = document.getElementById('fd-tooltip');
+
+    // Friendly names and descriptions for each network
+    const FD_NET_INFO = {
+        ipv4:  { full: 'Public IPv4 network', label: 'Public IPv4', isOverlay: false },
+        ipv6:  { full: 'Public IPv6 network', label: 'Public IPv6', isOverlay: false },
+        onion: { full: 'Tor onion routing network', label: 'Tor onion routing network', isOverlay: true },
+        i2p:   { full: 'I2P anonymous network', label: 'I2P anonymous network', isOverlay: true },
+        cjdns: { full: 'CJDNS encrypted mesh network', label: 'CJDNS encrypted mesh network', isOverlay: true },
+    };
+
+    // Map data-net attributes back to internal net keys
+    const FD_NET_KEY_MAP = { ipv4: 'ipv4', ipv6: 'ipv6', onion: 'onion', i2p: 'i2p', cjdns: 'cjdns' };
+
+    function buildFdTooltip(netKey) {
+        const info = FD_NET_INFO[netKey];
+        if (!info) return '';
+        const c = fdCachedCounts[netKey] || { in: 0, out: 0 };
+        const total = c.in + c.out;
+        const isEnabled = total > 0;
+
+        // Get score for ipv4/ipv6
+        let scoreVal = null;
+        if (!info.isOverlay) {
+            const scoreEl = document.getElementById(`fd-${netKey === 'onion' ? 'tor' : netKey}-score`);
+            if (scoreEl) scoreVal = scoreEl.textContent;
+        }
+
+        let html = '<div class="fdt-title">';
+        if (isEnabled) {
+            html += `${info.full} <span class="fdt-status-enabled">(Enabled)</span>`;
+        } else {
+            html += `${info.label} <span class="fdt-status-disabled">(Disabled)</span>`;
+        }
+        html += '</div>';
+
+        html += `<div class="fdt-row">Inbound: ${c.in} peers</div>`;
+        html += `<div class="fdt-row">Outbound: ${c.out} peers</div>`;
+
+        if (info.isOverlay) {
+            html += '<div class="fdt-row-muted">Overlay network (no reliable local score)</div>';
+        } else if (scoreVal) {
+            html += `<div class="fdt-row">Local Bitcoin Core Network Score: ${scoreVal}</div>`;
+        }
+
+        if (isEnabled) {
+            if (info.isOverlay) {
+                html += '<div class="fdt-row-muted">Appears to be properly configured</div>';
+            }
+        } else {
+            html += '<div class="fdt-warn">This network is either disabled, or not currently connected.<br>Please check your settings in Bitcoin Core</div>';
+        }
+
+        return html;
+    }
+
+    // Attach hover listeners to all flight deck chips
+    document.querySelectorAll('.fd-net-chip').forEach(chip => {
+        chip.addEventListener('mouseenter', () => {
+            const netKey = chip.dataset.net;
+            if (!fdTooltipEl) return;
+            const html = buildFdTooltip(netKey);
+            if (!html) return;
+            fdTooltipEl.innerHTML = html;
+            fdTooltipEl.classList.remove('hidden');
+            // Position below the chip
+            const rect = chip.getBoundingClientRect();
+            fdTooltipEl.style.left = rect.left + 'px';
+            fdTooltipEl.style.top = (rect.bottom + 6) + 'px';
+        });
+        chip.addEventListener('mouseleave', () => {
+            if (fdTooltipEl) fdTooltipEl.classList.add('hidden');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════
     // MINIMIZE BUTTON — Toggle peer panel collapsed state
     // ═══════════════════════════════════════════════════════════
 
     const minimizeBtn = document.getElementById('btn-minimize');
+    const mapControlsEl = document.getElementById('map-controls');
+
+    /** Reposition map controls above the peer panel (expanded or collapsed) + footer */
+    function repositionMapControls() {
+        if (!mapControlsEl) return;
+        const panel = document.getElementById('peer-panel');
+        if (!panel) return;
+        const panelRect = panel.getBoundingClientRect();
+        const panelHeight = window.innerHeight - panelRect.top;
+        // 28px footer + panel visible height + 8px margin
+        mapControlsEl.style.bottom = (panelHeight + 28 + 8) + 'px';
+    }
+
     if (minimizeBtn) {
         minimizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -329,9 +413,14 @@
                 panel.classList.toggle('collapsed');
                 const isCollapsed = panel.classList.contains('collapsed');
                 minimizeBtn.innerHTML = isCollapsed ? 'Show Table &#9650;' : 'Hide Table &#9660;';
+                // Reposition map controls after transition
+                setTimeout(repositionMapControls, 350);
             }
         });
     }
+
+    // Initial positioning of map controls
+    setTimeout(repositionMapControls, 100);
 
     // ═══════════════════════════════════════════════════════════
     // BTC PRICE STATE
@@ -1627,24 +1716,25 @@
      * @param {number} brightness - connection-age brightness (0..1)
      */
     function drawNodeAt(sx, sy, c, r, gr, pulse, opacity, brightness) {
-        // Outer glow (radial gradient) — modulated by brightness
+        // Outer glow (radial gradient) — modulated by brightness and pulse
         const grad = ctx.createRadialGradient(sx, sy, r, sx, sy, gr);
-        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity * brightness));
-        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity * brightness));
+        grad.addColorStop(0, rgba(c, 0.55 * pulse * opacity * brightness));
+        grad.addColorStop(0.5, rgba(c, 0.18 * pulse * opacity * brightness));
         grad.addColorStop(1, rgba(c, 0));
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(sx, sy, gr, 0, Math.PI * 2);
         ctx.fill();
 
-        // Core dot — brightness affects base opacity
-        ctx.fillStyle = rgba(c, (0.5 + 0.4 * brightness) * opacity);
+        // Core dot — now subtly modulated by pulse for continuous twinkle
+        const coreTwinkle = 0.88 + 0.12 * pulse;
+        ctx.fillStyle = rgba(c, (0.5 + 0.4 * brightness) * opacity * coreTwinkle);
         ctx.beginPath();
         ctx.arc(sx, sy, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright white centre highlight — scales with brightness
-        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity * brightness);
+        // Bright white centre highlight — scales with brightness and pulse
+        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.65 * pulse * opacity * brightness);
         ctx.beginPath();
         ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2);
         ctx.fill();

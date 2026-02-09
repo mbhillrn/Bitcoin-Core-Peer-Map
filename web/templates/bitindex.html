@@ -25,32 +25,32 @@
     <div id="flight-deck" class="flight-deck">
         <div class="fd-toggle" id="fd-toggle" title="Toggle network stats">&#9662;</div>
         <div class="fd-content" id="fd-content">
-            <div class="fd-net-chip" data-net="ipv4" title="Public IPv4 network">
+            <div class="fd-net-chip" data-net="ipv4">
+                <span class="fd-net-dot disabled" id="fd-ipv4-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-ipv4)">IPv4</span>
-                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
-                <span class="fd-net-score" title="Bitcoin Core local network score">Score: <span id="fd-ipv4-score">&mdash;</span></span>
-                <span class="fd-net-status" id="fd-ipv4-status"></span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
+                <span class="fd-net-score">S: <span id="fd-ipv4-score">&mdash;</span></span>
             </div>
-            <div class="fd-net-chip" data-net="ipv6" title="Public IPv6 network">
+            <div class="fd-net-chip" data-net="ipv6">
+                <span class="fd-net-dot disabled" id="fd-ipv6-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-ipv6)">IPv6</span>
-                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
-                <span class="fd-net-score" title="Bitcoin Core local network score">Score: <span id="fd-ipv6-score">&mdash;</span></span>
-                <span class="fd-net-status" id="fd-ipv6-status"></span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
+                <span class="fd-net-score">S: <span id="fd-ipv6-score">&mdash;</span></span>
             </div>
-            <div class="fd-net-chip" data-net="onion" title="Tor onion routing network">
+            <div class="fd-net-chip" data-net="onion">
+                <span class="fd-net-dot disabled" id="fd-tor-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-tor)">Tor</span>
-                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
-                <span class="fd-net-status" id="fd-tor-status"></span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
             </div>
-            <div class="fd-net-chip" data-net="i2p" title="I2P anonymous network">
+            <div class="fd-net-chip" data-net="i2p">
+                <span class="fd-net-dot disabled" id="fd-i2p-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-i2p)">I2P</span>
-                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
-                <span class="fd-net-status" id="fd-i2p-status"></span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
             </div>
-            <div class="fd-net-chip" data-net="cjdns" title="CJDNS encrypted mesh network">
+            <div class="fd-net-chip" data-net="cjdns">
+                <span class="fd-net-dot disabled" id="fd-cjdns-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-cjdns)">CJDNS</span>
-                <span class="fd-net-counts" title="In / Out"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
-                <span class="fd-net-status" id="fd-cjdns-status"></span>
+                <span class="fd-net-counts"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
             </div>
         </div>
     </div>
@@ -89,15 +89,20 @@
             <span class="ro-rate" id="ro-rate-out">&mdash;</span>
         </div>
         <div class="ro-row"><span class="ro-link" id="ro-geodb-link" title="Click here for MBCore DB info and update">MBCore DB <span class="ro-geodb-count" id="ro-geodb-count">&mdash;</span></span></div>
-        <div class="ro-controls" id="ro-controls">
-            <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
-            <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
-            <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
-        </div>
+    </div>
+
+    <!-- Map controls — bottom-right, above peer panel -->
+    <div id="map-controls" class="map-controls">
+        <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
+        <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
+        <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
     </div>
 
     <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
+
+    <!-- Flight deck hover tooltip -->
+    <div id="fd-tooltip" class="fd-tooltip hidden"></div>
 
     <!-- Antarctica annotation -->
     <div id="antarctica-note" class="antarctica-note hidden">
@@ -144,7 +149,7 @@
 
     <!-- Footer -->
     <footer id="footer" class="footer">
-        <span class="footer-btc" id="footer-btc" title="Click to copy BTC address to clipboard">Support (btc): <span class="footer-btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
+        <span class="footer-btc" id="footer-btc">Support (btc): <span class="footer-btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
         <span class="footer-author">Created by <a class="footer-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" title="Visit mbhillrn MBCore repository: GitHub">@mbhillrn</a></span>
     </footer>
 
