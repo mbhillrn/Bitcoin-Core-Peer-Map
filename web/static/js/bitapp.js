@@ -2290,7 +2290,8 @@
     ];
 
     // Visible column keys (start with defaults, can be toggled later)
-    let visibleColumns = COLUMNS.filter(c => c.vis).map(c => c.key);
+    const DEFAULT_VISIBLE_COLUMNS = COLUMNS.filter(c => c.vis).map(c => c.key);
+    let visibleColumns = [...DEFAULT_VISIBLE_COLUMNS];
 
     // Sort state
     let sortKey = 'id';
@@ -2655,7 +2656,7 @@
         popup.className = 'table-settings-popup';
         popup.id = 'table-settings-popup';
 
-        let html = '<div class="tsp-title">Table Settings</div>';
+        let html = '<div class="tsp-header"><span class="tsp-title">Table Settings</span><button class="tsp-defaults-btn" id="tsp-defaults">Defaults</button></div>';
 
         // ── Transparency slider ──
         html += '<div class="tsp-section">Transparency</div>';
@@ -2711,6 +2712,29 @@
                 renderPeerTable();
             });
         });
+
+        // Bind Defaults button
+        const defaultsBtn = document.getElementById('tsp-defaults');
+        if (defaultsBtn) {
+            defaultsBtn.addEventListener('click', () => {
+                // Reset columns to defaults
+                visibleColumns = [...DEFAULT_VISIBLE_COLUMNS];
+                // Reset transparency to 0%
+                panelOpacity = 0;
+                applyPanelOpacity();
+                // Reset auto-fit
+                autoFitColumns = true;
+                userColumnWidths = {};
+                updateAutoFitBtn();
+                // Re-render table
+                renderColgroup();
+                renderPeerTableHead();
+                renderPeerTable();
+                // Refresh the popup to reflect changes
+                closeTableSettings();
+                openTableSettings();
+            });
+        }
 
         setTimeout(() => {
             document.addEventListener('click', closeTableSettingsOnOutside);
@@ -3632,31 +3656,39 @@
     /** Store latest system stats for modal use */
     let lastSystemStats = null;
 
-    function renderSystemInfoCard(stats) {
-        // Store the stats for modal use
-        lastSystemStats = stats;
+    /** SSE stream reference (declared early so renderSystemInfoCard can check it) */
+    let sysStreamSource = null;
+    let sysStreamRetryDelay = 1000;
 
-        // Update right overlay CPU/RAM display
-        const cpuEl = document.getElementById('ro-cpu');
-        const ramEl = document.getElementById('ro-ram');
-        if (cpuEl && stats.cpu_pct != null) {
-            const cpuPct = Math.round(stats.cpu_pct);
-            cpuEl.textContent = cpuPct + '%';
-            pulseOnChange('ro-cpu', cpuPct, 'white');
-        }
-        if (ramEl && stats.mem_pct != null) {
-            const memPct = Math.round(stats.mem_pct);
-            const memUsed = stats.mem_used_mb;
-            const memTotal = stats.mem_total_mb;
-            ramEl.textContent = memPct + '%';
-            // Hover shows full details
-            let hoverParts = [`Memory: ${memPct}%`];
-            if (memUsed && memTotal) hoverParts.push(`Used: ${memUsed} / ${memTotal} MB`);
-            if (stats.cpu_pct != null) hoverParts.push(`CPU: ${Math.round(stats.cpu_pct)}%`);
-            if (stats.uptime) hoverParts.push(`Uptime: ${stats.uptime}`);
-            if (stats.load_avg) hoverParts.push(`Load: ${stats.load_avg}`);
-            ramEl.title = hoverParts.join('\n');
-            pulseOnChange('ro-ram', memPct, 'white');
+    function renderSystemInfoCard(stats) {
+        // Merge modal-only fields (uptime, load, disk) into lastSystemStats
+        // CPU/RAM/NET are driven by the SSE stream — don't overwrite those here
+        if (!lastSystemStats) lastSystemStats = {};
+        if (stats.uptime) lastSystemStats.uptime = stats.uptime;
+        if (stats.uptime_sec) lastSystemStats.uptime_sec = stats.uptime_sec;
+        if (stats.load_1 != null) lastSystemStats.load_1 = stats.load_1;
+        if (stats.load_5 != null) lastSystemStats.load_5 = stats.load_5;
+        if (stats.load_15 != null) lastSystemStats.load_15 = stats.load_15;
+        if (stats.disk_total_gb != null) lastSystemStats.disk_total_gb = stats.disk_total_gb;
+        if (stats.disk_used_gb != null) lastSystemStats.disk_used_gb = stats.disk_used_gb;
+        if (stats.disk_free_gb != null) lastSystemStats.disk_free_gb = stats.disk_free_gb;
+        if (stats.disk_pct != null) lastSystemStats.disk_pct = stats.disk_pct;
+        if (stats.cpu_breakdown) lastSystemStats.cpu_breakdown = stats.cpu_breakdown;
+
+        // Only update CPU/RAM display if SSE stream is not active (fallback)
+        if (!sysStreamSource) {
+            const cpuEl = document.getElementById('ro-cpu');
+            const ramEl = document.getElementById('ro-ram');
+            if (cpuEl && stats.cpu_pct != null) {
+                const cpuPct = Math.round(stats.cpu_pct);
+                cpuEl.textContent = cpuPct + '%';
+                pulseOnChange('ro-cpu', cpuPct, 'white');
+            }
+            if (ramEl && stats.mem_pct != null) {
+                const memPct = Math.round(stats.mem_pct);
+                ramEl.textContent = memPct + '%';
+                pulseOnChange('ro-ram', memPct, 'white');
+            }
         }
 
         // Update right overlay MBCore DB entry count
@@ -3828,7 +3860,7 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // NETWORK TRAFFIC — from /api/netspeed
+    // NETWORK TRAFFIC + SYSTEM STATS — SSE stream with dual-EMA
     // ═══════════════════════════════════════════════════════════
 
     let lastNetTraffic = null;
@@ -3837,17 +3869,6 @@
     let netBarMode = 'auto';
     let netBarManualMaxIn = 1024 * 1024;   // 1 MB/s default manual max for IN
     let netBarManualMaxOut = 1024 * 1024;  // 1 MB/s default manual max for OUT
-
-    async function fetchNetSpeed() {
-        try {
-            const resp = await fetch('/api/netspeed');
-            if (!resp.ok) return;
-            lastNetTraffic = await resp.json();
-            updateHandleTrafficBars();
-        } catch (err) {
-            console.error('[vNext] Failed to fetch netspeed:', err);
-        }
-    }
 
     // History arrays for adaptive max (from original dashboard)
     const netHistoryIn = [];
@@ -3862,7 +3883,7 @@
         return Math.max(p90 * 1.2, 10 * 1024);
     }
 
-    /** Update the traffic bars in the left overlay */
+    /** Update the traffic bars in the right overlay */
     function updateHandleTrafficBars() {
         if (!lastNetTraffic) return;
         const rx = lastNetTraffic.rx_bps || 0;
@@ -3898,6 +3919,97 @@
         return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
     }
 
+    // ── Number tweening state for smooth CPU/RAM text ──
+    let tweenCpu = { current: null, target: null, el: null };
+    let tweenRam = { current: null, target: null, el: null };
+    let tweenRafId = null;
+
+    function startTweenLoop() {
+        if (tweenRafId) return;
+        function tick() {
+            tweenRafId = requestAnimationFrame(tick);
+            // Lerp CPU
+            if (tweenCpu.current !== null && tweenCpu.target !== null && tweenCpu.el) {
+                const diff = tweenCpu.target - tweenCpu.current;
+                if (Math.abs(diff) < 0.15) {
+                    tweenCpu.current = tweenCpu.target;
+                } else {
+                    tweenCpu.current += diff * 0.12;
+                }
+                tweenCpu.el.textContent = Math.round(tweenCpu.current) + '%';
+            }
+            // Lerp RAM
+            if (tweenRam.current !== null && tweenRam.target !== null && tweenRam.el) {
+                const diff = tweenRam.target - tweenRam.current;
+                if (Math.abs(diff) < 0.15) {
+                    tweenRam.current = tweenRam.target;
+                } else {
+                    tweenRam.current += diff * 0.12;
+                }
+                tweenRam.el.textContent = Math.round(tweenRam.current) + '%';
+            }
+        }
+        tweenRafId = requestAnimationFrame(tick);
+    }
+
+    // ── SSE EventSource for real-time system stats ──
+    function connectSystemStream() {
+        if (sysStreamSource) { sysStreamSource.close(); sysStreamSource = null; }
+        sysStreamSource = new EventSource('/api/stream/system');
+
+        sysStreamSource.addEventListener('system', (e) => {
+            try {
+                const d = JSON.parse(e.data);
+
+                // Update NET traffic
+                lastNetTraffic = { rx_bps: d.rx_bps || 0, tx_bps: d.tx_bps || 0 };
+                updateHandleTrafficBars();
+
+                // Update CPU with tweening
+                const cpuEl = document.getElementById('ro-cpu');
+                if (cpuEl && d.cpu_pct != null) {
+                    tweenCpu.el = cpuEl;
+                    tweenCpu.target = d.cpu_pct;
+                    if (tweenCpu.current === null) tweenCpu.current = d.cpu_pct;
+                    pulseOnChange('ro-cpu', Math.round(d.cpu_pct), 'white');
+                }
+
+                // Update RAM with tweening
+                const ramEl = document.getElementById('ro-ram');
+                if (ramEl && d.mem_pct != null) {
+                    tweenRam.el = ramEl;
+                    tweenRam.target = d.mem_pct;
+                    if (tweenRam.current === null) tweenRam.current = d.mem_pct;
+                    // Update hover tooltip
+                    let hoverParts = [`Memory: ${Math.round(d.mem_pct)}%`];
+                    if (d.mem_used_mb && d.mem_total_mb) hoverParts.push(`Used: ${d.mem_used_mb} / ${d.mem_total_mb} MB`);
+                    if (d.cpu_pct != null) hoverParts.push(`CPU: ${Math.round(d.cpu_pct)}%`);
+                    ramEl.title = hoverParts.join('\n');
+                    pulseOnChange('ro-ram', Math.round(d.mem_pct), 'white');
+                }
+
+                // Store for modal use (merge with existing lastSystemStats)
+                if (!lastSystemStats) lastSystemStats = {};
+                lastSystemStats.cpu_pct = d.cpu_pct;
+                lastSystemStats.mem_pct = d.mem_pct;
+                lastSystemStats.mem_used_mb = d.mem_used_mb;
+                lastSystemStats.mem_total_mb = d.mem_total_mb;
+
+                sysStreamRetryDelay = 1000; // reset on success
+            } catch (err) {
+                console.error('[vNext] SSE parse error:', err);
+            }
+        });
+
+        sysStreamSource.onerror = () => {
+            sysStreamSource.close();
+            sysStreamSource = null;
+            // Reconnect with backoff (max 10s)
+            setTimeout(connectSystemStream, sysStreamRetryDelay);
+            sysStreamRetryDelay = Math.min(sysStreamRetryDelay * 1.5, 10000);
+        };
+    }
+
     // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
@@ -3926,17 +4038,18 @@
         fetchInfo();
         btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
 
-        // Fetch system stats (CPU/RAM) immediately, then poll every 10s
+        // System stats + NET speed: real-time SSE stream (dual-EMA smoothed, ~250ms updates)
+        connectSystemStream();
+        startTweenLoop();
+
+        // Still fetch full system stats once for modal data (uptime, load, disk)
         fetchSystemStats();
-        setInterval(fetchSystemStats, CFG.pollInterval);
+        // Re-fetch full stats every 30s for modal freshness (uptime, load, disk only)
+        setInterval(fetchSystemStats, 30000);
 
         // Fetch recent changes immediately, then poll every 10s
         fetchChanges();
         setInterval(fetchChanges, CFG.pollInterval);
-
-        // Fetch network traffic speed immediately, then poll every 5s
-        fetchNetSpeed();
-        setInterval(fetchNetSpeed, 5000);
 
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)

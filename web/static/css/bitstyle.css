@@ -590,7 +590,7 @@ html, body {
     display: block;
     height: 100%;
     border-radius: 4px;
-    transition: width 0.8s ease;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     min-width: 0;
     width: 0%;
 }
@@ -924,13 +924,35 @@ html, body {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
+.tsp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
 .tsp-title {
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
     color: #e8c547;
-    margin-bottom: 8px;
+}
+.tsp-defaults-btn {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: 3px;
+    background: rgba(88, 166, 255, 0.08);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.tsp-defaults-btn:hover {
+    background: rgba(88, 166, 255, 0.18);
+    border-color: var(--accent);
 }
 .tsp-section {
     font-size: 9px;
@@ -1395,7 +1417,7 @@ html, body {
 .net-traffic-bar {
     height: 100%;
     border-radius: 4px;
-    transition: width 0.8s ease;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     min-width: 0;
 }
 .net-traffic-bar.traffic-in  { background: var(--ok); }

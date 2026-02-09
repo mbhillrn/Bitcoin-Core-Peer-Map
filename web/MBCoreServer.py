@@ -11,6 +11,7 @@ Features:
 """
 
 import json
+import math
 import os
 import queue
 import socket
@@ -1194,6 +1195,178 @@ async def api_netspeed():
         return result
     except Exception as e:
         return {'rx_bps': 0, 'tx_bps': 0, 'error': str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REAL-TIME SYSTEM STATS SSE (dual-EMA smoothed, high-frequency sampling)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DualEMA:
+    """Dual-EMA smoother: fast τ reacts to spikes, slow τ stays calm, blend adapts."""
+    def __init__(self, tau_fast=0.3, tau_slow=1.2):
+        self.tau_fast = tau_fast
+        self.tau_slow = tau_slow
+        self.fast = None
+        self.slow = None
+
+    def update(self, raw, dt):
+        if self.fast is None:
+            self.fast = raw
+            self.slow = raw
+            return raw
+        alpha_fast = 1 - math.exp(-dt / self.tau_fast)
+        alpha_slow = 1 - math.exp(-dt / self.tau_slow)
+        self.fast += alpha_fast * (raw - self.fast)
+        self.slow += alpha_slow * (raw - self.slow)
+        # Blend: lean fast when raw deviates from slow trend
+        deviation = abs(raw - self.slow) / max(self.slow, 1.0)
+        blend = min(deviation * 2.0, 1.0)
+        return self.slow + blend * (self.fast - self.slow)
+
+
+# Shared state for the background sampler
+_sys_stream_state = {
+    'net_rx_ema': DualEMA(tau_fast=0.3, tau_slow=1.0),
+    'net_tx_ema': DualEMA(tau_fast=0.3, tau_slow=1.0),
+    'cpu_ema': DualEMA(tau_fast=0.3, tau_slow=0.7),
+    'ram_ema': DualEMA(tau_fast=0.5, tau_slow=2.0),
+    'prev_net': None,       # {rx, tx, ts}
+    'prev_cpu': None,       # (idle, total)
+    'latest': None,         # latest smoothed snapshot dict
+    'lock': threading.Lock(),
+}
+
+
+def _sample_system_stats():
+    """Sample /proc files and update dual-EMA smoothed values. Called from background thread."""
+    st = _sys_stream_state
+    now = time.time()
+
+    # ── NET: read /proc/net/dev ──
+    net_rx_raw = 0.0
+    net_tx_raw = 0.0
+    try:
+        rx_total = 0
+        tx_total = 0
+        with open('/proc/net/dev', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if ':' not in line or line.startswith('Inter') or line.startswith('face'):
+                    continue
+                iface, data = line.split(':', 1)
+                if iface.strip() == 'lo':
+                    continue
+                parts = data.split()
+                if len(parts) >= 9:
+                    rx_total += int(parts[0])
+                    tx_total += int(parts[8])
+        if st['prev_net'] is not None:
+            dt_net = now - st['prev_net']['ts']
+            if dt_net > 0:
+                net_rx_raw = max(0, (rx_total - st['prev_net']['rx']) / dt_net)
+                net_tx_raw = max(0, (tx_total - st['prev_net']['tx']) / dt_net)
+        st['prev_net'] = {'rx': rx_total, 'tx': tx_total, 'ts': now}
+    except Exception:
+        pass
+
+    # ── CPU: read /proc/stat ──
+    cpu_raw = None
+    try:
+        with open('/proc/stat', 'r') as f:
+            line = f.readline()
+            parts = line.split()
+            if len(parts) >= 8:
+                vals = [int(x) for x in parts[1:9]]
+                idle = vals[3] + vals[4]  # idle + iowait
+                total = sum(vals)
+                if st['prev_cpu'] is not None:
+                    d_idle = idle - st['prev_cpu'][0]
+                    d_total = total - st['prev_cpu'][1]
+                    if d_total > 0:
+                        cpu_raw = 100.0 * (1 - d_idle / d_total)
+                st['prev_cpu'] = (idle, total)
+    except Exception:
+        pass
+
+    # ── RAM: read /proc/meminfo ──
+    mem_raw = None
+    mem_used_mb = None
+    mem_total_mb = None
+    try:
+        with open('/proc/meminfo', 'r') as f:
+            mem_total = 0
+            mem_avail = 0
+            for line in f:
+                if line.startswith('MemTotal:'):
+                    mem_total = int(line.split()[1])
+                elif line.startswith('MemAvailable:'):
+                    mem_avail = int(line.split()[1])
+            if mem_total > 0:
+                mem_raw = (1 - mem_avail / mem_total) * 100.0
+                mem_total_mb = round(mem_total / 1024)
+                mem_used_mb = round((mem_total - mem_avail) / 1024)
+    except Exception:
+        pass
+
+    # ── Apply dual-EMA smoothing ──
+    dt = 0.2  # nominal sample interval
+    if st['prev_net'] is not None and net_rx_raw >= 0:
+        rx_smooth = st['net_rx_ema'].update(net_rx_raw, dt)
+        tx_smooth = st['net_tx_ema'].update(net_tx_raw, dt)
+    else:
+        rx_smooth = 0.0
+        tx_smooth = 0.0
+
+    cpu_smooth = st['cpu_ema'].update(cpu_raw, dt) if cpu_raw is not None else None
+    mem_smooth = st['ram_ema'].update(mem_raw, dt) if mem_raw is not None else None
+
+    snapshot = {
+        'rx_bps': round(rx_smooth, 1),
+        'tx_bps': round(tx_smooth, 1),
+        'cpu_pct': round(cpu_smooth, 1) if cpu_smooth is not None else None,
+        'mem_pct': round(mem_smooth, 1) if mem_smooth is not None else None,
+        'mem_used_mb': mem_used_mb,
+        'mem_total_mb': mem_total_mb,
+        'ts': now,
+    }
+
+    with st['lock']:
+        st['latest'] = snapshot
+
+
+def _sys_sampler_loop():
+    """Background thread: sample /proc every 200ms."""
+    while not stop_flag.is_set():
+        _sample_system_stats()
+        # Sleep in small chunks so we can respond to stop_flag quickly
+        for _ in range(4):  # 4 x 50ms = 200ms
+            if stop_flag.is_set():
+                return
+            time.sleep(0.05)
+
+
+# Start the background sampler thread
+_sys_sampler_thread = threading.Thread(target=_sys_sampler_loop, daemon=True)
+_sys_sampler_thread.start()
+
+
+@app.get("/api/stream/system")
+async def api_stream_system(request: Request):
+    """SSE endpoint: pushes dual-EMA smoothed CPU/RAM/NET every 250ms."""
+    import asyncio
+
+    async def generate():
+        yield {"event": "message", "data": json.dumps({"type": "connected"})}
+        while not stop_flag.is_set():
+            if await request.is_disconnected():
+                break
+            with _sys_stream_state['lock']:
+                snapshot = _sys_stream_state['latest']
+            if snapshot:
+                yield {"event": "system", "data": json.dumps(snapshot)}
+            await asyncio.sleep(0.25)
+
+    return EventSourceResponse(generate())
 
 
 @app.get("/api/info")
