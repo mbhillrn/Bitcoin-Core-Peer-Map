@@ -412,15 +412,14 @@
     const minimizeBtn = document.getElementById('btn-minimize');
     const mapControlsEl = document.getElementById('map-controls');
 
-    /** Reposition map controls above the peer panel (expanded or collapsed) + footer */
+    /** Reposition map controls below the right overlay */
     function repositionMapControls() {
         if (!mapControlsEl) return;
-        const panel = document.getElementById('peer-panel');
-        if (!panel) return;
-        const panelRect = panel.getBoundingClientRect();
-        const panelVisibleHeight = window.innerHeight - panelRect.top;
-        // Place controls 8px above the panel's top edge (panel already sits above 28px footer)
-        mapControlsEl.style.bottom = (panelVisibleHeight + 8) + 'px';
+        const rightOverlay = document.getElementById('right-overlay');
+        if (rightOverlay) {
+            const rect = rightOverlay.getBoundingClientRect();
+            mapControlsEl.style.top = (rect.bottom + 8) + 'px';
+        }
     }
 
     if (minimizeBtn) {
@@ -816,8 +815,8 @@
         roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(); });
     }
 
-    // Left overlay: CPU/RAM/NET rows → click opens system info modal
-    ['mo-row-cpu', 'mo-row-ram', 'mo-row-netin', 'mo-row-netout'].forEach(id => {
+    // Left overlay: Peers/CPU/RAM/NET rows → click opens system info modal
+    ['mo-row-peers', 'mo-row-cpu', 'mo-row-ram', 'mo-row-netin', 'mo-row-netout'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
     });
@@ -1300,7 +1299,7 @@
                 const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
                 const heightStr = info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014';
                 const display = heightStr + (t ? ` (${t})` : '');
-                html += mrow('Block Height', display, 'Latest block height seen by this node', display, 'modal-val-ok');
+                html += mrow('Block Height', display, 'Latest block height seen by this node', display);
             }
             if (info.mempool_size != null) {
                 html += mrow('Mempool Size', `${info.mempool_size.toLocaleString()} tx`, 'Number of unconfirmed transactions in the mempool', `${info.mempool_size.toLocaleString()} transactions`);
@@ -1329,7 +1328,7 @@
             const price = data.btc_price || 0;
             let mhtml = '';
             const pendingVal = (mp.size || 0).toLocaleString();
-            mhtml += mrow('Pending TXs', pendingVal, 'Unconfirmed transactions waiting to be mined', `${pendingVal} transactions`, 'modal-val-highlight');
+            mhtml += mrow('Pending TXs', pendingVal, 'Unconfirmed transactions waiting to be mined', `${pendingVal} transactions`);
             const dataSz = ((mp.bytes || 0) / 1e6).toFixed(2) + ' MB';
             mhtml += mrow('Data Size', dataSz, 'Raw serialized size of all mempool transactions', dataSz);
             const memUsg = ((mp.usage || 0) / 1e6).toFixed(2) + ' MB';
@@ -1353,7 +1352,7 @@
                 mhtml += mrow('Full RBF', val, 'Replace-by-fee policy \u2014 whether any transaction can be replaced by a higher-fee version', val, mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn');
             }
             if (mp.unbroadcastcount != null) {
-                mhtml += mrow('Unbroadcast TXs', mp.unbroadcastcount.toString(), 'Transactions submitted locally but not yet seen relayed back by any peer', `${mp.unbroadcastcount} transactions`, mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight');
+                mhtml += mrow('Unbroadcast TXs', mp.unbroadcastcount.toString(), 'Transactions submitted locally but not yet seen relayed back by any peer', `${mp.unbroadcastcount} transactions`);
             }
             section.innerHTML = mhtml;
         }).catch(err => {
@@ -1369,8 +1368,8 @@
             const bc = data.blockchain;
             if (!bc) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
             let bhtml = '';
-            bhtml += mrow('Chain', bc.chain || '\u2014', 'Bitcoin network this node is connected to', bc.chain || '', 'modal-val-highlight');
-            bhtml += mrow('Block Height', (bc.blocks || 0).toLocaleString(), 'Number of validated blocks in the local chain', `${(bc.blocks || 0).toLocaleString()} blocks`, 'modal-val-ok');
+            bhtml += mrow('Chain', bc.chain || '\u2014', 'Bitcoin network this node is connected to', bc.chain || '');
+            bhtml += mrow('Block Height', (bc.blocks || 0).toLocaleString(), 'Number of validated blocks in the local chain', `${(bc.blocks || 0).toLocaleString()} blocks`);
             if (bc.headers) {
                 const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
                 const syncVal = `${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)`;
@@ -2266,7 +2265,7 @@
         // Advanced columns (hidden by default)
         { key: 'direction',       label: 'Dir',      get: p => p.direction === 'IN' ? 'IN' : 'OUT',        full: p => p.direction === 'IN' ? 'Inbound' : 'Outbound', vis: false, w: 40 },
         { key: 'countryCode',     label: 'CC',       get: p => p.countryCode || '—',                       full: null,  vis: false, w: 35  },
-        { key: 'continentCode',   label: 'CC',       get: p => p.continentCode || '—',                     full: null,  vis: false, w: 35  },
+        { key: 'continentCode',   label: 'CntC',     get: p => p.continentCode || '—',                     full: null,  vis: false, w: 40  },
         { key: 'lat',             label: 'Lat',      get: p => p.lat != null ? p.lat.toFixed(2) : '—',     full: null,  vis: false, w: 55  },
         { key: 'lon',             label: 'Lon',      get: p => p.lon != null ? p.lon.toFixed(2) : '—',     full: null,  vis: false, w: 55  },
         { key: 'region',          label: 'Rgn',      get: p => p.region || '—',                             full: null,  vis: false, w: 60  },
@@ -2549,18 +2548,120 @@
         autoFitBtn.classList.toggle('active', autoFitColumns);
     }
     updateAutoFitBtn();
-    autoFitBtn.addEventListener('click', () => {
+    autoFitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         autoFitColumns = !autoFitColumns;
         if (autoFitColumns) userColumnWidths = {};
         updateAutoFitBtn();
         renderColgroup();
     });
 
+    // ── Table Settings gear popup (column toggles + transparency) ──
+    const tableSettingsBtn = document.getElementById('btn-table-settings');
+    let tableSettingsEl = null;
+    let panelOpacity = 60; // default percentage (0 = invisible, 100 = opaque)
+
+    if (tableSettingsBtn) {
+        tableSettingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (tableSettingsEl) { closeTableSettings(); return; }
+            openTableSettings();
+        });
+    }
+
+    function openTableSettings() {
+        closeTableSettings();
+        const popup = document.createElement('div');
+        popup.className = 'table-settings-popup';
+        popup.id = 'table-settings-popup';
+
+        let html = '<div class="tsp-title">Table Settings</div>';
+
+        // ── Transparency slider ──
+        html += '<div class="tsp-section">Transparency</div>';
+        html += `<div class="tsp-slider-row"><input type="range" class="tsp-slider" id="tsp-opacity" min="0" max="100" value="${panelOpacity}"><span class="tsp-slider-val" id="tsp-opacity-val">${panelOpacity}%</span></div>`;
+
+        // ── Column toggles ──
+        html += '<div class="tsp-section">Columns</div>';
+        html += '<div class="tsp-col-grid">';
+        for (const col of COLUMNS) {
+            const checked = visibleColumns.includes(col.key) ? 'checked' : '';
+            html += `<label class="tsp-col-item"><input type="checkbox" data-col="${col.key}" ${checked}>${col.label}</label>`;
+        }
+        html += '</div>';
+
+        popup.innerHTML = html;
+        document.body.appendChild(popup);
+        tableSettingsEl = popup;
+
+        // Position below the gear button
+        if (tableSettingsBtn) {
+            const rect = tableSettingsBtn.getBoundingClientRect();
+            popup.style.right = (window.innerWidth - rect.right) + 'px';
+            popup.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+        }
+
+        // Bind opacity slider
+        const opacitySlider = document.getElementById('tsp-opacity');
+        const opacityVal = document.getElementById('tsp-opacity-val');
+        if (opacitySlider) {
+            opacitySlider.addEventListener('input', () => {
+                panelOpacity = parseInt(opacitySlider.value);
+                opacityVal.textContent = panelOpacity + '%';
+                applyPanelOpacity();
+            });
+        }
+
+        // Bind column toggles
+        popup.querySelectorAll('input[data-col]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const key = cb.dataset.col;
+                if (cb.checked) {
+                    if (!visibleColumns.includes(key)) {
+                        visibleColumns.push(key);
+                    }
+                } else {
+                    // Don't allow removing all columns
+                    const remaining = visibleColumns.filter(k => k !== key);
+                    if (remaining.length === 0) { cb.checked = true; return; }
+                    visibleColumns = remaining;
+                }
+                renderColgroup();
+                renderPeerTableHead();
+                renderPeerTable();
+            });
+        });
+
+        setTimeout(() => {
+            document.addEventListener('click', closeTableSettingsOnOutside);
+        }, 0);
+    }
+
+    function applyPanelOpacity() {
+        const alpha = panelOpacity / 100;
+        const handle = document.querySelector('.peer-panel-handle');
+        const body = document.querySelector('.peer-panel-body');
+        if (handle) handle.style.background = `rgba(10, 14, 20, ${alpha})`;
+        if (body) body.style.background = `rgba(10, 14, 20, ${alpha})`;
+    }
+
+    function closeTableSettingsOnOutside(e) {
+        if (tableSettingsEl && !tableSettingsEl.contains(e.target) && e.target !== tableSettingsBtn) {
+            closeTableSettings();
+        }
+    }
+
+    function closeTableSettings() {
+        if (tableSettingsEl) { tableSettingsEl.remove(); tableSettingsEl = null; }
+        document.removeEventListener('click', closeTableSettingsOnOutside);
+    }
+
     // ── Ban list modal (overlay — peer table stays visible underneath) ──
     const bansBtn = document.getElementById('btn-bans');
     let banModalOpen = false;
 
-    bansBtn.addEventListener('click', () => {
+    bansBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (banModalOpen) {
             closeBanModal();
         } else {
@@ -3373,7 +3474,6 @@
 
         // Right-side display toggle states
         const rightItems = [
-            { id: 'ro-row-countdown', label: 'Update Countdown', visible: true },
             { id: 'ro-row-statusmsg', label: 'Map Status', visible: true },
             { id: 'ro-row-nodestatus', label: 'Node Info', visible: true },
             { id: 'ro-row-geodb', label: 'MBCore DB', visible: true },
@@ -3551,7 +3651,7 @@
             const txPct = Math.min(100, (tx / curMaxOut) * 100);
             html += `<div class="info-row"><span class="info-label">IN \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
             html += `<div class="info-row"><span class="info-label">OUT \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
-            html += `<div class="info-row" style="margin-top:2px"><span class="info-label">Current Max</span><span class="info-val" style="font-size:10px;color:var(--text-muted)">IN: ${formatBps(curMaxIn)} \u00b7 OUT: ${formatBps(curMaxOut)}</span></div>`;
+            html += `<div class="info-row" style="margin-top:2px"><span class="info-label">Current Max</span><span class="info-val" style="font-size:10px">IN: ${formatBps(curMaxIn)} \u00b7 OUT: ${formatBps(curMaxOut)}</span></div>`;
         } else {
             html += '<div style="color:var(--text-muted);padding:4px 0">No traffic data yet</div>';
         }
