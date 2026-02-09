@@ -84,6 +84,31 @@
         ipv4: 'IPv4', ipv6: 'IPv6', onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS',
     };
 
+    // Bitcoin Core service flag abbreviations and descriptions
+    const SERVICE_FLAGS = {
+        'NETWORK':          { abbr: 'N',  desc: 'Full chain history (NODE_NETWORK)' },
+        'WITNESS':          { abbr: 'W',  desc: 'Segregated Witness support (NODE_WITNESS)' },
+        'NETWORK_LIMITED':  { abbr: 'NL', desc: 'Limited chain history, last 288 blocks (NODE_NETWORK_LIMITED)' },
+        'P2P_V2':           { abbr: 'P',  desc: 'BIP324 v2 encrypted transport (P2P_V2)' },
+        'COMPACT_FILTERS':  { abbr: 'CF', desc: 'BIP157/158 compact block filters (NODE_COMPACT_FILTERS)' },
+        'BLOOM':            { abbr: 'B',  desc: 'BIP37 Bloom filter support (NODE_BLOOM)' },
+    };
+
+    /** Build unique short abbreviation string from services array */
+    function serviceAbbrev(services) {
+        if (!services || !services.length) return '\u2014';
+        return services.map(s => (SERVICE_FLAGS[s] ? SERVICE_FLAGS[s].abbr : s.charAt(0))).join(' ');
+    }
+
+    /** Build full hover description from services array */
+    function serviceHover(services) {
+        if (!services || !services.length) return 'No service flags';
+        return services.map(s => {
+            const f = SERVICE_FLAGS[s];
+            return f ? `${f.abbr} = ${f.desc}` : s;
+        }).join('\n');
+    }
+
     // ═══════════════════════════════════════════════════════════
     // ANTARCTICA RESEARCH STATIONS
     // Private/overlay peers get placed here (same stations as v5)
@@ -247,20 +272,14 @@
     // FLIGHT DECK — Toggle + Network stats
     // ═══════════════════════════════════════════════════════════
 
-    const flightDeck = document.getElementById('flight-deck');
-    const fdToggle = document.getElementById('fd-toggle');
-    if (fdToggle && flightDeck) {
-        fdToggle.addEventListener('click', () => {
-            flightDeck.classList.toggle('collapsed');
-            fdToggle.textContent = flightDeck.classList.contains('collapsed') ? '\u25B4' : '\u25BE';
-        });
-    }
+    // Flight deck is always visible (toggle removed)
 
     // Previous flight deck counts for delta indicators
     const fdPrevCounts = {};
 
-    // Cached flight deck counts for tooltip use
+    // Cached flight deck counts and scores for tooltip use
     let fdCachedCounts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
+    let fdCachedScores = { ipv4: null, ipv6: null };
 
     function updateFlightDeck(peerNodes) {
         const counts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
@@ -333,11 +352,10 @@
         const total = c.in + c.out;
         const isEnabled = total > 0;
 
-        // Get score for ipv4/ipv6
+        // Get score for ipv4/ipv6 from cached values
         let scoreVal = null;
         if (!info.isOverlay) {
-            const scoreEl = document.getElementById(`fd-${netKey === 'onion' ? 'tor' : netKey}-score`);
-            if (scoreEl) scoreVal = scoreEl.textContent;
+            scoreVal = fdCachedScores[netKey];
         }
 
         let html = '<div class="fdt-title">';
@@ -400,9 +418,9 @@
         const panel = document.getElementById('peer-panel');
         if (!panel) return;
         const panelRect = panel.getBoundingClientRect();
-        const panelHeight = window.innerHeight - panelRect.top;
-        // 28px footer + panel visible height + 8px margin
-        mapControlsEl.style.bottom = (panelHeight + 28 + 8) + 'px';
+        const panelVisibleHeight = window.innerHeight - panelRect.top;
+        // Place controls 8px above the panel's top edge (panel already sits above 28px footer)
+        mapControlsEl.style.bottom = (panelVisibleHeight + 8) + 'px';
     }
 
     if (minimizeBtn) {
@@ -413,14 +431,15 @@
                 panel.classList.toggle('collapsed');
                 const isCollapsed = panel.classList.contains('collapsed');
                 minimizeBtn.innerHTML = isCollapsed ? 'Show Table &#9650;' : 'Hide Table &#9660;';
-                // Reposition map controls after transition
+                // Reposition map controls after transition completes
                 setTimeout(repositionMapControls, 350);
             }
         });
     }
 
-    // Initial positioning of map controls
-    setTimeout(repositionMapControls, 100);
+    // Initial positioning of map controls + reposition on resize
+    setTimeout(repositionMapControls, 200);
+    window.addEventListener('resize', repositionMapControls);
 
     // ═══════════════════════════════════════════════════════════
     // BTC PRICE STATE
@@ -812,18 +831,6 @@
     const moNodeInfoLink = document.getElementById('mo-node-info');
     if (moNodeInfoLink) {
         moNodeInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
-    }
-
-    // Map overlay link: Mempool Info
-    const moMempoolInfoLink = document.getElementById('mo-mempool-info');
-    if (moMempoolInfoLink) {
-        moMempoolInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openMempoolModal(); });
-    }
-
-    // Map overlay link: Blockchain Info
-    const moBlockchainInfoLink = document.getElementById('mo-blockchain-info');
-    if (moBlockchainInfoLink) {
-        moBlockchainInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openBlockchainModal(); });
     }
 
     // Right overlay: MBCore DB link
@@ -1241,14 +1248,10 @@
                 if (geodbCountEl) geodbCountEl.textContent = info.geo_db_stats.entries.toLocaleString();
             }
 
-            // Update flight deck scores
+            // Store flight deck scores for tooltip display
             if (info.network_scores) {
-                const s4 = info.network_scores.ipv4;
-                const s6 = info.network_scores.ipv6;
-                const score4El = document.getElementById('fd-ipv4-score');
-                const score6El = document.getElementById('fd-ipv6-score');
-                if (score4El) { score4El.textContent = s4 != null ? s4 : '\u2014'; pulseOnChange('fd-ipv4-score', s4 || 0, 'long'); }
-                if (score6El) { score6El.textContent = s6 != null ? s6 : '\u2014'; pulseOnChange('fd-ipv6-score', s6 || 0, 'long'); }
+                fdCachedScores.ipv4 = info.network_scores.ipv4;
+                fdCachedScores.ipv6 = info.network_scores.ipv6;
             }
 
         } catch (err) {
@@ -1429,10 +1432,12 @@
         const txt = document.getElementById('status-text');
         if (connected) {
             dot.classList.add('online');
-            txt.textContent = 'Connected';
+            dot.title = 'MBCore is running';
+            txt.textContent = 'Running';
         } else {
             dot.classList.remove('online');
-            txt.textContent = 'Offline';
+            dot.title = 'MBCore service not running, please check your terminal/process';
+            txt.textContent = 'Stopped';
         }
     }
 
@@ -2232,7 +2237,7 @@
         { key: 'connection_type', label: 'Type',     get: p => peerTypeShort(p),                           full: p => peerTypeFull(p), vis: true, w: 70 },
         { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 130 },
         { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 90  },
-        { key: 'services_abbrev', label: 'Services', get: p => p.services_abbrev || '—',                   full: null,  vis: true,  w: 70  },
+        { key: 'services_abbrev', label: 'Services', get: p => serviceAbbrev(p.services),                    full: p => serviceHover(p.services),  vis: true,  w: 70  },
         { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 60  },
         { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 55  },
         { key: 'country',         label: 'Country',  get: p => p.country || '—',                           full: null,  vis: true,  w: 70  },
@@ -3353,11 +3358,14 @@
             const memPct = Math.round(stats.mem_pct);
             const memUsed = stats.mem_used_mb;
             const memTotal = stats.mem_total_mb;
-            if (memUsed && memTotal) {
-                ramEl.textContent = `${memPct}% (${memUsed}/${memTotal}MB)`;
-            } else {
-                ramEl.textContent = memPct + '%';
-            }
+            ramEl.textContent = memPct + '%';
+            // Hover shows full details
+            let hoverParts = [`Memory: ${memPct}%`];
+            if (memUsed && memTotal) hoverParts.push(`Used: ${memUsed} / ${memTotal} MB`);
+            if (stats.cpu_pct != null) hoverParts.push(`CPU: ${Math.round(stats.cpu_pct)}%`);
+            if (stats.uptime) hoverParts.push(`Uptime: ${stats.uptime}`);
+            if (stats.load_avg) hoverParts.push(`Load: ${stats.load_avg}`);
+            ramEl.title = hoverParts.join('\n');
             pulseOnChange('ro-ram', memPct, 'white');
         }
 

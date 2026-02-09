@@ -16,26 +16,23 @@
         </div>
         <div class="topbar-right">
             <span id="clock" class="topbar-clock" title="Current local time"></span>
-            <span class="status-dot" id="status-dot" title="Connection status"></span>
-            <span class="status-text" id="status-text">Offline</span>
+            <span class="status-dot" id="status-dot" title="MBCore service not running, please check your terminal/process"></span>
+            <span class="status-text" id="status-text">Stopped</span>
         </div>
     </header>
 
     <!-- Network stats overlay — transparent panel centered at top of map -->
     <div id="flight-deck" class="flight-deck">
-        <div class="fd-toggle" id="fd-toggle" title="Toggle network stats">&#9662;</div>
         <div class="fd-content" id="fd-content">
             <div class="fd-net-chip" data-net="ipv4">
                 <span class="fd-net-dot disabled" id="fd-ipv4-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-ipv4)">IPv4</span>
                 <span class="fd-net-counts"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
-                <span class="fd-net-score">S: <span id="fd-ipv4-score">&mdash;</span></span>
             </div>
             <div class="fd-net-chip" data-net="ipv6">
                 <span class="fd-net-dot disabled" id="fd-ipv6-dot"></span>
                 <span class="fd-net-name" style="color:var(--net-ipv6)">IPv6</span>
                 <span class="fd-net-counts"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
-                <span class="fd-net-score">S: <span id="fd-ipv6-score">&mdash;</span></span>
             </div>
             <div class="fd-net-chip" data-net="onion">
                 <span class="fd-net-dot disabled" id="fd-tor-dot"></span>
@@ -62,8 +59,6 @@
         <div class="mo-row"><span class="mo-label">Update in</span> <span class="mo-value" id="mo-countdown">&mdash;</span></div>
         <div class="mo-row"><span class="mo-status-msg" id="mo-status-msg">Loading...</span></div>
         <div class="mo-row mo-link-row"><span class="mo-link" id="mo-node-info" title="Click here for node information">Node Info</span></div>
-        <div class="mo-row mo-link-row"><span class="mo-link" id="mo-mempool-info" title="Click here for mempool information">Mempool Info</span></div>
-        <div class="mo-row mo-link-row"><span class="mo-link" id="mo-blockchain-info" title="Click here for blockchain information">Blockchain Info</span></div>
         <div class="mo-row mo-btc-row">
             <span class="mo-btc" id="mo-btc" title="Bitcoin price — updates automatically">
                 <span class="mo-btc-symbol" id="mo-btc-symbol">&#x20bf;</span>

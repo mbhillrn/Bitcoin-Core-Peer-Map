@@ -249,23 +249,7 @@ html, body {
     user-select: none;
     padding: 0 4px;
 }
-.flight-deck.collapsed {
-    max-height: 0;
-    opacity: 0;
-}
-.fd-toggle {
-    position: absolute;
-    right: 12px;
-    top: 2px;
-    font-size: 10px;
-    color: var(--text-muted);
-    cursor: pointer;
-    z-index: 2;
-    padding: 2px 6px;
-    transition: color var(--transition), transform 0.3s ease;
-}
-.fd-toggle:hover { color: var(--text-secondary); }
-.flight-deck.collapsed .fd-toggle { transform: rotate(180deg); }
+/* No toggle — flight deck is always visible */
 .fd-content {
     display: flex;
     align-items: center;
@@ -319,12 +303,7 @@ html, body {
     display: inline-block;
     position: relative;
 }
-.fd-net-score {
-    color: var(--text-muted);
-    font-size: 11px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-}
-.fd-net-score span { color: var(--text-secondary); font-weight: 600; }
+/* Scores removed from chips — shown only in hover tooltip */
 
 /* Flight deck hover tooltip */
 .fd-tooltip {
@@ -790,7 +769,7 @@ html, body {
 .peer-panel-handle {
     display: flex;
     flex-direction: column;
-    background: rgba(10, 14, 20, 0.92);
+    background: rgba(10, 14, 20, 0.70);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid rgba(88, 166, 255, 0.12);
@@ -798,7 +777,7 @@ html, body {
     user-select: none;
     flex-shrink: 0;
 }
-.peer-panel-handle:hover { background: rgba(17, 24, 32, 0.95); }
+.peer-panel-handle:hover { background: rgba(17, 24, 32, 0.80); }
 
 /* Row 1: title + filters + buttons + traffic + autofit + minimize */
 .handle-row1 {
@@ -995,7 +974,7 @@ html, body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: rgba(10, 14, 20, 0.94);
+    background: rgba(10, 14, 20, 0.72);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
