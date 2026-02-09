@@ -454,6 +454,27 @@
     // ═══════════════════════════════════════════════════════════
 
     const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','CNY','HKD','SGD'];
+    const CURRENCY_META = {
+        USD: { symbol: '$',   decimals: 2 },
+        EUR: { symbol: '\u20AC',  decimals: 2 },  // €
+        GBP: { symbol: '\u00A3',  decimals: 2 },  // £
+        JPY: { symbol: '\u00A5',  decimals: 0 },  // ¥
+        CHF: { symbol: 'CHF ', decimals: 2 },
+        CAD: { symbol: 'C$',  decimals: 2 },
+        AUD: { symbol: 'A$',  decimals: 2 },
+        CNY: { symbol: 'CN\u00A5', decimals: 2 },  // CN¥
+        HKD: { symbol: 'HK$', decimals: 2 },
+        SGD: { symbol: 'S$',  decimals: 2 },
+    };
+
+    function formatCurrencyPrice(price, currencyCode) {
+        const meta = CURRENCY_META[currencyCode] || { symbol: '', decimals: 2 };
+        return meta.symbol + price.toLocaleString(undefined, {
+            minimumFractionDigits: meta.decimals,
+            maximumFractionDigits: meta.decimals,
+        });
+    }
+
     let currencyDropdownEl = null;
 
     const currCodeEl = document.getElementById('mo-btc-currency');
@@ -551,7 +572,8 @@
             html += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
             html += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
             const totalFeesBTC = mp.total_fee || 0;
-            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            const feesMeta = CURRENCY_META[btcCurrency] || { symbol: '$', decimals: 2 };
+            const totalFeesFiat = price ? ` (${feesMeta.symbol}${(totalFeesBTC * price).toFixed(feesMeta.decimals)})` : '';
             html += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
             html += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
             if (mp.mempoolminfee != null) {
@@ -1341,7 +1363,8 @@
             const memUsg = ((mp.usage || 0) / 1e6).toFixed(2) + ' MB';
             mhtml += mrow('Memory Usage', memUsg, 'Actual RAM used by the mempool', memUsg);
             const totalFeesBTC = mp.total_fee || 0;
-            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            const feesMeta2 = CURRENCY_META[btcCurrency] || { symbol: '$', decimals: 2 };
+            const totalFeesFiat = price ? ` (${feesMeta2.symbol}${(totalFeesBTC * price).toFixed(feesMeta2.decimals)})` : '';
             const feesVal = totalFeesBTC.toFixed(8) + ' BTC' + totalFeesFiat;
             mhtml += mrow('Total Fees', feesVal, 'Sum of all fees from pending transactions', feesVal);
             const maxMp = ((mp.maxmempool || 0) / 1e6).toFixed(0) + ' MB';
@@ -1425,7 +1448,7 @@
 
         if (info.btc_price) {
             const price = parseFloat(info.btc_price);
-            priceEl.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            priceEl.textContent = formatCurrencyPrice(price, btcCurrency);
 
             // Persistent coloring on price element (red/green on change)
             const dir = pulseOnChange('mo-btc-price', price, 'persistent');
@@ -3928,23 +3951,23 @@
         if (tweenRafId) return;
         function tick() {
             tweenRafId = requestAnimationFrame(tick);
-            // Lerp CPU
+            // Lerp CPU (slow glide, ~600ms to settle)
             if (tweenCpu.current !== null && tweenCpu.target !== null && tweenCpu.el) {
                 const diff = tweenCpu.target - tweenCpu.current;
                 if (Math.abs(diff) < 0.15) {
                     tweenCpu.current = tweenCpu.target;
                 } else {
-                    tweenCpu.current += diff * 0.12;
+                    tweenCpu.current += diff * 0.06;
                 }
                 tweenCpu.el.textContent = Math.round(tweenCpu.current) + '%';
             }
-            // Lerp RAM
+            // Lerp RAM (slow glide)
             if (tweenRam.current !== null && tweenRam.target !== null && tweenRam.el) {
                 const diff = tweenRam.target - tweenRam.current;
                 if (Math.abs(diff) < 0.15) {
                     tweenRam.current = tweenRam.target;
                 } else {
-                    tweenRam.current += diff * 0.12;
+                    tweenRam.current += diff * 0.06;
                 }
                 tweenRam.el.textContent = Math.round(tweenRam.current) + '%';
             }
@@ -3961,31 +3984,45 @@
             try {
                 const d = JSON.parse(e.data);
 
-                // Update NET traffic
-                lastNetTraffic = { rx_bps: d.rx_bps || 0, tx_bps: d.tx_bps || 0 };
-                updateHandleTrafficBars();
+                // ── NET traffic (deadband: ignore changes < 2 KB/s) ──
+                const newRx = d.rx_bps || 0;
+                const newTx = d.tx_bps || 0;
+                const prevRx = lastNetTraffic ? lastNetTraffic.rx_bps : 0;
+                const prevTx = lastNetTraffic ? lastNetTraffic.tx_bps : 0;
+                if (Math.abs(newRx - prevRx) > 2048 || Math.abs(newTx - prevTx) > 2048 || !lastNetTraffic) {
+                    lastNetTraffic = { rx_bps: newRx, tx_bps: newTx };
+                    updateHandleTrafficBars();
+                }
 
-                // Update CPU with tweening
+                // ── CPU with tweening (deadband: ignore changes < 1%) ──
                 const cpuEl = document.getElementById('ro-cpu');
                 if (cpuEl && d.cpu_pct != null) {
                     tweenCpu.el = cpuEl;
-                    tweenCpu.target = d.cpu_pct;
-                    if (tweenCpu.current === null) tweenCpu.current = d.cpu_pct;
-                    pulseOnChange('ro-cpu', Math.round(d.cpu_pct), 'white');
+                    if (tweenCpu.current === null) {
+                        tweenCpu.current = d.cpu_pct;
+                        tweenCpu.target = d.cpu_pct;
+                    } else if (Math.abs(d.cpu_pct - tweenCpu.target) >= 1.0) {
+                        tweenCpu.target = d.cpu_pct;
+                        pulseOnChange('ro-cpu', Math.round(d.cpu_pct), 'white');
+                    }
                 }
 
-                // Update RAM with tweening
+                // ── RAM with tweening (deadband: ignore changes < 0.5%) ──
                 const ramEl = document.getElementById('ro-ram');
                 if (ramEl && d.mem_pct != null) {
                     tweenRam.el = ramEl;
-                    tweenRam.target = d.mem_pct;
-                    if (tweenRam.current === null) tweenRam.current = d.mem_pct;
+                    if (tweenRam.current === null) {
+                        tweenRam.current = d.mem_pct;
+                        tweenRam.target = d.mem_pct;
+                    } else if (Math.abs(d.mem_pct - tweenRam.target) >= 0.5) {
+                        tweenRam.target = d.mem_pct;
+                        pulseOnChange('ro-ram', Math.round(d.mem_pct), 'white');
+                    }
                     // Update hover tooltip
                     let hoverParts = [`Memory: ${Math.round(d.mem_pct)}%`];
                     if (d.mem_used_mb && d.mem_total_mb) hoverParts.push(`Used: ${d.mem_used_mb} / ${d.mem_total_mb} MB`);
                     if (d.cpu_pct != null) hoverParts.push(`CPU: ${Math.round(d.cpu_pct)}%`);
                     ramEl.title = hoverParts.join('\n');
-                    pulseOnChange('ro-ram', Math.round(d.mem_pct), 'white');
                 }
 
                 // Store for modal use (merge with existing lastSystemStats)

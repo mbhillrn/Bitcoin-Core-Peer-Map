@@ -590,7 +590,7 @@ html, body {
     display: block;
     height: 100%;
     border-radius: 4px;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     min-width: 0;
     width: 0%;
 }
@@ -1417,7 +1417,7 @@ html, body {
 .net-traffic-bar {
     height: 100%;
     border-radius: 4px;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     min-width: 0;
 }
 .net-traffic-bar.traffic-in  { background: var(--ok); }

@@ -1226,9 +1226,9 @@ class DualEMA:
 
 # Shared state for the background sampler
 _sys_stream_state = {
-    'net_rx_ema': DualEMA(tau_fast=0.3, tau_slow=1.0),
-    'net_tx_ema': DualEMA(tau_fast=0.3, tau_slow=1.0),
-    'cpu_ema': DualEMA(tau_fast=0.3, tau_slow=0.7),
+    'net_rx_ema': DualEMA(tau_fast=0.8, tau_slow=2.5),
+    'net_tx_ema': DualEMA(tau_fast=0.8, tau_slow=2.5),
+    'cpu_ema': DualEMA(tau_fast=0.6, tau_slow=1.5),
     'ram_ema': DualEMA(tau_fast=0.5, tau_slow=2.0),
     'prev_net': None,       # {rx, tx, ts}
     'prev_cpu': None,       # (idle, total)
@@ -1352,7 +1352,7 @@ _sys_sampler_thread.start()
 
 @app.get("/api/stream/system")
 async def api_stream_system(request: Request):
-    """SSE endpoint: pushes dual-EMA smoothed CPU/RAM/NET every 250ms."""
+    """SSE endpoint: pushes dual-EMA smoothed CPU/RAM/NET every 500ms."""
     import asyncio
 
     async def generate():
@@ -1364,7 +1364,7 @@ async def api_stream_system(request: Request):
                 snapshot = _sys_stream_state['latest']
             if snapshot:
                 yield {"event": "system", "data": json.dumps(snapshot)}
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.5)
 
     return EventSourceResponse(generate())
 
