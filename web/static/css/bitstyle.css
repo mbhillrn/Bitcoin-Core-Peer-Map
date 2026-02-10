@@ -906,7 +906,7 @@ html, body {
     color: var(--text-muted);
 }
 .handle-btn-dim:hover { color: var(--text-secondary); }
-.handle-btn-dim.active { color: var(--accent); }
+.handle-btn-dim.active { color: #b0b8c4; }
 
 /* --- Table Settings Popup (gear icon) --- */
 .table-settings-popup {

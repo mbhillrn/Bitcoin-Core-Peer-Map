@@ -647,7 +647,7 @@ run_python_check() {
     echo ""
 
     # Offer to install
-    if prompt_yn "Setup virtual environment and install packages?"; then
+    if prompt_yn "Setup virtual environment and install packages?" "y"; then
         # Create venv if needed
         if [[ $need_venv -eq 1 ]]; then
             echo ""
