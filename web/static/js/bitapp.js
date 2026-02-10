@@ -696,6 +696,7 @@
             html += `<div class="modal-row"><span class="modal-label" title="Database health status">Status</span><span class="geodb-status-badge ${statusCls}" title="${statusText.toUpperCase()}">${statusText.toUpperCase()}</span></div>`;
             if (stats.entries != null) html += mrow('Entries', stats.entries.toLocaleString(), 'Total number of IP geolocation records in the database', `${stats.entries.toLocaleString()} records`);
             if (stats.size_bytes != null) html += mrow('Size', (stats.size_bytes / 1e6).toFixed(1) + ' MB', 'Database file size on disk', `${(stats.size_bytes / 1e6).toFixed(1)} MB`);
+            if (stats.newest_age_days != null) html += mrow('Newest Entry', stats.newest_age_days + ' days', 'Age of the newest geolocation record', `${stats.newest_age_days} days old`);
             if (stats.oldest_age_days != null) html += mrow('Oldest Entry', stats.oldest_age_days + ' days', 'Age of the oldest geolocation record', `${stats.oldest_age_days} days old`);
             if (stats.path) html += `<div class="modal-row"><span class="modal-label" title="File system path to the database">Path</span><span class="modal-val" style="font-size:9px;max-width:260px" title="${stats.path}">${stats.path}</span></div>`;
             const alVal = stats.auto_lookup ? 'On' : 'Off';

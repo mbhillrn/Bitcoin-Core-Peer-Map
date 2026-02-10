@@ -327,7 +327,7 @@ def check_geo_db_integrity() -> tuple:
 
 def get_geo_db_stats() -> dict:
     """Get statistics about the geo database with status"""
-    base = {'status': 'disabled', 'entries': 0, 'size_mb': 0, 'last_updated': None, 'oldest_updated': None, 'db_path': str(GEO_DB_FILE)}
+    base = {'status': 'disabled', 'entries': 0, 'size_bytes': 0, 'last_updated': None, 'oldest_updated': None, 'db_path': str(GEO_DB_FILE)}
     if not geo_db_enabled:
         return base
     if not GEO_DB_FILE.exists():
@@ -342,8 +342,8 @@ def get_geo_db_stats() -> dict:
         cursor = conn.execute('SELECT MIN(last_updated) FROM geo_cache WHERE last_updated > 0')
         oldest = cursor.fetchone()[0]
         conn.close()
-        size_mb = GEO_DB_FILE.stat().st_size / (1024 * 1024)
-        base.update({'status': 'ok', 'entries': count, 'size_mb': round(size_mb, 2), 'last_updated': last, 'oldest_updated': oldest})
+        size_bytes = GEO_DB_FILE.stat().st_size
+        base.update({'status': 'ok', 'entries': count, 'size_bytes': size_bytes, 'last_updated': last, 'oldest_updated': oldest})
         return base
     except Exception as e:
         base['status'] = 'error'
@@ -1492,9 +1492,13 @@ async def api_info(currency: str = "USD"):
         stats = get_geo_db_stats()
         if stats.get('entries', 0) > 0:
             oldest_age_days = None
+            newest_age_days = None
             if stats.get('oldest_updated'):
                 oldest_age_days = int((time.time() - stats['oldest_updated']) / 86400)
+            if stats.get('last_updated'):
+                newest_age_days = int((time.time() - stats['last_updated']) / 86400)
             stats['oldest_age_days'] = oldest_age_days
+            stats['newest_age_days'] = newest_age_days
         stats['auto_lookup'] = geo_db_enabled
         stats['auto_update'] = geo_db_auto_update
         result['geo_db_stats'] = stats
