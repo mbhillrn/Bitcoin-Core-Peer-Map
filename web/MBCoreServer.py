@@ -2010,7 +2010,7 @@ def main():
 
     if is_remote:
         # --- SSH / headless: primary = LAN URL ---
-        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
+        print(f"      {C_WHITE}Open (any LAN machine):{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
         if firewall_active and firewall_name:
             print(f"      {C_RED}**Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
             print(f"      {C_RED}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
