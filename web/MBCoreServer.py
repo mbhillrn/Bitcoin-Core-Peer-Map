@@ -1990,20 +1990,21 @@ def main():
     # so they reliably tell us about THIS launch, not other sessions.
     is_remote = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
 
-    # Center the title relative to the line width
+    # Center all header lines relative to the line width
     title_text = "Instructions"
     title_pad = (line_w - len(title_text)) // 2
+    subtitle_text = "**Instructions provided based on detected system:**"
+    subtitle_pad = (line_w - len(subtitle_text)) // 2
+    detect_text = "**Detected: local/remote(ssh/headless)**"
+    detect_pad = (line_w - len(detect_text)) // 2
+
     print("")
     print(f"{' ' * title_pad}{C_BOLD}{C_YELLOW}{title_text}{C_RESET}")
     print("")
-    print(f"  {C_BOLD}{C_YELLOW}**Instructions provided based on detected system:**{C_RESET}")
+    print(f"{' ' * subtitle_pad}{C_BOLD}{C_YELLOW}{subtitle_text}{C_RESET}")
     if is_remote:
-        detect_text = "**Detected: local/remote(ssh/headless)**"
-        detect_pad = (line_w - len(detect_text)) // 2
         print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_DIM}local/{C_RESET}{C_BOLD}{C_RED}remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
     else:
-        detect_text = "**Detected: local/remote(ssh/headless)**"
-        detect_pad = (line_w - len(detect_text)) // 2
         print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_RED}local{C_RESET}{C_DIM}/remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
     print("")
 
@@ -2016,8 +2017,8 @@ def main():
         else:
             print(f"      {C_WHITE}If using a firewall, make sure port {port} is open.{C_RESET}")
         print("")
-        print(f"  {C_DIM}If running Dashboard on the local node machine:{C_RESET}")
-        print(f"      {C_DIM}Open: {url_local} on your local browser{C_RESET}")
+        print(f"      {C_DIM}If running Dashboard on the local node machine:{C_RESET}")
+        print(f"          {C_DIM}Open: {url_local} on your local browser{C_RESET}")
     else:
         # --- Local: primary = localhost URL ---
         print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_local}{C_RESET} {C_WHITE}on your local browser{C_RESET}")
@@ -2027,8 +2028,8 @@ def main():
         else:
             print(f"      {C_DIM}If using a firewall, make sure port {port} is open.{C_RESET}")
         print("")
-        print(f"  {C_DIM}From any other device on your network:{C_RESET}")
-        print(f"      {C_BLUE}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
+        print(f"      {C_DIM}From any other device on your network:{C_RESET}")
+        print(f"          {C_BLUE}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
 
     print("")
     print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
