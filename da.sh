@@ -19,10 +19,12 @@ source "$MBTC_DIR/lib/config.sh"
 VERSION=$(cat "$MBTC_DIR/VERSION" 2>/dev/null || echo "0.0.0")
 GITHUB_REPO="mbhillrn/Bitcoin-Core-Peer-Map"
 GITHUB_VERSION_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/VERSION"
+GITHUB_CHANGES_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/CHANGES"
 GEOIP_REPO="mbhillrn/Bitcoin-Node-GeoIP-Dataset"
 GEOIP_DB_URL="https://raw.githubusercontent.com/$GEOIP_REPO/main/geo.db"
 UPDATE_AVAILABLE=0
 LATEST_VERSION=""
+LATEST_CHANGES=""
 
 # Venv paths
 VENV_DIR="$MBTC_DIR/venv"
@@ -1095,6 +1097,7 @@ port_settings() {
 check_for_updates() {
     UPDATE_AVAILABLE=0
     LATEST_VERSION=""
+    LATEST_CHANGES=""
 
     # Only check if curl is available
     if ! command -v curl &>/dev/null; then
@@ -1122,6 +1125,8 @@ check_for_updates() {
             if (( rp > lp )); then
                 LATEST_VERSION="$remote_version"
                 UPDATE_AVAILABLE=1
+                # Fetch release notes (non-blocking, ok if it fails)
+                LATEST_CHANGES=$(curl -s --connect-timeout 3 --max-time 5 "$GITHUB_CHANGES_URL" 2>/dev/null | head -3)
                 return 0
             elif (( rp < lp )); then
                 return 0
@@ -1230,6 +1235,12 @@ main() {
             echo -e "  ${T_WARN}⚡ UPDATE AVAILABLE!${RST}"
             echo -e "  ${T_DIM}Your version:${RST}   v${VERSION}"
             echo -e "  ${T_SUCCESS}Latest version:${RST} v${LATEST_VERSION}"
+            if [[ -n "$LATEST_CHANGES" ]]; then
+                echo -e "  ${T_WARN}───────────────────────────────────────────────────────────${RST}"
+                while IFS= read -r line; do
+                    echo -e "  ${T_DIM}${line}${RST}"
+                done <<< "$LATEST_CHANGES"
+            fi
             echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
             echo ""
             if prompt_yn "Would you like to update now?"; then
