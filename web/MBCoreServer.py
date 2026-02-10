@@ -719,8 +719,7 @@ def _ensure_connectivity_thread():
 def _connectivity_checker():
     """Background thread that pings google to detect when internet comes back.
     Only runs while internet_state is NOT green. Stops itself once green."""
-    global internet_failure_start
-    offline_duration = 0
+    global internet_failure_start, internet_consecutive_ok
     while not stop_flag.is_set():
         # If we're back to green, this thread's job is done
         with internet_state_lock:
@@ -735,30 +734,19 @@ def _connectivity_checker():
             # Reset consecutive OK counter on failure
             with internet_state_lock:
                 internet_consecutive_ok = 0
+
             # Check if we should transition yellow → red (10 seconds of failures)
             with internet_state_lock:
                 if internet_state == 'yellow' and internet_failure_start:
-                    elapsed = time.time() - internet_failure_start
-                    if elapsed >= 10:
-                        pass  # Set to red below
-                    else:
-                        # Still yellow, keep trying. Timeout IS the delay.
-                        continue
-                elif internet_state == 'red':
-                    offline_duration = time.time() - internet_failure_start if internet_failure_start else 0
-                else:
-                    continue
-            # Transition yellow → red after 10s
-            if internet_state == 'yellow':
-                set_internet_state('red')
+                    if time.time() - internet_failure_start >= 10:
+                        set_internet_state('red')
 
         # Delay logic: after 60s offline, slow to every 10s
+        # Under 60s, the ping timeout (~2s) IS the natural delay
         with internet_state_lock:
             if internet_state != 'green' and internet_failure_start:
-                offline_duration = time.time() - internet_failure_start
-        if offline_duration > 60:
-            stop_flag.wait(timeout=10)
-        # If still under 60s, the ping timeout (~2s) IS the natural delay
+                if time.time() - internet_failure_start > 60:
+                    stop_flag.wait(timeout=10)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -802,6 +790,10 @@ def fetch_geo_api(ip: str) -> Optional[dict]:
     try:
         url = f"{GEO_API_URL}/{ip}?fields={GEO_API_FIELDS}"
         response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            api_consecutive_failures += 1
+            on_network_failure()
+            return None
         data = response.json()
         if data.get('status') == 'success':
             api_consecutive_failures = 0
@@ -1608,6 +1600,9 @@ async def api_info(currency: str = "USD"):
                     globals()['last_price_currency'] = currency
                     globals()['last_price_error'] = None
                     on_network_success()
+            else:
+                globals()['last_price_error'] = f"Coinbase API returned HTTP {response.status_code}"
+                on_network_failure()
         except Exception as e:
             err_msg = str(e)
             # Simplify the error message for display
@@ -1792,7 +1787,13 @@ async def api_mempool(currency: str = "USD"):
                     result['btc_price'] = float(price)
                     globals()['last_known_price'] = str(price)
                     globals()['last_price_currency'] = currency
+            else:
+                globals()['last_price_error'] = f"Coinbase API returned HTTP {response.status_code}"
+                on_network_failure()
+                if last_known_price:
+                    result['btc_price'] = float(last_known_price)
         except Exception:
+            on_network_failure()
             if last_known_price:
                 result['btc_price'] = float(last_known_price)
 
@@ -2172,7 +2173,7 @@ def get_manual_port() -> int:
 
 
 def main():
-    global geo_db_enabled, geo_db_auto_update
+    global geo_db_enabled, geo_db_auto_update, internet_failure_start
 
     if not config.load():
         print("Error: Configuration not found. Run ./da.sh first to configure.")

@@ -632,7 +632,7 @@ show_geo_db_settings() {
         echo -e "     ${T_DIM}(Delete all cached data and start fresh)${RST}"
         echo ""
         echo -e "  ${T_WARN}4)${RST} Disable database"
-        echo -e "     ${T_DIM}(Rely on API only - 1 lookup per 1.5 seconds)${RST}"
+        echo -e "     ${T_DIM}(Rely on API only)${RST}"
         echo ""
         echo -e "  ${T_INFO}5)${RST} Check database integrity"
         echo -e "     ${T_DIM}(Verify database file is not corrupted)${RST}"
