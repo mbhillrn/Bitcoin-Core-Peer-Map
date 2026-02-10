@@ -172,35 +172,50 @@ run_web_dashboard() {
         return
     fi
 
-    # Check geo API availability (non-blocking if it's down)
-    if ! check_geo_api_available; then
-        show_geo_api_warning
+    # Check internet connectivity with countdown
+    MBTC_OFFLINE_START=0
+    if ! check_connectivity_countdown; then
+        show_offline_warning
     fi
 
-    # Check for database updates if auto-update is enabled
-    local geo_auto_update geo_db_enabled
-    geo_auto_update=$(get_config "GEO_DB_AUTO_UPDATE" "false")
-    geo_db_enabled=$(get_config "GEO_DB_ENABLED" "false")
-    if [[ "$geo_db_enabled" == "true" ]]; then
-        local geo_db_file="$MBTC_DIR/data/geo.db"
-        if [[ -f "$geo_db_file" ]]; then
-            local db_count
-            db_count=$(sqlite3 "$geo_db_file" "SELECT COUNT(*) FROM geo_cache" 2>/dev/null || echo "0")
-            msg_ok "Geo/IP Database: ${db_count} cached entries"
-        fi
-        if [[ "$geo_auto_update" == "true" ]]; then
-            msg_info "Checking for Geo/IP Database updates..."
-            if ! download_geoip_dataset; then
-                msg_warn "Bitcoin Node GeoIP Dataset is not currently available"
-                echo -e "  ${T_DIM}Your local database will cache peers you discover.${RST}"
+    # Only do geo DB download if we're online
+    if [[ "$MBTC_OFFLINE_START" -eq 0 ]]; then
+        local geo_auto_update geo_db_enabled
+        geo_auto_update=$(get_config "GEO_DB_AUTO_UPDATE" "false")
+        geo_db_enabled=$(get_config "GEO_DB_ENABLED" "false")
+        if [[ "$geo_db_enabled" == "true" ]]; then
+            local geo_db_file="$MBTC_DIR/data/geo.db"
+            if [[ -f "$geo_db_file" ]]; then
+                local db_count
+                db_count=$(sqlite3 "$geo_db_file" "SELECT COUNT(*) FROM geo_cache" 2>/dev/null || echo "0")
+                msg_ok "Geo/IP Database: ${db_count} cached entries"
             fi
-            sleep 1
+            if [[ "$geo_auto_update" == "true" ]]; then
+                msg_info "Checking for Geo/IP Database updates..."
+                if ! download_geoip_dataset; then
+                    msg_warn "Bitcoin Node GeoIP Dataset is not currently available"
+                    echo -e "  ${T_DIM}Your local database will cache peers you discover.${RST}"
+                fi
+                sleep 1
+            fi
+        fi
+    else
+        # Offline — show DB status but skip download
+        local geo_db_enabled
+        geo_db_enabled=$(get_config "GEO_DB_ENABLED" "false")
+        if [[ "$geo_db_enabled" == "true" ]]; then
+            local geo_db_file="$MBTC_DIR/data/geo.db"
+            if [[ -f "$geo_db_file" ]]; then
+                local db_count
+                db_count=$(sqlite3 "$geo_db_file" "SELECT COUNT(*) FROM geo_cache" 2>/dev/null || echo "0")
+                msg_ok "Geo/IP Database: ${db_count} cached entries (offline — skipping update)"
+            fi
         fi
     fi
 
-    # Run web server using venv
+    # Run web server using venv, pass offline flag
     clear
-    "$VENV_PYTHON" "$MBTC_DIR/web/MBCoreServer.py"
+    MBTC_OFFLINE_START="$MBTC_OFFLINE_START" "$VENV_PYTHON" "$MBTC_DIR/web/MBCoreServer.py"
 }
 
 run_detection() {
@@ -487,55 +502,45 @@ download_geoip_dataset() {
 # INTERNET CONNECTIVITY CHECK
 # ═══════════════════════════════════════════════════════════════════════════════
 
-check_internet_connectivity() {
-    # Returns: 0 = connected, 1 = offline
-    curl -s --connect-timeout 3 -o /dev/null "https://www.google.com" 2>/dev/null && return 0
-    curl -s --connect-timeout 3 -o /dev/null "https://cloudflare.com" 2>/dev/null && return 0
+check_connectivity_countdown() {
+    # Ping google.com with a 5-second countdown.
+    # Returns immediately on success. Returns 1 if all 5 seconds pass.
+    echo -n "  Checking connection... "
+    for i in 5 4 3 2 1; do
+        # Try a quick 1-second ping to google
+        if curl -s --connect-timeout 1 --max-time 1 -o /dev/null "https://www.google.com" 2>/dev/null; then
+            echo -e "${T_OK}Connected${RST}"
+            return 0
+        fi
+        echo -n "${i} "
+    done
+    echo -e "${T_ERROR}No connection${RST}"
     return 1
 }
 
-check_geo_api_available() {
-    # Returns: 0 = available, 1 = unavailable
-    local response
-    response=$(curl -s --connect-timeout 5 "http://ip-api.com/json/?fields=status" 2>/dev/null)
-    if [[ "$response" == *'"status":"success"'* ]]; then
-        return 0
-    fi
-    return 1
-}
-
-show_geo_api_warning() {
+show_offline_warning() {
+    # Show warning when internet is unavailable at startup
+    # Sets MBTC_OFFLINE_START=1 if user continues without connection
     local geo_db_enabled
     geo_db_enabled=$(get_config "GEO_DB_ENABLED" "false")
 
     clear
     echo ""
     echo -e "${T_WARN}${BOLD}═══════════════════════════════════════════════════════════════${RST}"
-    echo -e "${T_WARN}${BOLD}  Warning: Cannot reach geolocation service${RST}"
+    echo -e "${T_WARN}${BOLD}  Warning: Cannot reach the internet${RST}"
     echo -e "${T_WARN}${BOLD}═══════════════════════════════════════════════════════════════${RST}"
     echo ""
 
-    # Check internet connectivity
-    echo -n "  Checking internet connectivity... "
-    if check_internet_connectivity; then
-        echo -e "${T_OK}CONNECTED${RST}"
-    else
-        echo -e "${T_ERROR}OFFLINE${RST}"
-    fi
-    echo ""
-
     if [[ "$geo_db_enabled" == "true" ]]; then
-        # Database IS enabled
         echo -e "  ${T_OK}Geo/IP Database: ENABLED ✓${RST}"
         echo ""
         echo -e "  ${T_DIM}Your local database will be used for known addresses.${RST}"
         echo -e "  ${T_DIM}Newly discovered IP addresses will not be geolocated${RST}"
-        echo -e "  ${T_DIM}until connection to the service is restored.${RST}"
+        echo -e "  ${T_DIM}until an internet connection is available.${RST}"
         echo ""
         echo -e "  ${T_DIM}Database settings: Geo/IP Database Settings (option g)${RST}"
     else
-        # Database NOT enabled
-        echo -e "  ${T_DIM}Without geolocation service access, peer locations${RST}"
+        echo -e "  ${T_DIM}Without internet access, peer locations${RST}"
         echo -e "  ${T_DIM}will be limited or unavailable.${RST}"
         echo ""
         echo -e "  ${T_INFO}We strongly recommend enabling the Geo/IP Database.${RST}"
@@ -545,7 +550,10 @@ show_geo_api_warning() {
         echo -e "  ${T_DIM}You can enable this in: Geo/IP Database Settings (option g)${RST}"
     fi
     echo ""
-    echo -e "  ${T_SECONDARY}[R]${RST} Retry connection    ${T_SECONDARY}[Enter]${RST} Continue anyway"
+    echo -e "  ${T_DIM}If continuing without a connection, the dashboard will${RST}"
+    echo -e "  ${T_DIM}continue to retry connection during operation.${RST}"
+    echo ""
+    echo -e "  ${T_SECONDARY}[R]${RST} Retry connection    ${T_SECONDARY}[Enter]${RST} Continue"
     echo ""
 
     while true; do
@@ -553,16 +561,18 @@ show_geo_api_warning() {
         case "$choice" in
             r|R)
                 echo ""
-                if check_geo_api_available; then
+                if check_connectivity_countdown; then
                     msg_ok "Connection restored!"
+                    MBTC_OFFLINE_START=0
                     sleep 1
                     return 0
                 else
-                    show_geo_api_warning
+                    show_offline_warning
                     return $?
                 fi
                 ;;
             "")
+                MBTC_OFFLINE_START=1
                 return 0
                 ;;
         esac
@@ -622,7 +632,7 @@ show_geo_db_settings() {
         echo -e "     ${T_DIM}(Delete all cached data and start fresh)${RST}"
         echo ""
         echo -e "  ${T_WARN}4)${RST} Disable database"
-        echo -e "     ${T_DIM}(Rely on API only - 1 lookup per 1.5 seconds)${RST}"
+        echo -e "     ${T_DIM}(Rely on API only)${RST}"
         echo ""
         echo -e "  ${T_INFO}5)${RST} Check database integrity"
         echo -e "     ${T_DIM}(Verify database file is not corrupted)${RST}"

@@ -16,8 +16,10 @@
         </div>
         <div class="topbar-right">
             <span id="clock" class="topbar-clock" title="Current local time"></span>
-            <span class="status-dot" id="status-dot" title="MBCore service not running, please check your terminal/process"></span>
-            <span class="status-text" id="status-text">Stopped</span>
+            <span class="internet-dot green" id="internet-dot" title="Internet connection status"></span>
+            <span class="internet-text" id="internet-text" title="Internet connection status">Internet</span>
+            <span class="status-dot" id="status-dot" title="MBCore dashboard service status"></span>
+            <span class="status-text" id="status-text" title="MBCore dashboard service status">Stopped</span>
         </div>
     </header>
 
@@ -53,7 +55,7 @@
     </div>
 
     <!-- BTC price — centered below flight deck -->
-    <div id="btc-price-bar" class="btc-price-bar" title="Bitcoin price — click to change currency">
+    <div id="btc-price-bar" class="btc-price-bar" title="Bitcoin price/currency options">
         <span class="mo-btc-symbol" id="mo-btc-symbol">&#x20bf;</span>
         <span class="mo-btc-price" id="mo-btc-price">&mdash;</span>
         <span class="mo-btc-arrow" id="mo-btc-arrow"></span>
