@@ -2022,14 +2022,14 @@ def main():
     else:
         # --- Local: primary = localhost URL ---
         print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_local}{C_RESET} {C_WHITE}on your local browser{C_RESET}")
+        print("")
+        print(f"      {C_DIM}From any other device on your network:{C_RESET}")
+        print(f"          {C_BLUE}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
         if firewall_active and firewall_name:
             print(f"      {C_DIM}Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
             print(f"      {C_DIM}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
         else:
             print(f"      {C_DIM}If using a firewall, make sure port {port} is open.{C_RESET}")
-        print("")
-        print(f"      {C_DIM}From any other device on your network:{C_RESET}")
-        print(f"          {C_BLUE}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
 
     print("")
     print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
