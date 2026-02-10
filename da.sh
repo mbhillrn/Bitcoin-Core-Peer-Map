@@ -204,7 +204,8 @@ run_web_dashboard() {
 }
 
 run_detection() {
-    "$MBTC_DIR/scripts/detect.sh"
+    # || true: don't let detection failure kill the script under set -e
+    "$MBTC_DIR/scripts/detect.sh" || true
     # Reload config after detection (|| true: don't crash under set -e if config missing)
     load_config 2>/dev/null || true
 }
@@ -1105,8 +1106,9 @@ check_for_updates() {
     fi
 
     # Fetch the VERSION file from GitHub (with 3 second timeout)
+    # Cache-bust to avoid stale CDN responses from raw.githubusercontent.com
     local remote_version
-    remote_version=$(curl -s --connect-timeout 3 --max-time 10 "$GITHUB_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
+    remote_version=$(curl -s --connect-timeout 3 --max-time 10 "${GITHUB_VERSION_URL}?cb=$(date +%s)" 2>/dev/null | tr -d '[:space:]')
 
     if [[ -z "$remote_version" ]]; then
         return 1

@@ -14,12 +14,14 @@ import json
 import math
 import os
 import queue
+import signal
 import socket
 import sqlite3
 import subprocess
 import sys
 import threading
 import time
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -1844,7 +1846,6 @@ if STATIC_DIR.exists():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import asyncio
-import signal
 
 # ANSI color codes
 C_RESET = "\033[0m"
@@ -2000,6 +2001,20 @@ def main():
     print(f"  {C_RED}Need help?{C_RESET} See the {C_RED}README{C_RESET} or visit github.com/mbhillrn/Bitcoin-Core-Peer-Map")
     print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
+    print("")
+
+    # Auto-open browser if running locally (not over SSH)
+    is_ssh = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
+    if not is_ssh:
+        try:
+            webbrowser.open(url_local)
+            print(f"  {C_GREEN}✓ Opened dashboard in your default browser{C_RESET}")
+        except Exception:
+            pass  # Silently ignore if no browser available
+    else:
+        print(f"  {C_DIM}SSH session detected — open the URL above in your local browser{C_RESET}")
+        print(f"  {C_DIM}Tip: use SSH port forwarding to access locally:{C_RESET}")
+        print(f"  {C_DIM}  ssh -L {port}:localhost:{port} user@this-host{C_RESET}")
     print("")
 
     # Signal handler for fast shutdown
