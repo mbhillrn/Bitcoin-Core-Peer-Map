@@ -6,6 +6,8 @@ A real-time monitoring dashboard for your personal Bitcoin Core node. Automatica
 
 ![MBCore Dashboard Full Map View](docs/images/1.hero2.png)
 
+*Note: CJDNS, I2P, and Tor peers are displayed in Antarctica as they cannot be geolocated.*
+
 MBCore Dashboard uses `bitcoin-cli` to query your running Bitcoin Core node, geolocates public peers via a maintained database and online ip geolocation searches like [ip-api.com](http://ip-api.com). Maintains a local SQLite database of peer locations (latitude, longitude, ISP, AS info, and more) for instant recall. The database is continuously updated with new IP geolocations from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset).
 
 - Interactive HTML5 Canvas world map with geolocated Bitcoin Core peers
