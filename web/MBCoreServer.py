@@ -1996,16 +1996,20 @@ def main():
     print("")
     print(f"{' ' * title_pad}{C_BOLD}{C_YELLOW}{title_text}{C_RESET}")
     print("")
-    print(f"  {C_WHITE}Instructions provided based on detected system:{C_RESET}")
+    print(f"  {C_BOLD}{C_YELLOW}**Instructions provided based on detected system:**{C_RESET}")
     if is_remote:
-        print(f"  {C_YELLOW}Detected Settings: MBCore running on {C_DIM}local/{C_RESET}{C_RED}remote(ssh/headless){C_RESET}{C_YELLOW} terminal{C_RESET}")
+        detect_text = "**Detected: local/remote(ssh/headless)**"
+        detect_pad = (line_w - len(detect_text)) // 2
+        print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_DIM}local/{C_RESET}{C_BOLD}{C_RED}remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
     else:
-        print(f"  {C_YELLOW}Detected Settings: MBCore running on {C_RED}local{C_RESET}{C_DIM}/remote(ssh/headless){C_RESET}{C_YELLOW} terminal{C_RESET}")
+        detect_text = "**Detected: local/remote(ssh/headless)**"
+        detect_pad = (line_w - len(detect_text)) // 2
+        print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_RED}local{C_RESET}{C_DIM}/remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
     print("")
 
     if is_remote:
         # --- SSH / headless: primary = LAN URL ---
-        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
+        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
         if firewall_active and firewall_name:
             print(f"      {C_RED}**Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
             print(f"      {C_RED}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
