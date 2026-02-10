@@ -222,6 +222,33 @@ html, body {
     font-size: 12px;
 }
 
+/* --- Internet Dot --- */
+.internet-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+.internet-dot.green {
+    background: var(--ok);
+    box-shadow: 0 0 8px var(--ok);
+    animation: status-pulse 2s infinite;
+}
+.internet-dot.yellow {
+    background: var(--warn);
+    box-shadow: 0 0 8px var(--warn);
+    animation: status-pulse 3s infinite;
+}
+.internet-dot.red {
+    background: var(--err);
+    box-shadow: 0 0 5px var(--err);
+}
+.internet-text {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-right: 10px;
+}
+
 /* --- Status Dot --- */
 .status-dot {
     width: 7px;

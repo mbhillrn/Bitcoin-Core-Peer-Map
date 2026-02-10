@@ -148,6 +148,35 @@ GEO_UNAVAILABLE = 2
 RETRY_INTERVALS = [86400, 259200, 604800, 604800]
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CONNECTIVITY STATE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Internet connectivity tracking
+internet_state = 'green'               # 'green', 'yellow', 'red'
+internet_state_lock = threading.Lock()
+internet_consecutive_ok = 0            # Consecutive successful pings (need 4 for green)
+internet_failure_start = None          # Timestamp when failures began (for yellow→red)
+connectivity_thread = None             # Reference to checker thread
+connectivity_thread_lock = threading.Lock()
+
+# API-specific tracking
+api_consecutive_failures = 0           # ip-api.com consecutive failures
+api_down_prompt_active = False         # Whether we've shown the API-down modal
+api_down_last_prompt_time = 0          # When we last prompted about API being down
+api_down_prompt_count = 0              # How many times we've prompted
+
+# Price tracking for offline display
+last_known_price = None                # Last successfully fetched BTC price (string)
+last_price_currency = 'USD'            # Currency of last known price
+last_price_error = None                # Most recent Coinbase error message
+
+# Database-only mode
+geo_db_only_mode = False               # When True, skip all API lookups
+
+# Offline startup flag
+offline_start = os.environ.get('MBTC_OFFLINE_START', '0') == '1'
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # GLOBAL STATE
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -367,6 +396,32 @@ def get_geo_from_db(ip: str) -> Optional[dict]:
         return None
 
 
+def is_valid_geo_data(data: dict) -> bool:
+    """Validate geo data before writing to database.
+    Returns True only if the data has meaningful location information."""
+    try:
+        lat = data.get('lat')
+        lon = data.get('lon')
+        country = data.get('country', '')
+        # lat/lon must be numeric
+        if lat is None or lon is None:
+            return False
+        lat = float(lat)
+        lon = float(lon)
+        # Must be in valid range
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            return False
+        # Reject 0,0 (Gulf of Guinea placeholder) unless country is provided
+        if lat == 0 and lon == 0 and not country:
+            return False
+        # Must have a country
+        if not country or not country.strip():
+            return False
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 def save_geo_to_db(ip: str, data: dict):
     """Save geo data to database"""
     if not geo_db_enabled:
@@ -584,6 +639,129 @@ def kill_existing_dashboard():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CONNECTIVITY MONITORING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def ping_google() -> bool:
+    """Quick connectivity check — HTTP HEAD to google.com, 2s timeout"""
+    try:
+        response = requests.head("https://www.google.com", timeout=2)
+        return response.status_code < 500
+    except Exception:
+        return False
+
+
+def set_internet_state(new_state: str):
+    """Update internet state and broadcast change to frontend via SSE"""
+    global internet_state
+    with internet_state_lock:
+        old_state = internet_state
+        if old_state == new_state:
+            return
+        internet_state = new_state
+        print(f"Internet state: {old_state} → {new_state}")
+    # Broadcast state change to frontend
+    broadcast_update('connectivity', {
+        'internet_state': new_state,
+        'api_available': api_consecutive_failures < 5,
+    })
+
+
+def on_network_failure():
+    """Called when any external network call fails (API, Coinbase, etc.)
+    Transitions to yellow on first failure, starts the connectivity checker."""
+    global internet_failure_start, internet_consecutive_ok, connectivity_thread
+    with internet_state_lock:
+        internet_consecutive_ok = 0
+        if internet_state == 'green':
+            internet_failure_start = time.time()
+    set_internet_state('yellow')
+    # Start the connectivity checker thread if not already running
+    _ensure_connectivity_thread()
+
+
+def on_network_success():
+    """Called when any external network call succeeds (API, Coinbase, etc.)
+    Needs 4 consecutive successes to flip back to green."""
+    global internet_consecutive_ok, internet_failure_start, api_down_prompt_active
+    global api_down_prompt_count, api_down_last_prompt_time
+    with internet_state_lock:
+        if internet_state == 'green':
+            return  # Already green, nothing to do
+        internet_consecutive_ok += 1
+        if internet_consecutive_ok >= 4:
+            internet_consecutive_ok = 0
+            internet_failure_start = None
+            api_down_prompt_active = False
+            api_down_prompt_count = 0
+            api_down_last_prompt_time = 0
+    # Check outside lock to avoid holding it during broadcast
+    with internet_state_lock:
+        if internet_consecutive_ok == 0 and internet_failure_start is None:
+            pass  # We just reset — set to green below
+        else:
+            return
+    set_internet_state('green')
+
+
+def _ensure_connectivity_thread():
+    """Start the connectivity checker thread if it's not already running"""
+    global connectivity_thread
+    with connectivity_thread_lock:
+        if connectivity_thread is not None and connectivity_thread.is_alive():
+            return
+        connectivity_thread = threading.Thread(
+            target=_connectivity_checker, daemon=True, name="connectivity-checker"
+        )
+        connectivity_thread.start()
+
+
+def _connectivity_checker():
+    """Background thread that pings google to detect when internet comes back.
+    Only runs while internet_state is NOT green. Stops itself once green."""
+    global internet_failure_start
+    offline_duration = 0
+    while not stop_flag.is_set():
+        # If we're back to green, this thread's job is done
+        with internet_state_lock:
+            if internet_state == 'green':
+                return
+
+        success = ping_google()
+
+        if success:
+            on_network_success()
+        else:
+            # Reset consecutive OK counter on failure
+            with internet_state_lock:
+                internet_consecutive_ok = 0
+            # Check if we should transition yellow → red (10 seconds of failures)
+            with internet_state_lock:
+                if internet_state == 'yellow' and internet_failure_start:
+                    elapsed = time.time() - internet_failure_start
+                    if elapsed >= 10:
+                        pass  # Set to red below
+                    else:
+                        # Still yellow, keep trying. Timeout IS the delay.
+                        continue
+                elif internet_state == 'red':
+                    offline_duration = time.time() - internet_failure_start if internet_failure_start else 0
+                else:
+                    continue
+            # Transition yellow → red after 10s
+            if internet_state == 'yellow':
+                set_internet_state('red')
+
+        # Delay logic: after 60s offline, slow to every 10s
+        with internet_state_lock:
+            if internet_state != 'green' and internet_failure_start:
+                offline_duration = time.time() - internet_failure_start
+        if offline_duration > 60:
+            stop_flag.wait(timeout=10)
+        # If still under 60s, the ping timeout (~2s) IS the natural delay
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # BITCOIN RPC
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -620,25 +798,37 @@ def get_enabled_networks() -> list:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def fetch_geo_api(ip: str) -> Optional[dict]:
+    global api_consecutive_failures
     try:
         url = f"{GEO_API_URL}/{ip}?fields={GEO_API_FIELDS}"
         response = requests.get(url, timeout=10)
         data = response.json()
         if data.get('status') == 'success':
+            api_consecutive_failures = 0
+            on_network_success()
             return data
-    except:
-        pass
+    except Exception:
+        api_consecutive_failures += 1
+        on_network_failure()
     return None
 
 
 def geo_worker():
-    """Background thread for geo lookups - checks DB first, then API, stores in both"""
+    """Background thread for geo lookups - checks DB first, then API, stores in both.
+    Skips API calls when offline or in database-only mode."""
     global geo_pending_count
+    # Track IPs that need re-lookup when we come back online
+    offline_queue = []
+
     while not stop_flag.is_set():
         try:
             ip, network_type = geo_queue.get(timeout=0.5)
         except queue.Empty:
-            continue
+            # While idle, check if we have offline IPs to re-queue now that we're online
+            if offline_queue and internet_state == 'green' and not geo_db_only_mode:
+                ip, network_type = offline_queue.pop(0)
+            else:
+                continue
 
         data = None
         from_db = False
@@ -649,11 +839,21 @@ def geo_worker():
             data = db_data
             from_db = True
         else:
-            # Not in database, call the API
-            data = fetch_geo_api(ip)
-            if data:
-                # Save to database for future lookups
-                save_geo_to_db(ip, data)
+            # Not in database — check if we can call the API
+            skip_api = geo_db_only_mode or internet_state in ('yellow', 'red')
+            if skip_api:
+                # Can't reach API — queue for later, mark unavailable in session cache
+                offline_queue.append((ip, network_type))
+                data = None
+            else:
+                data = fetch_geo_api(ip)
+                if data and is_valid_geo_data(data):
+                    # Valid data — save to database
+                    save_geo_to_db(ip, data)
+                elif data:
+                    # API returned success but data is invalid — don't save to DB
+                    # Still use it for session display but don't persist junk
+                    pass
 
         # Store in SESSION CACHE (fast in-memory lookup)
         with geo_cache_lock:
@@ -704,8 +904,8 @@ def geo_worker():
 
         broadcast_update('geo_update', {'ip': ip})
 
-        # Only delay if we called the API (not when loading from DB)
-        if not from_db:
+        # Only delay if we called the API (not when loading from DB or skipped)
+        if not from_db and not (geo_db_only_mode or internet_state in ('yellow', 'red')):
             time.sleep(GEO_API_DELAY)
 
 
@@ -1383,18 +1583,42 @@ async def api_info(currency: str = "USD"):
         'connected': None,
         'mempool_size': None,
         'subversion': None,
+        'last_known_price': last_known_price,
+        'last_price_currency': last_price_currency,
+        'last_price_error': last_price_error,
+        'internet_state': internet_state,
+        'api_available': api_consecutive_failures < 5,
+        'geo_db_only_mode': geo_db_only_mode,
     }
 
-    # 1. Bitcoin price from Coinbase API
-    try:
-        response = requests.get(f"https://api.coinbase.com/v2/prices/BTC-{currency}/spot", timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            price = data.get('data', {}).get('amount')
-            if price:
-                result['btc_price'] = price
-    except Exception as e:
-        print(f"BTC price fetch error: {e}")
+    # 1. Bitcoin price from Coinbase API (skip if offline)
+    if internet_state == 'red':
+        # Don't even attempt — return cached price info (already in result)
+        pass
+    else:
+        try:
+            response = requests.get(f"https://api.coinbase.com/v2/prices/BTC-{currency}/spot", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get('data', {}).get('amount')
+                if price:
+                    result['btc_price'] = price
+                    # Cache the successful price
+                    globals()['last_known_price'] = price
+                    globals()['last_price_currency'] = currency
+                    globals()['last_price_error'] = None
+                    on_network_success()
+        except Exception as e:
+            err_msg = str(e)
+            # Simplify the error message for display
+            if 'Failed to resolve' in err_msg or 'NameResolutionError' in err_msg:
+                globals()['last_price_error'] = f"Cannot resolve api.coinbase.com"
+            elif 'timed out' in err_msg.lower():
+                globals()['last_price_error'] = f"Connection to api.coinbase.com timed out"
+            else:
+                globals()['last_price_error'] = f"Coinbase API error"
+            print(f"BTC price fetch error: {e}")
+            on_network_failure()
 
     # 2. Last block info
     try:
@@ -1502,6 +1726,7 @@ async def api_info(currency: str = "USD"):
             stats['newest_age_days'] = newest_age_days
         stats['auto_lookup'] = geo_db_enabled
         stats['auto_update'] = geo_db_auto_update
+        stats['db_only_mode'] = geo_db_only_mode
         result['geo_db_stats'] = stats
     except Exception:
         result['geo_db_stats'] = {'status': 'error', 'error': 'Failed to query database'}
@@ -1553,16 +1778,23 @@ async def api_mempool(currency: str = "USD"):
     except Exception as e:
         result['error'] = str(e)
 
-    # Also fetch BTC price for total fees display
-    try:
-        response = requests.get(f"https://api.coinbase.com/v2/prices/BTC-{currency}/spot", timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            price = data.get('data', {}).get('amount')
-            if price:
-                result['btc_price'] = float(price)
-    except Exception:
-        pass
+    # Also fetch BTC price for total fees display (skip if offline)
+    if internet_state == 'red':
+        if last_known_price:
+            result['btc_price'] = float(last_known_price)
+    else:
+        try:
+            response = requests.get(f"https://api.coinbase.com/v2/prices/BTC-{currency}/spot", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get('data', {}).get('amount')
+                if price:
+                    result['btc_price'] = float(price)
+                    globals()['last_known_price'] = str(price)
+                    globals()['last_price_currency'] = currency
+        except Exception:
+            if last_known_price:
+                result['btc_price'] = float(last_known_price)
 
     return result
 
@@ -1766,6 +1998,58 @@ async def api_peer_connect(request: Request):
         return {'success': False, 'error': str(e)}
 
 
+@app.get("/api/connectivity")
+async def api_connectivity():
+    """Get current internet connectivity state for the frontend"""
+    # Determine if we should prompt about API being down
+    should_prompt = False
+    if api_consecutive_failures >= 5 and internet_state == 'green' and not geo_db_only_mode:
+        now = time.time()
+        elapsed = now - api_down_last_prompt_time if api_down_last_prompt_time else float('inf')
+        # Prompt schedule: after 5 failures, then 1min, 2min, 3min, then every 5min
+        if api_down_prompt_count == 0:
+            should_prompt = True
+        elif api_down_prompt_count <= 3 and elapsed >= (api_down_prompt_count * 60):
+            should_prompt = True
+        elif api_down_prompt_count > 3 and elapsed >= 300:
+            should_prompt = True
+    return {
+        'internet_state': internet_state,
+        'api_available': api_consecutive_failures < 5,
+        'api_consecutive_failures': api_consecutive_failures,
+        'last_price_error': last_price_error,
+        'last_known_price': last_known_price,
+        'last_price_currency': last_price_currency,
+        'geo_db_only_mode': geo_db_only_mode,
+        'api_down_prompt': should_prompt,
+    }
+
+
+@app.post("/api/geodb/toggle-db-only")
+async def api_toggle_db_only():
+    """Toggle database-only mode (skip all API lookups)"""
+    global geo_db_only_mode, api_down_prompt_active, api_down_prompt_count, api_down_last_prompt_time
+    geo_db_only_mode = not geo_db_only_mode
+    if geo_db_only_mode:
+        api_down_prompt_active = False
+        api_down_prompt_count = 0
+        api_down_last_prompt_time = 0
+    return {
+        'success': True,
+        'geo_db_only_mode': geo_db_only_mode,
+        'message': 'API lookup disabled. To re-enable, return to this menu.' if geo_db_only_mode else 'API lookup re-enabled.'
+    }
+
+
+@app.post("/api/connectivity/api-prompt-ack")
+async def api_prompt_ack():
+    """Acknowledge the API-down prompt (user saw it, reset prompt timer)"""
+    global api_down_last_prompt_time, api_down_prompt_count
+    api_down_last_prompt_time = time.time()
+    api_down_prompt_count += 1
+    return {'success': True}
+
+
 @app.post("/api/geodb/update")
 async def api_geodb_update():
     """Download and merge the latest geo database from the server"""
@@ -1953,6 +2237,12 @@ def main():
 
     refresh_thread = threading.Thread(target=refresh_worker, daemon=True)
     refresh_thread.start()
+
+    # If we started offline, set initial state and start connectivity checker
+    if offline_start:
+        set_internet_state('red')
+        internet_failure_start = time.time()
+        _ensure_connectivity_thread()
 
     # Initial addrman cache refresh
     refresh_addrman_cache()

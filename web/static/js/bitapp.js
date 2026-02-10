@@ -491,6 +491,10 @@
         }
         html += '</div>';
         html += `<div class="curr-freq"><span>Update every</span><input type="number" id="curr-freq-input" value="${btcPriceInterval}" min="5" max="99"><span>sec</span></div>`;
+        // Show last price error if any
+        if (lastNodeInfo && lastNodeInfo.last_price_error) {
+            html += `<div class="curr-error" style="color:var(--text-muted);font-size:9px;padding:6px 8px 2px;border-top:1px solid rgba(255,255,255,0.06)">${lastNodeInfo.last_price_error}</div>`;
+        }
         dd.innerHTML = html;
         document.body.appendChild(dd);
         currencyDropdownEl = dd;
@@ -703,9 +707,30 @@
             html += mrow('Auto-lookup', alVal, 'Automatically look up geolocation for new peer IPs', alVal, stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn');
             const auVal = stats.auto_update ? 'On' : 'Off';
             html += mrow('Auto-update', auVal, 'Automatically refresh stale geolocation entries', auVal, stats.auto_update ? 'modal-val-ok' : 'modal-val-warn');
+            // Database-only mode toggle
+            const dbOnly = stats.db_only_mode || false;
+            const dbOnlyVal = dbOnly ? 'On' : 'Off';
+            html += `<div class="modal-row"><span class="modal-label" title="When enabled, only use cached database entries — no API lookups">API Lookup</span><span class="modal-val ${dbOnly ? 'modal-val-warn' : 'modal-val-ok'}" title="${dbOnly ? 'API lookup is disabled — using database only' : 'API lookups are active'}">${dbOnly ? 'Off (DB Only)' : 'On'}</span><button class="geodb-toggle-btn" id="geodb-dbonly-toggle" style="margin-left:8px;font-size:9px;padding:2px 8px;border:1px solid rgba(255,255,255,0.1);border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-secondary);cursor:pointer">${dbOnly ? 'Enable API' : 'Disable API'}</button></div>`;
+            if (dbOnly) {
+                html += `<div style="color:var(--warn);font-size:9px;padding:0 12px 8px;opacity:0.8">API lookup is disabled. To re-enable, click "Enable API" above.</div>`;
+            }
             html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
             html += '<div class="geodb-result" id="geodb-result"></div>';
             body.innerHTML = html;
+
+            // DB-only toggle handler
+            document.getElementById('geodb-dbonly-toggle').addEventListener('click', async () => {
+                try {
+                    const resp = await fetch('/api/geodb/toggle-db-only', { method: 'POST' });
+                    const data = await resp.json();
+                    if (data.success) {
+                        // Refresh the modal
+                        fetchInfo().then(() => openGeoDBDropdown());
+                    }
+                } catch (err) {
+                    console.error('Toggle DB-only failed:', err);
+                }
+            });
 
             document.getElementById('geodb-update-btn').addEventListener('click', async () => {
                 const resultEl = document.getElementById('geodb-result');
@@ -1253,6 +1278,10 @@
     let lastBlockHeight = null;
     let lastNodeInfo = null;  // Full /api/info response for Node Info card
 
+    // Track previous internet state for toast notifications
+    let _prevInternetState = 'green';
+    let _lastRestoredToastTime = 0;
+
     async function fetchInfo() {
         try {
             const resp = await fetch(`/api/info?currency=${btcCurrency}`);
@@ -1260,6 +1289,25 @@
             const info = await resp.json();
 
             lastNodeInfo = info;
+
+            // Update internet connectivity indicator
+            if (info.internet_state) {
+                updateInternetDot(info.internet_state);
+                // Show "Connection restored" toast when transitioning to green
+                if (info.internet_state === 'green' && _prevInternetState !== 'green') {
+                    const now = Date.now();
+                    if (now - _lastRestoredToastTime > 60000) {
+                        showConnectionRestoredToast();
+                        _lastRestoredToastTime = now;
+                    }
+                }
+                _prevInternetState = info.internet_state;
+            }
+
+            // Check if we should show the API-down prompt
+            if (info.internet_state === 'green' && info.api_available === false && !info.geo_db_only_mode) {
+                checkApiDownPrompt();
+            }
 
             // Update block height (stored for modals and map overlay)
             if (info.last_block && info.last_block.height) {
@@ -1447,9 +1495,15 @@
         const arrowEl = document.getElementById('mo-btc-arrow');
         if (!priceEl) return;
 
+        // Remove any existing asterisks
+        let existingAst = priceEl.parentElement && priceEl.parentElement.querySelector('.price-offline-ast');
+        if (existingAst) existingAst.remove();
+
         if (info.btc_price) {
             const price = parseFloat(info.btc_price);
             priceEl.textContent = formatCurrencyPrice(price, btcCurrency);
+            priceEl.style.color = '';
+            priceEl.title = '';
 
             // Persistent coloring on price element (red/green on change)
             const dir = pulseOnChange('mo-btc-price', price, 'persistent');
@@ -1460,8 +1514,32 @@
                 arrowEl.textContent = dir > 0 ? '\u25B2' : '\u25BC';
                 arrowEl.className = 'mo-btc-arrow ' + (dir > 0 ? 'arrow-up' : 'arrow-down');
             }
+        } else if (info.last_known_price) {
+            // Offline but have a cached price — show grey with red asterisks
+            const price = parseFloat(info.last_known_price);
+            const curr = info.last_price_currency || btcCurrency;
+            priceEl.textContent = formatCurrencyPrice(price, curr);
+            priceEl.style.color = 'var(--text-muted)';
+            priceEl.title = 'OFFLINE... Waiting for connection';
+            if (arrowEl) { arrowEl.textContent = ''; arrowEl.className = 'mo-btc-arrow'; }
+            // Add red asterisks
+            const ast = document.createElement('span');
+            ast.className = 'price-offline-ast';
+            ast.textContent = '**';
+            ast.style.cssText = 'color:var(--err);font-weight:700;margin-left:3px;font-size:11px';
+            priceEl.parentElement.appendChild(ast);
         } else {
-            priceEl.textContent = '\u2014';
+            // No price at all — show dashes
+            priceEl.textContent = '- - -';
+            priceEl.style.color = 'var(--text-muted)';
+            priceEl.title = 'OFFLINE... Waiting for connection';
+            if (arrowEl) { arrowEl.textContent = ''; arrowEl.className = 'mo-btc-arrow'; }
+            // Add red asterisks
+            const ast = document.createElement('span');
+            ast.className = 'price-offline-ast';
+            ast.textContent = '**';
+            ast.style.cssText = 'color:var(--err);font-weight:700;margin-left:3px;font-size:11px';
+            priceEl.parentElement.appendChild(ast);
         }
 
         // Currency code display
@@ -1485,6 +1563,120 @@
             dot.title = 'MBCore service not running, please check your terminal/process';
             txt.textContent = 'Stopped';
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // INTERNET CONNECTIVITY INDICATOR
+    // ═══════════════════════════════════════════════════════════
+
+    function updateInternetDot(state) {
+        const dot = document.getElementById('internet-dot');
+        if (!dot) return;
+        dot.classList.remove('green', 'yellow', 'red');
+        dot.classList.add(state);
+        if (state === 'green') {
+            dot.title = 'Connection Good';
+        } else if (state === 'yellow') {
+            dot.title = 'Detecting Connection Issues';
+        } else {
+            dot.title = 'Offline, check internet connection!';
+        }
+    }
+
+    function showConnectionRestoredToast() {
+        // Remove any existing toast
+        const existing = document.getElementById('conn-restored-toast');
+        if (existing) existing.remove();
+
+        const el = document.createElement('div');
+        el.id = 'conn-restored-toast';
+        el.textContent = 'Connection restored';
+        el.style.cssText = `
+            position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:400;
+            padding:8px 16px;border-radius:6px;font-size:11px;font-weight:600;
+            backdrop-filter:blur(12px);border:1px solid rgba(63,185,80,0.4);
+            color:var(--ok);background:rgba(10,14,20,0.92);
+            transition:opacity 1s;pointer-events:auto;cursor:pointer;
+        `;
+        document.body.appendChild(el);
+
+        // Click anywhere to dismiss immediately
+        const dismiss = () => {
+            el.remove();
+            document.removeEventListener('click', dismiss);
+        };
+        setTimeout(() => document.addEventListener('click', dismiss), 100);
+
+        // Auto-fade after 5 seconds
+        setTimeout(() => {
+            el.style.opacity = '0';
+            setTimeout(() => {
+                if (el.parentElement) el.remove();
+                document.removeEventListener('click', dismiss);
+            }, 1000);
+        }, 5000);
+    }
+
+    // API-down modal: shown when internet is up but geo API is failing
+    let _apiDownModalVisible = false;
+
+    async function checkApiDownPrompt() {
+        if (_apiDownModalVisible) return;
+        try {
+            const resp = await fetch('/api/connectivity');
+            const data = await resp.json();
+            if (data.api_down_prompt && !data.geo_db_only_mode) {
+                showApiDownModal();
+                // Acknowledge we showed the prompt
+                fetch('/api/connectivity/api-prompt-ack', { method: 'POST' });
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function showApiDownModal() {
+        if (_apiDownModalVisible) return;
+        _apiDownModalVisible = true;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'api-down-modal';
+        overlay.innerHTML = `
+            <div class="modal-box" style="max-width:440px">
+                <div class="modal-header">
+                    <span class="modal-title">Geolocation API Not Responding</span>
+                    <button class="modal-close" id="api-down-close">&times;</button>
+                </div>
+                <div class="modal-body" style="padding:16px">
+                    <p style="color:var(--text-secondary);margin:0 0 12px;font-size:12px">
+                        The geolocation API is not responding, but your internet connection appears to be working.
+                    </p>
+                    <p style="color:var(--text-muted);margin:0 0 16px;font-size:11px">
+                        You can switch to database-only mode (uses cached locations only) or keep trying the API.
+                    </p>
+                    <div style="display:flex;gap:8px;justify-content:center">
+                        <button class="geodb-update-btn" id="api-down-dbonly" style="background:rgba(210,153,34,0.15);color:var(--warn);border-color:rgba(210,153,34,0.3)">Database-Only Mode</button>
+                        <button class="geodb-update-btn" id="api-down-keep">Keep Trying</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        const close = () => {
+            overlay.remove();
+            _apiDownModalVisible = false;
+        };
+
+        document.getElementById('api-down-close').addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+        document.getElementById('api-down-dbonly').addEventListener('click', async () => {
+            try {
+                await fetch('/api/geodb/toggle-db-only', { method: 'POST' });
+            } catch (e) { /* ignore */ }
+            close();
+        });
+
+        document.getElementById('api-down-keep').addEventListener('click', close);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2038,17 +2230,36 @@
         // Map overlay — status message (like original: "Map Loaded!" / "Locating X peers...")
         const moMsg = document.getElementById('mo-status-msg');
         if (moMsg) {
-            // Count pending geolocation peers
-            let pendingGeo = 0;
-            for (const n of nodes) {
-                if (n.alive && n.location_status === 'pending') pendingGeo++;
-            }
-            if (pendingGeo > 0) {
-                moMsg.textContent = `Locating ${pendingGeo} peer${pendingGeo > 1 ? 's' : ''}...`;
+            const inetState = lastNodeInfo ? lastNodeInfo.internet_state : 'green';
+            const apiAvail = lastNodeInfo ? lastNodeInfo.api_available : true;
+            const dbOnly = lastNodeInfo ? lastNodeInfo.geo_db_only_mode : false;
+
+            if (inetState === 'red') {
+                moMsg.textContent = 'Offline';
                 moMsg.classList.remove('loaded');
-            } else if (total > 0) {
-                moMsg.textContent = 'Map Loaded!';
-                moMsg.classList.add('loaded');
+                moMsg.style.color = 'var(--err)';
+            } else if (inetState === 'yellow') {
+                moMsg.textContent = 'Connection issues...';
+                moMsg.classList.remove('loaded');
+                moMsg.style.color = 'var(--warn)';
+            } else if (dbOnly || apiAvail === false) {
+                moMsg.textContent = 'Geo service unavailable';
+                moMsg.classList.remove('loaded');
+                moMsg.style.color = 'var(--warn)';
+            } else {
+                moMsg.style.color = '';
+                // Count pending geolocation peers
+                let pendingGeo = 0;
+                for (const n of nodes) {
+                    if (n.alive && n.location_status === 'pending') pendingGeo++;
+                }
+                if (pendingGeo > 0) {
+                    moMsg.textContent = `Locating ${pendingGeo} peer${pendingGeo > 1 ? 's' : ''}...`;
+                    moMsg.classList.remove('loaded');
+                } else if (total > 0) {
+                    moMsg.textContent = 'Map Loaded!';
+                    moMsg.classList.add('loaded');
+                }
             }
         }
 
