@@ -1556,11 +1556,13 @@
         const txt = document.getElementById('status-text');
         if (connected) {
             dot.classList.add('online');
-            dot.title = 'MBCore is running';
+            dot.title = 'MBCore dashboard is running and connected';
+            txt.title = 'MBCore dashboard is running and connected';
             txt.textContent = 'Running';
         } else {
             dot.classList.remove('online');
-            dot.title = 'MBCore service not running, please check your terminal/process';
+            dot.title = 'MBCore dashboard service is not responding';
+            txt.title = 'MBCore dashboard service is not responding';
             txt.textContent = 'Stopped';
         }
     }
@@ -1571,16 +1573,20 @@
 
     function updateInternetDot(state) {
         const dot = document.getElementById('internet-dot');
+        const txt = document.getElementById('internet-text');
         if (!dot) return;
         dot.classList.remove('green', 'yellow', 'red');
         dot.classList.add(state);
+        let tip;
         if (state === 'green') {
-            dot.title = 'Connection Good';
+            tip = 'Internet connection is active';
         } else if (state === 'yellow') {
-            dot.title = 'Detecting Connection Issues';
+            tip = 'Detecting connection issues, retrying...';
         } else {
-            dot.title = 'Offline, check internet connection!';
+            tip = 'No internet connection detected';
         }
+        dot.title = tip;
+        if (txt) txt.title = tip;
     }
 
     function showConnectionRestoredToast() {

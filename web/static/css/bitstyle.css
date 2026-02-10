@@ -244,8 +244,8 @@ html, body {
     box-shadow: 0 0 5px var(--err);
 }
 .internet-text {
-    font-size: 10px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: var(--text-secondary);
     margin-right: 10px;
 }
 
