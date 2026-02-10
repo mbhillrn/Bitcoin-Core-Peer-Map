@@ -1,0 +1,3 @@
+Fixed update checker not prompting during startup
+Streamlined first-boot setup (auto-detect + auto-geo)
+Update prompt now shows what changed in the new version

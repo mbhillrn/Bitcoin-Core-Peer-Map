@@ -19,10 +19,12 @@ source "$MBTC_DIR/lib/config.sh"
 VERSION=$(cat "$MBTC_DIR/VERSION" 2>/dev/null || echo "0.0.0")
 GITHUB_REPO="mbhillrn/Bitcoin-Core-Peer-Map"
 GITHUB_VERSION_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/VERSION"
+GITHUB_CHANGES_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/CHANGES"
 GEOIP_REPO="mbhillrn/Bitcoin-Node-GeoIP-Dataset"
 GEOIP_DB_URL="https://raw.githubusercontent.com/$GEOIP_REPO/main/geo.db"
 UPDATE_AVAILABLE=0
 LATEST_VERSION=""
+LATEST_CHANGES=""
 
 # Venv paths
 VENV_DIR="$MBTC_DIR/venv"
@@ -58,12 +60,6 @@ handle_ctrl_c() {
 }
 
 trap handle_ctrl_c SIGINT
-
-# Cleanup temp files on exit
-cleanup_temp() {
-    rm -f "/tmp/mbtc_update_check_$$"
-}
-trap cleanup_temp EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BANNER
@@ -1098,10 +1094,12 @@ port_settings() {
 # VERSION CHECK AND AUTO-UPDATE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-UPDATE_CHECK_FILE="/tmp/mbtc_update_check_$$"
-
 check_for_updates() {
-    # Only check if curl is available and we have internet
+    UPDATE_AVAILABLE=0
+    LATEST_VERSION=""
+    LATEST_CHANGES=""
+
+    # Only check if curl is available
     if ! command -v curl &>/dev/null; then
         return 1
     fi
@@ -1125,8 +1123,10 @@ check_for_updates() {
             local lp=${local_parts[$i]:-0}
             local rp=${remote_parts[$i]:-0}
             if (( rp > lp )); then
-                # Write to temp file so parent can read it (subshell can't set parent vars)
-                echo "$remote_version" > "$UPDATE_CHECK_FILE"
+                LATEST_VERSION="$remote_version"
+                UPDATE_AVAILABLE=1
+                # Fetch release notes (non-blocking, ok if it fails)
+                LATEST_CHANGES=$(curl -s --connect-timeout 3 --max-time 5 "$GITHUB_CHANGES_URL" 2>/dev/null | head -3)
                 return 0
             elif (( rp < lp )); then
                 return 0
@@ -1135,15 +1135,6 @@ check_for_updates() {
     fi
 
     return 0
-}
-
-# Read update check results from background process
-read_update_check() {
-    if [[ -f "$UPDATE_CHECK_FILE" ]]; then
-        LATEST_VERSION=$(cat "$UPDATE_CHECK_FILE")
-        UPDATE_AVAILABLE=1
-        rm -f "$UPDATE_CHECK_FILE"
-    fi
 }
 
 show_update_banner() {
@@ -1207,10 +1198,6 @@ run_update() {
 main() {
     show_banner
 
-    # Check for updates in the background (non-blocking)
-    check_for_updates &
-    local update_pid=$!
-
     # Check prerequisites
     if ! run_prereq_check; then
         msg_err "Cannot continue without required prerequisites"
@@ -1238,27 +1225,35 @@ main() {
         unset MBTC_AUTO_DETECT
     fi
 
-    # Wait for update check to complete (with timeout)
-    wait "$update_pid" 2>/dev/null || true
-
-    # Read update check results from background process
-    read_update_check
-
-    # If update available, prompt the user
-    if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
-        echo ""
-        echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
-        echo -e "  ${T_WARN}⚡ UPDATE AVAILABLE!${RST}"
-        echo -e "  ${T_DIM}Your version:${RST}   v${VERSION}"
-        echo -e "  ${T_SUCCESS}Latest version:${RST} v${LATEST_VERSION}"
-        echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
-        echo ""
-        if prompt_yn "Would you like to update now?"; then
-            run_update
+    # Check for updates (synchronous, always visible)
+    echo ""
+    echo -e "${T_DIM}Checking for updates...${RST}"
+    if check_for_updates; then
+        if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
+            echo ""
+            echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
+            echo -e "  ${T_WARN}⚡ UPDATE AVAILABLE!${RST}"
+            echo -e "  ${T_DIM}Your version:${RST}   v${VERSION}"
+            echo -e "  ${T_SUCCESS}Latest version:${RST} v${LATEST_VERSION}"
+            if [[ -n "$LATEST_CHANGES" ]]; then
+                echo -e "  ${T_WARN}───────────────────────────────────────────────────────────${RST}"
+                while IFS= read -r line; do
+                    echo -e "  ${T_DIM}${line}${RST}"
+                done <<< "$LATEST_CHANGES"
+            fi
+            echo -e "  ${T_WARN}═══════════════════════════════════════════════════════════${RST}"
+            echo ""
+            if prompt_yn "Would you like to update now?"; then
+                run_update
+            else
+                msg_info "You can update later by pressing 'u' in the menu"
+                sleep 1
+            fi
         else
-            msg_info "You can update later by pressing 'u' in the menu"
-            sleep 1
+            msg_ok "Running latest version (v${VERSION})"
         fi
+    else
+        msg_warn "Could not check for updates (no internet connection?)"
     fi
 
     # First-run database setup prompt (only shown once)
