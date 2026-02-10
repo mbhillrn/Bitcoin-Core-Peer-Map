@@ -2,9 +2,9 @@
 
 A real-time monitoring dashboard for your personal Bitcoin Core node. Automatically geolocates your connected peers, places them on an interactive canvas world map, and provides tools to manage connections, all from your browser.
 
-![MBCore Dashboard — Peer Table Expanded](docs/images/1.hero1.png)
+![MBCore Dashboard Peer Table Expanded](docs/images/1.hero1.png)
 
-![MBCore Dashboard — Full Map View](docs/images/1.hero2.png)
+![MBCore Dashboard Full Map View](docs/images/1.hero2.png)
 
 MBCore Dashboard uses `bitcoin-cli` to query your running Bitcoin Core node, geolocates public peers via a maintained database and online ip geolocation searches like [ip-api.com](http://ip-api.com). Maintains a local SQLite database of peer locations (latitude, longitude, ISP, AS info, and more) for instant recall. The database is continuously updated with new IP geolocations from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset).
 
@@ -12,8 +12,8 @@ MBCore Dashboard uses `bitcoin-cli` to query your running Bitcoin Core node, geo
 - Supports all 5 Bitcoin Core network types: **IPv4**, **IPv6**, **Tor**, **I2P**, **CJDNS**
 - Real-time peer data, system stats, and live Bitcoin price
 - Connect, disconnect, and ban peers directly from the dashboard
-- Local GeoIP database with automatic updates — works offline for cached peers
-- Zero config — auto-detects your Bitcoin Core installation
+- Local GeoIP database with automatic updates, works offline for cached peers
+- Zero config, auto-detects your Bitcoin Core installation
 - Single script install, no accounts, no external services requiring signup
 
 **Requires:** [Bitcoin Core](https://bitcoincore.org/) (`bitcoind`) installed and running.
@@ -34,7 +34,7 @@ On first run, the script checks prerequisites and sets up a Python virtual envir
 
 Bitcoin Core is auto-detected and configured. The GeoIP database is automatically enabled and downloaded. If auto-detection can't find your setup (rare), use **m) Manual Settings** from the main menu to enter your paths.
 
-You'll land at the main menu — press **1** to launch the dashboard:
+You'll land at the main menu. Press **1** to launch the dashboard:
 
 ![Main Menu](docs/images/5.menu.png)
 
@@ -72,35 +72,35 @@ The popup shows the peer's ID, address, network type, connection direction, soft
 
 ![Antarctica](docs/images/8.antarctica1.png)
 
-Peers on private networks (Tor, I2P, CJDNS) don't have real geographic coordinates. These peers are placed at Antarctic research stations for visualization — their real locations are hidden by design.
+Peers on private networks (Tor, I2P, CJDNS) don't have real geographic coordinates. These peers are placed at Antarctic research stations for visualization. Their real locations are hidden by design.
 
 ![Antarctica Peer Card](docs/images/8.antarctica2.png)
 
 Toggle Antarctica visibility from the Table Settings gear menu.
 
-### Left Overlay — System Stats
+### Left Overlay: System Stats
 
 ![System Info](docs/images/13.systeminfo.png)
 
 The upper-left overlay shows at a glance:
-- **Peers** — total connected peer count
-- **CPU** — processor utilization percentage
-- **RAM** — memory usage percentage
-- **NET ↓ / NET ↑** — real-time network download/upload with animated bars
+- **Peers** total connected peer count
+- **CPU** processor utilization percentage
+- **RAM** memory usage percentage
+- **NET ↓ / NET ↑** real-time network download/upload with animated bars
 
 Click CPU, RAM, or NET for a detailed **System Info** modal with full breakdowns: CPU bar, RAM (MB used/total), system uptime, load averages, disk usage, and network traffic scaling options (auto-detect or manual). You can also toggle which stats appear on the overlay.
 
-### Right Overlay — Node Info and Database
+### Right Overlay: Node Info and Database
 
-- **Update in** — countdown to next peer data refresh
-- **Status** — geolocation progress for newly discovered peers
-- **NODE INFO** — click to open a detailed modal with node version, peer count, blockchain size, TX index status, sync progress, block height, mempool size, and full blockchain/mempool details
+- **Update in** countdown to next peer data refresh
+- **Status** geolocation progress for newly discovered peers
+- **NODE INFO** click to open a detailed modal with node version, peer count, blockchain size, TX index status, sync progress, block height, mempool size, and full blockchain/mempool details
 
 ![Node Info](docs/images/12.nodeinfo.png)
 
 The Node Info modal has three sections: **Node** (version, peers, disk size, pruning, sync status), **Mempool** (pending TXs, data size, memory usage, total fees, min accepted/relay fees, Full RBF status), and **Blockchain** (chain, block height, sync progress, best block hash, difficulty, median time, softforks).
 
-- **MBCORE DB** — click for GeoIP database stats: entry count, database size, newest/oldest entry age, file path, auto-lookup and auto-update status, and an **Update Database** button to pull new geolocations without leaving the dashboard
+- **MBCORE DB** click for GeoIP database stats: entry count, database size, newest/oldest entry age, file path, auto-lookup and auto-update status, and an **Update Database** button to pull new geolocations without leaving the dashboard
 
 ![GeoIP Database Modal](docs/images/16.geodb-modal.png)
 
@@ -113,12 +113,12 @@ The bottom panel shows all connected peers in a sortable, filterable table. The 
 **Default columns:** ID, Net, Duration, Type, IP:Port, Software, Services, City, Region, Country, Continent, ISP, Ping, Sent, Received, Addrman
 
 **Features:**
-- **Network filters** — filter by All, IPv4, IPv6, Tor, I2P, or CJDNS
-- **Sortable** — click any column header (cycles: unsorted → ascending → descending)
-- **Resizable** — drag column edges
-- **Auto-fit** — automatically sizes columns to fit content; turns off when you manually resize
-- **Hide/Show Table** — minimize the peer table for a full map view
-- **Click to fly** — click any row to zoom to that peer on the map
+- **Network filters** filter by All, IPv4, IPv6, Tor, I2P, or CJDNS
+- **Sortable** click any column header (cycles: unsorted → ascending → descending)
+- **Resizable** drag column edges
+- **Auto-fit** automatically sizes columns to fit content; turns off when you manually resize
+- **Hide/Show Table** minimize the peer table for a full map view
+- **Click to fly** click any row to zoom to that peer on the map
 
 16 columns visible by default, with 17+ additional columns available (country code, lat/lon, AS number, AS name, district, mobile, org, timezone, currency, hosting, proxy, ZIP, and more).
 
@@ -127,16 +127,16 @@ The bottom panel shows all connected peers in a sortable, filterable table. The 
 ![Display Settings](docs/images/14.displaysettings.png)
 
 Click the gear icon in the peer panel handle to access Display Settings:
-- **Update Frequency** — configure how often peer data and node info are refreshed (3–120 seconds)
-- **Show/Hide** — toggle visibility of Map Status, Node Info, and MBCore DB on the right overlay
+- **Update Frequency** configure how often peer data and node info are refreshed (3-120 seconds)
+- **Show/Hide** toggle visibility of Map Status, Node Info, and MBCore DB on the right overlay
 
 ### Table Settings
 
 The gear (⚙) button opens Table Settings where you can:
-- Adjust **panel transparency** (0–100% opacity slider)
+- Adjust **panel transparency** (0-100% opacity slider)
 - Toggle individual **columns** on/off
 - Toggle **Private Networks in Antarctica**
-- **Reset to Defaults** — restore default columns, transparency, and settings
+- **Reset to Defaults** restore default columns, transparency, and settings
 
 ### Connect Peer
 
@@ -161,7 +161,7 @@ Click the **Disconnect** button on any peer row in the table to open the disconn
 | **1) Enter MBCore Dashboard** | Launch the web dashboard |
 | **2) Reset MBCore Config** | Clear saved configuration (option to keep or delete database) |
 | **3) Firewall Helper** | Detect your network and configure UFW to allow dashboard access from other devices |
-| **g) Geo/IP Database** | Manage the GeoIP cache — toggle auto-updates, check integrity, purge old entries |
+| **g) Geo/IP Database** | Manage the GeoIP cache, toggle auto-updates, check integrity, purge old entries |
 | **m) Manual Settings** | Manually enter Bitcoin Core paths if auto-detection didn't work |
 | **p) Port Settings** | Change the dashboard port (default: 58333, persists across restarts) |
 | **u) Update** | Update to the latest version (appears when an update is available) |
@@ -257,13 +257,13 @@ Bitcoin-Core-Peer-Map/
 | Dashboard won't load from another device | Use the **Firewall Helper** (option 3) or manually allow port 58333 |
 | Dashboard won't load at all | Close old browser tabs, check `ss -tlnp \| grep 58333` for port conflicts |
 | Bitcoin Core not detected | Make sure `bitcoind` is running, or use **m) Manual Settings** |
-| Peers show "Unknown" location | Geolocation is in progress — new peers are looked up as they connect |
+| Peers show "Unknown" location | Geolocation is in progress, new peers are looked up as they connect |
 
 ---
 
 ## License
 
-MIT License — Free to use, modify, and distribute.
+MIT License. Free to use, modify, and distribute.
 
 ## Support
 
