@@ -1990,6 +1990,9 @@
     // Countdown timer state
     let lastPeerFetchTime = 0;
     let countdownInterval = null;
+    // Poll timer IDs (stored so they can be restarted when settings change)
+    let peerPollTimer = null;
+    let changesPollTimer = null;
 
     function startCountdownTimer() {
         if (countdownInterval) clearInterval(countdownInterval);
@@ -2694,6 +2697,10 @@
         }
         html += '</div>';
 
+        // ── Antarctica setting ──
+        html += '<div class="tsp-section">Private Networks</div>';
+        html += `<label class="tsp-col-item"><input type="checkbox" id="tsp-antarctica" ${showAntarcticaPeers ? 'checked' : ''}>Show in Antarctica</label>`;
+
         popup.innerHTML = html;
         document.body.appendChild(popup);
         tableSettingsEl = popup;
@@ -2736,6 +2743,19 @@
             });
         });
 
+        // Bind Antarctica toggle
+        const antToggle = document.getElementById('tsp-antarctica');
+        if (antToggle) {
+            antToggle.addEventListener('change', () => {
+                showAntarcticaPeers = antToggle.checked;
+                if (showAntarcticaPeers && !antNoteDismissed) {
+                    antNote.classList.remove('hidden');
+                } else if (!showAntarcticaPeers) {
+                    antNote.classList.add('hidden');
+                }
+            });
+        }
+
         // Bind Defaults button
         const defaultsBtn = document.getElementById('tsp-defaults');
         if (defaultsBtn) {
@@ -2745,6 +2765,10 @@
                 // Reset transparency to 0%
                 panelOpacity = 0;
                 applyPanelOpacity();
+                // Reset Antarctica setting
+                showAntarcticaPeers = true;
+                antNoteDismissed = false;
+                antNote.classList.remove('hidden');
                 // Reset auto-fit
                 autoFitColumns = true;
                 userColumnWidths = {};
@@ -2945,7 +2969,7 @@
         const isPrivateNet = (rowNet === 'onion' || rowNet === 'i2p' || rowNet === 'cjdns');
         if (isPrivateNet) {
             const netName = NET_DISPLAY[rowNet] || rowNet.toUpperCase();
-            showPrivateNetPopup(`${netName} peers cannot be geolocated and are placed in Antarctica for visualization.`);
+            showPrivateNetPopup(`${netName} peers cannot be geolocated and are placed in Antarctica for visualization. Minimize the peer table to see them on the map. You can toggle this in Table Settings (gear icon).`);
             return;
         }
 
@@ -3362,12 +3386,8 @@
                 pinnedNode = node;
                 highlightedPeerId = node.peerId;
                 showTooltip(node, e.clientX, e.clientY, true);
-                // Scroll peer table to this row (expand panel if collapsed)
-                if (panelEl.classList.contains('collapsed')) {
-                    panelEl.classList.remove('collapsed');
-                    // Wait for panel to expand before scrolling
-                    setTimeout(() => highlightTableRow(node.peerId, true), 350);
-                } else {
+                // Only scroll to peer row if panel is already open — never reopen a minimized panel
+                if (!panelEl.classList.contains('collapsed')) {
                     highlightTableRow(node.peerId, true);
                 }
             } else if (pinnedNode) {
@@ -3448,6 +3468,7 @@
     const netPopover = document.getElementById('net-popover');
     const antCloseBtn = document.getElementById('ant-close');
     let antNoteDismissed = false;  // tracks if user dismissed the annotation this session
+    let showAntarcticaPeers = true; // setting: show private network peers in Antarctica (default ON)
 
     /** Update badge visual states to reflect the current multi-select filter */
     function updateBadgeStates() {
@@ -3463,16 +3484,8 @@
             }
         });
 
-        // Show Antarctica annotation when any private network is enabled
-        // Once dismissed, stays closed for the entire session
-        if (!antNoteDismissed) {
-            const hasPrivate = enabledNets.has('onion') || enabledNets.has('i2p') || enabledNets.has('cjdns');
-            if (hasPrivate) {
-                antNote.classList.remove('hidden');
-            } else {
-                antNote.classList.add('hidden');
-            }
-        }
+        // Antarctica annotation visibility is controlled by showAntarcticaPeers setting
+        // and session dismissal — no longer tied to filter toggles
     }
 
     // Click to toggle network badges (multi-select)
@@ -3630,13 +3643,21 @@
             popup.style.top = (rect.bottom + 6) + 'px';
         }
 
-        // Bind frequency inputs
+        // Bind frequency inputs — restart active timers so new interval takes effect
         const pollInput = document.getElementById('dsp-poll-sec');
         if (pollInput) {
             pollInput.addEventListener('change', () => {
                 const v = clamp(parseInt(pollInput.value) || 10, 3, 120);
                 pollInput.value = v;
                 CFG.pollInterval = v * 1000;
+                // Restart peer + changes poll timers at the new interval
+                if (peerPollTimer) clearInterval(peerPollTimer);
+                peerPollTimer = setInterval(fetchPeers, CFG.pollInterval);
+                if (changesPollTimer) clearInterval(changesPollTimer);
+                changesPollTimer = setInterval(fetchChanges, CFG.pollInterval);
+                // Restart countdown display so it uses the new interval
+                lastPeerFetchTime = Date.now();
+                startCountdownTimer();
             });
         }
         const infoInput = document.getElementById('dsp-info-sec');
@@ -3645,6 +3666,9 @@
                 const v = clamp(parseInt(infoInput.value) || 15, 5, 120);
                 infoInput.value = v;
                 CFG.infoPollInterval = v * 1000;
+                // Restart info poll timer at the new interval
+                if (btcPriceTimer) clearInterval(btcPriceTimer);
+                btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
             });
         }
 
@@ -3984,13 +4008,16 @@
             try {
                 const d = JSON.parse(e.data);
 
-                // ── NET traffic (deadband: ignore changes < 2 KB/s) ──
+                // ── NET traffic (deadband: only update visuals for changes > 2 KB/s) ──
                 const newRx = d.rx_bps || 0;
                 const newTx = d.tx_bps || 0;
                 const prevRx = lastNetTraffic ? lastNetTraffic.rx_bps : 0;
                 const prevTx = lastNetTraffic ? lastNetTraffic.tx_bps : 0;
-                if (Math.abs(newRx - prevRx) > 2048 || Math.abs(newTx - prevTx) > 2048 || !lastNetTraffic) {
-                    lastNetTraffic = { rx_bps: newRx, tx_bps: newTx };
+                const firstSample = !lastNetTraffic;
+                // Always update cache so future comparisons use current values
+                lastNetTraffic = { rx_bps: newRx, tx_bps: newTx };
+                // Only trigger visual update when change exceeds deadband
+                if (Math.abs(newRx - prevRx) > 2048 || Math.abs(newTx - prevTx) > 2048 || firstSample) {
                     updateHandleTrafficBars();
                 }
 
@@ -4068,7 +4095,7 @@
         // Fetch real peer data immediately, then poll every 10s
         lastPeerFetchTime = Date.now();
         fetchPeers();
-        setInterval(fetchPeers, CFG.pollInterval);
+        peerPollTimer = setInterval(fetchPeers, CFG.pollInterval);
         startCountdownTimer();
 
         // Fetch node info (block height, BTC price, etc) immediately, then poll
@@ -4086,7 +4113,12 @@
 
         // Fetch recent changes immediately, then poll every 10s
         fetchChanges();
-        setInterval(fetchChanges, CFG.pollInterval);
+        changesPollTimer = setInterval(fetchChanges, CFG.pollInterval);
+
+        // Show Antarctica annotation at session start (if setting is ON)
+        if (showAntarcticaPeers && !antNoteDismissed) {
+            antNote.classList.remove('hidden');
+        }
 
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)
