@@ -2003,18 +2003,30 @@ def main():
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print("")
 
-    # Auto-open browser if running locally (not over SSH)
-    is_ssh = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
-    if not is_ssh:
-        try:
-            webbrowser.open(url_local)
-            print(f"  {C_GREEN}✓ Opened dashboard in your default browser{C_RESET}")
-        except Exception:
-            pass  # Silently ignore if no browser available
+    # Decide whether it's safe to auto-open a browser.
+    # Requirements: a graphical display available to THIS process AND this
+    # process was NOT launched from an SSH session.  SSH env vars are
+    # per-process-tree so they reliably tell us about *this* launch, not
+    # other sessions on the box.  DISPLAY / WAYLAND_DISPLAY tell us
+    # there's an actual graphical desktop we can target.
+    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    from_ssh = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
+
+    if has_display and not from_ssh:
+        # Local graphical desktop — safe to open a browser.
+        # Run in a daemon thread so a slow/missing browser can never hang the server.
+        def _open():
+            try:
+                webbrowser.open(url_local)
+            except Exception:
+                pass
+        t = threading.Thread(target=_open, daemon=True)
+        t.start()
+        print(f"  {C_GREEN}✓ Opening dashboard in your default browser...{C_RESET}")
     else:
-        print(f"  {C_DIM}SSH session detected — open the URL above in your local browser{C_RESET}")
-        print(f"  {C_DIM}Tip: use SSH port forwarding to access locally:{C_RESET}")
-        print(f"  {C_DIM}  ssh -L {port}:localhost:{port} user@this-host{C_RESET}")
+        # SSH, headless, or no graphical session — don't touch a browser.
+        print(f"  {C_DIM}SSH or headless session detected.{C_RESET}")
+        print(f"  {C_DIM}Open {C_RESET}{C_BOLD}{C_CYAN}{url_lan}{C_RESET}{C_DIM} on any device on your network.{C_RESET}")
     print("")
 
     # Signal handler for fast shutdown
