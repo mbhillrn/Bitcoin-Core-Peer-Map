@@ -14,6 +14,7 @@ import json
 import math
 import os
 import queue
+import signal
 import socket
 import sqlite3
 import subprocess
@@ -1844,7 +1845,6 @@ if STATIC_DIR.exists():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import asyncio
-import signal
 
 # ANSI color codes
 C_RESET = "\033[0m"
@@ -1984,17 +1984,53 @@ def main():
     print(f"  MIT License – Free to use, modify, and distribute")
     print(f"  {C_BOLD}{C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
+
+    # Detect if this process was launched from an SSH session.
+    # SSH env vars are per-process-tree (set by sshd for that connection),
+    # so they reliably tell us about THIS launch, not other sessions.
+    is_remote = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
+
+    # Center all header lines relative to the line width
+    title_text = "Instructions"
+    title_pad = (line_w - len(title_text)) // 2
+    subtitle_text = "**Instructions provided based on detected system:**"
+    subtitle_pad = (line_w - len(subtitle_text)) // 2
+    detect_text = "**Detected: local/remote(ssh/headless)**"
+    detect_pad = (line_w - len(detect_text)) // 2
+
     print("")
-    print(f"  {C_BOLD}{C_WHITE}Open your dashboard in any web browser:{C_RESET}")
+    print(f"{' ' * title_pad}{C_BOLD}{C_YELLOW}{title_text}{C_RESET}")
     print("")
-    print(f"      {C_BOLD}{C_CYAN}{url_local}{C_RESET}")
+    print(f"{' ' * subtitle_pad}{C_BOLD}{C_YELLOW}{subtitle_text}{C_RESET}")
+    if is_remote:
+        print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_DIM}local/{C_RESET}{C_BOLD}{C_RED}remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
+    else:
+        print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_RED}local{C_RESET}{C_DIM}/remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
     print("")
-    print(f"  {C_WHITE}From another device on your network:{C_RESET}")
-    print("")
-    print(f"      {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
-    if firewall_active and firewall_name:
-        print(f"      {C_RED}Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
-        print(f"      {C_RED}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
+
+    if is_remote:
+        # --- SSH / headless: primary = LAN URL ---
+        print(f"      {C_WHITE}Open (any LAN machine):{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
+        if firewall_active and firewall_name:
+            print(f"      {C_RED}**Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
+            print(f"      {C_RED}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
+        else:
+            print(f"      {C_WHITE}If using a firewall, make sure port {port} is open.{C_RESET}")
+        print("")
+        print(f"      {C_DIM}If running Dashboard on the local node machine:{C_RESET}")
+        print(f"          {C_DIM}Open: {url_local} on your local browser{C_RESET}")
+    else:
+        # --- Local: primary = localhost URL ---
+        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_local}{C_RESET} {C_WHITE}on your local browser{C_RESET}")
+        print("")
+        print(f"      {C_DIM}From any other device on your network:{C_RESET}")
+        print(f"          {C_BLUE}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
+        if firewall_active and firewall_name:
+            print(f"      {C_DIM}Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
+            print(f"      {C_DIM}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
+        else:
+            print(f"      {C_DIM}If using a firewall, make sure port {port} is open.{C_RESET}")
+
     print("")
     print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
     print(f"  {C_RED}Need help?{C_RESET} See the {C_RED}README{C_RESET} or visit github.com/mbhillrn/Bitcoin-Core-Peer-Map")

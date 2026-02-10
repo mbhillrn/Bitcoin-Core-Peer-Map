@@ -6,6 +6,8 @@ A real-time monitoring dashboard for your personal Bitcoin Core node. Automatica
 
 ![MBCore Dashboard Full Map View](docs/images/1.hero2.png)
 
+*Note: CJDNS, I2P, and Tor peers are displayed in Antarctica as they cannot be geolocated.*
+
 MBCore Dashboard uses `bitcoin-cli` to query your running Bitcoin Core node, geolocates public peers via a maintained database and online ip geolocation searches like [ip-api.com](http://ip-api.com). Maintains a local SQLite database of peer locations (latitude, longitude, ISP, AS info, and more) for instant recall. The database is continuously updated with new IP geolocations from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset).
 
 - Interactive HTML5 Canvas world map with geolocated Bitcoin Core peers
@@ -38,9 +40,19 @@ You'll land at the main menu. Press **1** to launch the dashboard:
 
 ![Main Menu](docs/images/5.menu.png)
 
-The dashboard starts and shows your access URLs:
+If the geolocation service is unreachable (no internet), you'll see a warning before the dashboard launches. Your local GeoIP database is used automatically for cached peers. Press **Enter** to continue or **R** to retry:
 
-![Dashboard Launch](docs/images/6.banner.png)
+![Cannot Reach Geolocation Service](docs/images/6.cannot-reach-geo.png)
+
+The dashboard starts and shows access URLs tailored to your detected environment:
+
+**Local (desktop):** Shows your localhost URL with a LAN address for other devices on your network.
+
+![Local Instructions](docs/images/6.local-instructions.png)
+
+**Remote (SSH/headless):** Shows your LAN IP as the primary URL, with firewall guidance if one is detected.
+
+![Remote Instructions](docs/images/6.remote-instructions.png)
 
 Open the URL in your browser and you're in.
 
