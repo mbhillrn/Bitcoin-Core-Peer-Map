@@ -53,10 +53,10 @@
 
         // ── Pulse behaviour by direction ──
         // Base rates — new peers get additional "nervousness" on top
-        pulseSpeedInbound: 0.0012,   // slower, calm breathing for inbound
-        pulseSpeedOutbound: 0.0024,  // faster, sharper pulse for outbound
-        pulseDepthInbound: 0.25,     // subtle amplitude for inbound
-        pulseDepthOutbound: 0.45,    // more pronounced for outbound
+        pulseSpeedInbound: 0.0014,   // slower, calm breathing for inbound
+        pulseSpeedOutbound: 0.0026,  // faster, sharper pulse for outbound
+        pulseDepthInbound: 0.32,     // gentle but visible amplitude for inbound
+        pulseDepthOutbound: 0.48,    // more pronounced for outbound
         // Nervousness: young peers pulse faster, veterans are steady
         nervousnessMax: 0.003,     // extra pulse speed added to young peers
         nervousnessRampSec: 1800,  // seconds for nervousness to decay to zero (30 min)
@@ -83,6 +83,31 @@
     const NET_DISPLAY = {
         ipv4: 'IPv4', ipv6: 'IPv6', onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS',
     };
+
+    // Bitcoin Core service flag abbreviations and descriptions
+    const SERVICE_FLAGS = {
+        'NETWORK':          { abbr: 'N',  desc: 'Full chain history (NODE_NETWORK)' },
+        'WITNESS':          { abbr: 'W',  desc: 'Segregated Witness support (NODE_WITNESS)' },
+        'NETWORK_LIMITED':  { abbr: 'NL', desc: 'Limited chain history, last 288 blocks (NODE_NETWORK_LIMITED)' },
+        'P2P_V2':           { abbr: 'P',  desc: 'BIP324 v2 encrypted transport (P2P_V2)' },
+        'COMPACT_FILTERS':  { abbr: 'CF', desc: 'BIP157/158 compact block filters (NODE_COMPACT_FILTERS)' },
+        'BLOOM':            { abbr: 'B',  desc: 'BIP37 Bloom filter support (NODE_BLOOM)' },
+    };
+
+    /** Build unique short abbreviation string from services array */
+    function serviceAbbrev(services) {
+        if (!services || !services.length) return '\u2014';
+        return services.map(s => (SERVICE_FLAGS[s] ? SERVICE_FLAGS[s].abbr : s.charAt(0))).join(' ');
+    }
+
+    /** Build full hover description from services array */
+    function serviceHover(services) {
+        if (!services || !services.length) return 'No service flags';
+        return services.map(s => {
+            const f = SERVICE_FLAGS[s];
+            return f ? `${f.abbr} = ${f.desc}` : s;
+        }).join('\n');
+    }
 
     // ═══════════════════════════════════════════════════════════
     // ANTARCTICA RESEARCH STATIONS
@@ -239,35 +264,22 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // BTC SUPPORT ADDRESS — Click to copy
+    // BTC SUPPORT ADDRESS — Selectable text (no click handler)
     // ═══════════════════════════════════════════════════════════
-
-    const footerBtcEl = document.getElementById('footer-btc');
-    if (footerBtcEl) {
-        footerBtcEl.addEventListener('click', () => {
-            navigator.clipboard.writeText('bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5').then(() => {
-                const orig = footerBtcEl.title;
-                footerBtcEl.title = 'Copied!';
-                setTimeout(() => { footerBtcEl.title = orig; }, 2000);
-            });
-        });
-    }
+    // Address is plain selectable text — users can highlight and copy manually.
 
     // ═══════════════════════════════════════════════════════════
     // FLIGHT DECK — Toggle + Network stats
     // ═══════════════════════════════════════════════════════════
 
-    const flightDeck = document.getElementById('flight-deck');
-    const fdToggle = document.getElementById('fd-toggle');
-    if (fdToggle && flightDeck) {
-        fdToggle.addEventListener('click', () => {
-            flightDeck.classList.toggle('collapsed');
-            fdToggle.textContent = flightDeck.classList.contains('collapsed') ? '\u25B4' : '\u25BE';
-        });
-    }
+    // Flight deck is always visible (toggle removed)
 
     // Previous flight deck counts for delta indicators
     const fdPrevCounts = {};
+
+    // Cached flight deck counts and scores for tooltip use
+    let fdCachedCounts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
+    let fdCachedScores = { ipv4: null, ipv6: null };
 
     function updateFlightDeck(peerNodes) {
         const counts = { ipv4: {in:0,out:0}, ipv6: {in:0,out:0}, onion: {in:0,out:0}, i2p: {in:0,out:0}, cjdns: {in:0,out:0} };
@@ -278,6 +290,7 @@
             if (n.direction === 'IN') counts[net].in++;
             else counts[net].out++;
         }
+        fdCachedCounts = counts;
         const netMap = { ipv4:'ipv4', ipv6:'ipv6', onion:'tor', i2p:'i2p', cjdns:'cjdns' };
         for (const [net, label] of Object.entries(netMap)) {
             const c = counts[net];
@@ -301,26 +314,114 @@
                 }
                 fdPrevCounts[`${net}-out`] = c.out;
             }
-            // Status badge (enabled if count > 0)
-            const statusEl = document.getElementById(`fd-${label}-status`);
-            if (statusEl) {
+            // Green/red dot indicator (enabled = has peers, disabled = no peers)
+            const dotEl = document.getElementById(`fd-${label}-dot`);
+            if (dotEl) {
                 const total = c.in + c.out;
                 if (total > 0) {
-                    statusEl.textContent = 'Enabled';
-                    statusEl.className = 'fd-net-status enabled';
+                    dotEl.className = 'fd-net-dot enabled';
                 } else {
-                    statusEl.textContent = 'Not configured';
-                    statusEl.className = 'fd-net-status not-configured';
+                    dotEl.className = 'fd-net-dot disabled';
                 }
             }
         }
     }
 
     // ═══════════════════════════════════════════════════════════
+    // FLIGHT DECK HOVER TOOLTIPS — Detailed network info on hover
+    // ═══════════════════════════════════════════════════════════
+
+    const fdTooltipEl = document.getElementById('fd-tooltip');
+
+    // Friendly names and descriptions for each network
+    const FD_NET_INFO = {
+        ipv4:  { full: 'Public IPv4 network', label: 'Public IPv4', isOverlay: false },
+        ipv6:  { full: 'Public IPv6 network', label: 'Public IPv6', isOverlay: false },
+        onion: { full: 'Tor onion routing network', label: 'Tor onion routing network', isOverlay: true },
+        i2p:   { full: 'I2P anonymous network', label: 'I2P anonymous network', isOverlay: true },
+        cjdns: { full: 'CJDNS encrypted mesh network', label: 'CJDNS encrypted mesh network', isOverlay: true },
+    };
+
+    // Map data-net attributes back to internal net keys
+    const FD_NET_KEY_MAP = { ipv4: 'ipv4', ipv6: 'ipv6', onion: 'onion', i2p: 'i2p', cjdns: 'cjdns' };
+
+    function buildFdTooltip(netKey) {
+        const info = FD_NET_INFO[netKey];
+        if (!info) return '';
+        const c = fdCachedCounts[netKey] || { in: 0, out: 0 };
+        const total = c.in + c.out;
+        const isEnabled = total > 0;
+
+        // Get score for ipv4/ipv6 from cached values
+        let scoreVal = null;
+        if (!info.isOverlay) {
+            scoreVal = fdCachedScores[netKey];
+        }
+
+        let html = '<div class="fdt-title">';
+        if (isEnabled) {
+            html += `${info.full} <span class="fdt-status-enabled">(Enabled)</span>`;
+        } else {
+            html += `${info.label} <span class="fdt-status-disabled">(Disabled)</span>`;
+        }
+        html += '</div>';
+
+        html += `<div class="fdt-row">Inbound: ${c.in} peers</div>`;
+        html += `<div class="fdt-row">Outbound: ${c.out} peers</div>`;
+
+        if (info.isOverlay) {
+            html += '<div class="fdt-row-muted">Overlay network (no reliable local score)</div>';
+        } else if (scoreVal) {
+            html += `<div class="fdt-row">Local Bitcoin Core Network Score: ${scoreVal}</div>`;
+        }
+
+        if (isEnabled) {
+            if (info.isOverlay) {
+                html += '<div class="fdt-row-muted">Appears to be properly configured</div>';
+            }
+        } else {
+            html += '<div class="fdt-warn">This network is either disabled, or not currently connected.<br>Please check your settings in Bitcoin Core</div>';
+        }
+
+        return html;
+    }
+
+    // Attach hover listeners to all flight deck chips
+    document.querySelectorAll('.fd-net-chip').forEach(chip => {
+        chip.addEventListener('mouseenter', () => {
+            const netKey = chip.dataset.net;
+            if (!fdTooltipEl) return;
+            const html = buildFdTooltip(netKey);
+            if (!html) return;
+            fdTooltipEl.innerHTML = html;
+            fdTooltipEl.classList.remove('hidden');
+            // Position below the chip
+            const rect = chip.getBoundingClientRect();
+            fdTooltipEl.style.left = rect.left + 'px';
+            fdTooltipEl.style.top = (rect.bottom + 6) + 'px';
+        });
+        chip.addEventListener('mouseleave', () => {
+            if (fdTooltipEl) fdTooltipEl.classList.add('hidden');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════
     // MINIMIZE BUTTON — Toggle peer panel collapsed state
     // ═══════════════════════════════════════════════════════════
 
     const minimizeBtn = document.getElementById('btn-minimize');
+    const mapControlsEl = document.getElementById('map-controls');
+
+    /** Reposition map controls below the right overlay */
+    function repositionMapControls() {
+        if (!mapControlsEl) return;
+        const rightOverlay = document.getElementById('right-overlay');
+        if (rightOverlay) {
+            const rect = rightOverlay.getBoundingClientRect();
+            mapControlsEl.style.top = (rect.bottom + 8) + 'px';
+        }
+    }
+
     if (minimizeBtn) {
         minimizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -329,9 +430,15 @@
                 panel.classList.toggle('collapsed');
                 const isCollapsed = panel.classList.contains('collapsed');
                 minimizeBtn.innerHTML = isCollapsed ? 'Show Table &#9650;' : 'Hide Table &#9660;';
+                // Reposition map controls after transition completes
+                setTimeout(repositionMapControls, 350);
             }
         });
     }
+
+    // Initial positioning of map controls + reposition on resize
+    setTimeout(repositionMapControls, 200);
+    window.addEventListener('resize', repositionMapControls);
 
     // ═══════════════════════════════════════════════════════════
     // BTC PRICE STATE
@@ -347,16 +454,31 @@
     // ═══════════════════════════════════════════════════════════
 
     const CURRENCIES = ['USD','EUR','GBP','JPY','CHF','CAD','AUD','CNY','HKD','SGD'];
+    const CURRENCY_META = {
+        USD: { symbol: '$',   decimals: 2 },
+        EUR: { symbol: '\u20AC',  decimals: 2 },  // €
+        GBP: { symbol: '\u00A3',  decimals: 2 },  // £
+        JPY: { symbol: '\u00A5',  decimals: 0 },  // ¥
+        CHF: { symbol: 'CHF ', decimals: 2 },
+        CAD: { symbol: 'C$',  decimals: 2 },
+        AUD: { symbol: 'A$',  decimals: 2 },
+        CNY: { symbol: 'CN\u00A5', decimals: 2 },  // CN¥
+        HKD: { symbol: 'HK$', decimals: 2 },
+        SGD: { symbol: 'S$',  decimals: 2 },
+    };
+
+    function formatCurrencyPrice(price, currencyCode) {
+        const meta = CURRENCY_META[currencyCode] || { symbol: '', decimals: 2 };
+        return meta.symbol + price.toLocaleString(undefined, {
+            minimumFractionDigits: meta.decimals,
+            maximumFractionDigits: meta.decimals,
+        });
+    }
+
     let currencyDropdownEl = null;
 
     const currCodeEl = document.getElementById('mo-btc-currency');
-    if (currCodeEl) {
-        currCodeEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (currencyDropdownEl) { closeCurrencyDropdown(); return; }
-            openCurrencyDropdown();
-        });
-    }
+    const btcPriceBarEl = document.getElementById('btc-price-bar');
 
     function openCurrencyDropdown() {
         closeCurrencyDropdown();
@@ -373,15 +495,19 @@
         document.body.appendChild(dd);
         currencyDropdownEl = dd;
 
-        // Position near the currency code element
-        const rect = currCodeEl.getBoundingClientRect();
-        dd.style.left = Math.max(8, rect.left - 60) + 'px';
-        dd.style.top = (rect.bottom + 6) + 'px';
+        // Position below the centered BTC price bar
+        const anchor = btcPriceBarEl || currCodeEl;
+        if (anchor) {
+            const rect = anchor.getBoundingClientRect();
+            const ddWidth = 200; // approx dropdown width
+            dd.style.left = Math.max(8, rect.left + rect.width / 2 - ddWidth / 2) + 'px';
+            dd.style.top = (rect.bottom + 6) + 'px';
+        }
 
         dd.querySelectorAll('.curr-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 btcCurrency = btn.dataset.curr;
-                currCodeEl.textContent = btcCurrency;
+                if (currCodeEl) currCodeEl.textContent = btcCurrency;
                 dd.querySelectorAll('.curr-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 fetchInfo();
@@ -407,7 +533,8 @@
     }
 
     function closeCurrencyOnOutside(e) {
-        if (currencyDropdownEl && !currencyDropdownEl.contains(e.target) && e.target !== currCodeEl) {
+        const bar = btcPriceBarEl || currCodeEl;
+        if (currencyDropdownEl && !currencyDropdownEl.contains(e.target) && (!bar || !bar.contains(e.target))) {
             closeCurrencyDropdown();
         }
     }
@@ -445,7 +572,8 @@
             html += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
             html += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
             const totalFeesBTC = mp.total_fee || 0;
-            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
+            const feesMeta = CURRENCY_META[btcCurrency] || { symbol: '$', decimals: 2 };
+            const totalFeesFiat = price ? ` (${feesMeta.symbol}${(totalFeesBTC * price).toFixed(feesMeta.decimals)})` : '';
             html += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
             html += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
             if (mp.mempoolminfee != null) {
@@ -545,92 +673,74 @@
     // GEODB MANAGEMENT DROPDOWN
     // ═══════════════════════════════════════════════════════════
 
-    let geodbDropdownEl = null;
+    /** Open MBCore DB as a centered modal (like Node Info) */
+    function openGeoDBDropdown() {
+        const existing = document.getElementById('geodb-modal');
+        if (existing) existing.remove();
 
-    function openGeoDBDropdown(anchorEl) {
-        closeGeoDBDropdown();
-        const dd = document.createElement('div');
-        dd.className = 'currency-dropdown';
-        dd.id = 'geodb-dropdown';
-        dd.style.minWidth = '240px';
-        dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">Loading...</div>';
-        document.body.appendChild(dd);
-        geodbDropdownEl = dd;
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.id = 'geodb-modal';
+        overlay.innerHTML = `<div class="modal-box" style="max-width:480px"><div class="modal-header"><span class="modal-title">MBCore DB</span><button class="modal-close" id="geodb-modal-close">&times;</button></div><div class="modal-body" id="geodb-modal-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('geodb-modal-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-        if (anchorEl) {
-            const rect = anchorEl.getBoundingClientRect();
-            dd.style.left = Math.max(8, rect.left - 60) + 'px';
-            dd.style.top = (rect.bottom + 6) + 'px';
-        }
+        const body = document.getElementById('geodb-modal-body');
 
-        // Populate from lastNodeInfo
         if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
-            renderGeoDBDropdown(lastNodeInfo.geo_db_stats);
+            const stats = lastNodeInfo.geo_db_stats;
+            const statusText = stats.status || 'unknown';
+            const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
+            let html = '';
+            html += `<div class="modal-row"><span class="modal-label" title="Database health status">Status</span><span class="geodb-status-badge ${statusCls}" title="${statusText.toUpperCase()}">${statusText.toUpperCase()}</span></div>`;
+            if (stats.entries != null) html += mrow('Entries', stats.entries.toLocaleString(), 'Total number of IP geolocation records in the database', `${stats.entries.toLocaleString()} records`);
+            if (stats.size_bytes != null) html += mrow('Size', (stats.size_bytes / 1e6).toFixed(1) + ' MB', 'Database file size on disk', `${(stats.size_bytes / 1e6).toFixed(1)} MB`);
+            if (stats.oldest_age_days != null) html += mrow('Oldest Entry', stats.oldest_age_days + ' days', 'Age of the oldest geolocation record', `${stats.oldest_age_days} days old`);
+            if (stats.path) html += `<div class="modal-row"><span class="modal-label" title="File system path to the database">Path</span><span class="modal-val" style="font-size:9px;max-width:260px" title="${stats.path}">${stats.path}</span></div>`;
+            const alVal = stats.auto_lookup ? 'On' : 'Off';
+            html += mrow('Auto-lookup', alVal, 'Automatically look up geolocation for new peer IPs', alVal, stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn');
+            const auVal = stats.auto_update ? 'On' : 'Off';
+            html += mrow('Auto-update', auVal, 'Automatically refresh stale geolocation entries', auVal, stats.auto_update ? 'modal-val-ok' : 'modal-val-warn');
+            html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
+            html += '<div class="geodb-result" id="geodb-result"></div>';
+            body.innerHTML = html;
+
+            document.getElementById('geodb-update-btn').addEventListener('click', async () => {
+                const resultEl = document.getElementById('geodb-result');
+                resultEl.textContent = 'Updating...';
+                resultEl.style.color = 'var(--text-secondary)';
+                try {
+                    const resp = await fetch('/api/geodb/update', { method: 'POST' });
+                    const data = await resp.json();
+                    resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
+                    resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
+                } catch (err) {
+                    resultEl.textContent = 'Error: ' + err.message;
+                    resultEl.style.color = 'var(--err)';
+                }
+            });
         } else {
-            dd.innerHTML = '<div style="color:var(--text-muted);font-size:10px;text-align:center;padding:8px">No GeoDB data</div>';
+            body.innerHTML = '<div style="color:var(--text-muted);padding:8px 0;text-align:center">No GeoDB data available</div>';
         }
-
-        setTimeout(() => { document.addEventListener('click', closeGeoDBOnOutside); }, 0);
-    }
-
-    function renderGeoDBDropdown(stats) {
-        const dd = document.getElementById('geodb-dropdown');
-        if (!dd) return;
-        const statusText = stats.status || 'unknown';
-        const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
-        let html = '<div class="curr-title">MBCore DB</div>';
-        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
-        if (stats.entries != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Entries</span><span class="modal-val">${stats.entries.toLocaleString()}</span></div>`;
-        if (stats.size_bytes != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Size</span><span class="modal-val">${(stats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
-        if (stats.oldest_age_days != null) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Oldest Entry</span><span class="modal-val">${stats.oldest_age_days} days</span></div>`;
-        if (stats.path) html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:160px" title="${stats.path}">${stats.path}</span></div>`;
-        const alCls = stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
-        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${stats.auto_lookup ? 'On' : 'Off'}</span></div>`;
-        const auCls = stats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
-        html += `<div class="modal-row" style="padding:2px 0"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${stats.auto_update ? 'On' : 'Off'}</span></div>`;
-        html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
-        html += '<div class="geodb-result" id="geodb-result"></div>';
-        dd.innerHTML = html;
-
-        document.getElementById('geodb-update-btn').addEventListener('click', async () => {
-            const resultEl = document.getElementById('geodb-result');
-            resultEl.textContent = 'Updating...';
-            resultEl.style.color = 'var(--text-secondary)';
-            try {
-                const resp = await fetch('/api/geodb/update', { method: 'POST' });
-                const data = await resp.json();
-                resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
-                resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
-            } catch (err) {
-                resultEl.textContent = 'Error: ' + err.message;
-                resultEl.style.color = 'var(--err)';
-            }
-        });
-    }
-
-    function closeGeoDBOnOutside(e) {
-        if (geodbDropdownEl && !geodbDropdownEl.contains(e.target)) {
-            closeGeoDBDropdown();
-        }
-    }
-
-    function closeGeoDBDropdown() {
-        if (geodbDropdownEl) { geodbDropdownEl.remove(); geodbDropdownEl = null; }
-        document.removeEventListener('click', closeGeoDBOnOutside);
     }
 
     // ═══════════════════════════════════════════════════════════
     // CONNECT PEER MODAL
     // ═══════════════════════════════════════════════════════════
 
+    // Cache the CLI base command from backend (fetched once)
+    let cliBaseCommand = 'bitcoin-cli';
+
     function openConnectPeerModal() {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'connect-peer-modal';
-        overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
+        const defaultCmd = `${cliBaseCommand} addnode <address> add`;
+        overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
             <div class="modal-header"><span class="modal-title">Connect Peer</span><button class="modal-close" id="connect-close">&times;</button></div>
             <div class="modal-body">
-                <div class="connect-instructions">Enter a peer address to connect. Bitcoin Core will attempt a one-time connection.</div>
+                <div class="connect-instructions">Enter a peer address to connect. Bitcoin Core will attempt a one-time (onetry) connection.</div>
                 <div class="connect-example">IPv4: 1.2.3.4:8333</div>
                 <div class="connect-example">IPv6: [2001:db8::1]:8333</div>
                 <div class="connect-example">Tor: abc...xyz.onion:8333</div>
@@ -641,7 +751,7 @@
                     <button class="connect-btn" id="connect-go-btn">Connect</button>
                 </div>
                 <div class="connect-result" id="connect-result"></div>
-                <div class="connect-cli-hint">For a permanent connection, use:<div class="connect-cli-cmd" id="connect-cli-cmd"><span>bitcoin-cli addnode &lt;address&gt; add</span><button class="connect-copy-btn" id="connect-copy-cli">Copy</button></div></div>
+                <div class="connect-cli-hint">For a permanent connection, use:<div class="connect-cli-cmd" id="connect-cli-cmd"><span>${defaultCmd}</span><span class="connect-copy-note">(copy and paste to terminal)</span></div></div>
             </div>
         </div>`;
         document.body.appendChild(overlay);
@@ -652,7 +762,20 @@
         const goBtn = document.getElementById('connect-go-btn');
         const resultEl = document.getElementById('connect-result');
         const cliCmd = document.getElementById('connect-cli-cmd');
-        const copyBtn = document.getElementById('connect-copy-cli');
+
+        // Fetch actual CLI base command from backend
+        fetch('/api/cli-info').then(r => r.json()).then(data => {
+            if (data.base_command) {
+                cliBaseCommand = data.base_command;
+                const cmdSpan = cliCmd.querySelector('span');
+                const addr = input.value.trim();
+                if (cmdSpan) {
+                    cmdSpan.textContent = addr
+                        ? `${cliBaseCommand} addnode "${addr}" add`
+                        : `${cliBaseCommand} addnode <address> add`;
+                }
+            }
+        }).catch(() => {});
 
         goBtn.addEventListener('click', async () => {
             const addr = input.value.trim();
@@ -665,7 +788,7 @@
                 if (data.success) {
                     resultEl.textContent = `Connection attempt sent to ${data.address}`;
                     resultEl.className = 'connect-result ok';
-                    cliCmd.querySelector('span').textContent = `bitcoin-cli addnode "${data.address}" add`;
+                    cliCmd.querySelector('span').textContent = `${cliBaseCommand} addnode "${data.address}" add`;
                     setTimeout(fetchPeers, 2000);
                 } else {
                     resultEl.textContent = data.error || 'Failed';
@@ -679,15 +802,16 @@
 
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') goBtn.click(); });
 
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                const txt = cliCmd.querySelector('span').textContent;
-                navigator.clipboard.writeText(txt).then(() => {
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
-                });
-            });
-        }
+        // Auto-populate CLI command hint as user types
+        input.addEventListener('input', () => {
+            const addr = input.value.trim();
+            const cmdSpan = cliCmd.querySelector('span');
+            if (cmdSpan) {
+                cmdSpan.textContent = addr
+                    ? `${cliBaseCommand} addnode "${addr}" add`
+                    : `${cliBaseCommand} addnode <address> add`;
+            }
+        });
     }
 
     // Connect Peer button handler
@@ -708,29 +832,38 @@
         systemInfoBtn.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
     }
 
-    // Map overlay link: Node Info
-    const moNodeInfoLink = document.getElementById('mo-node-info');
-    if (moNodeInfoLink) {
-        moNodeInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+    // Right overlay: NODE INFO link → opens Node Info modal
+    const roNodeInfoLink = document.getElementById('ro-node-info');
+    if (roNodeInfoLink) {
+        roNodeInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
     }
 
-    // Map overlay link: Mempool Info
-    const moMempoolInfoLink = document.getElementById('mo-mempool-info');
-    if (moMempoolInfoLink) {
-        moMempoolInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openMempoolModal(); });
-    }
-
-    // Map overlay link: Blockchain Info
-    const moBlockchainInfoLink = document.getElementById('mo-blockchain-info');
-    if (moBlockchainInfoLink) {
-        moBlockchainInfoLink.addEventListener('click', (e) => { e.stopPropagation(); openBlockchainModal(); });
-    }
-
-    // Right overlay: MBCore DB link
+    // Right overlay: MBCORE DB link
     const roGeodbLink = document.getElementById('ro-geodb-link');
     if (roGeodbLink) {
-        roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(roGeodbLink); });
+        roGeodbLink.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(); });
     }
+
+    // Left overlay: Peers/CPU/RAM/NET rows → click opens system info modal
+    ['mo-row-peers', 'mo-row-cpu', 'mo-row-ram', 'mo-row-netin', 'mo-row-netout'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
+    });
+
+    // BTC price bar: click anywhere opens currency selector
+    const btcPriceBar = document.getElementById('btc-price-bar');
+    if (btcPriceBar) {
+        btcPriceBar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCurrencyDropdown();
+        });
+    }
+
+    // Right overlay: click Update/Status rows → open settings popup
+    ['ro-row-countdown', 'ro-row-statusmsg'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openDisplaySettingsPopup(el); });
+    });
 
     // ═══════════════════════════════════════════════════════════
     // PRIVATE NETWORK POPUP (for peer list clicks)
@@ -1141,14 +1274,10 @@
                 if (geodbCountEl) geodbCountEl.textContent = info.geo_db_stats.entries.toLocaleString();
             }
 
-            // Update flight deck scores
+            // Store flight deck scores for tooltip display
             if (info.network_scores) {
-                const s4 = info.network_scores.ipv4;
-                const s6 = info.network_scores.ipv6;
-                const score4El = document.getElementById('fd-ipv4-score');
-                const score6El = document.getElementById('fd-ipv6-score');
-                if (score4El) { score4El.textContent = s4 != null ? s4 : '\u2014'; pulseOnChange('fd-ipv4-score', s4 || 0, 'long'); }
-                if (score6El) { score6El.textContent = s6 != null ? s6 : '\u2014'; pulseOnChange('fd-ipv6-score', s6 || 0, 'long'); }
+                fdCachedScores.ipv4 = info.network_scores.ipv4;
+                fdCachedScores.ipv6 = info.network_scores.ipv6;
             }
 
         } catch (err) {
@@ -1157,6 +1286,14 @@
     }
 
     /** Open combined Node Info modal — node info + mempool + blockchain ALL in one */
+    /** Helper to build a modal row with hover tooltips on both label and value */
+    function mrow(label, value, labelTip, valueTip, valClass) {
+        const lt = labelTip ? ` title="${labelTip}"` : '';
+        const vt = valueTip ? ` title="${valueTip}"` : ` title="${value}"`;
+        const cls = valClass ? ` ${valClass}` : '';
+        return `<div class="modal-row"><span class="modal-label"${lt}>${label}</span><span class="modal-val${cls}"${vt}>${value}</span></div>`;
+    }
+
     function openNodeInfoModal() {
         // Remove any existing
         const existing = document.getElementById('node-info-modal');
@@ -1165,12 +1302,11 @@
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'node-info-modal';
-        overlay.innerHTML = `<div class="modal-box" style="max-width:560px"><div class="modal-header"><span class="modal-title">Node Info</span><button class="modal-close" id="node-info-close">&times;</button></div><div class="modal-body" id="node-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        overlay.innerHTML = `<div class="modal-box" style="max-width:640px"><div class="modal-header"><span class="modal-title">Node Info</span><button class="modal-close" id="node-info-close">&times;</button></div><div class="modal-body" id="node-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
         document.body.appendChild(overlay);
         document.getElementById('node-info-close').addEventListener('click', () => overlay.remove());
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-        // Build combined content from cached data + fresh API calls
         const body = document.getElementById('node-info-body');
         let html = '';
 
@@ -1178,20 +1314,24 @@
         html += '<div class="modal-section-title">Node</div>';
         if (lastNodeInfo) {
             const info = lastNodeInfo;
-            html += `<div class="modal-row"><span class="modal-label">Version</span><span class="modal-val">${info.subversion || '\u2014'}</span></div>`;
-            html += `<div class="modal-row"><span class="modal-label">Peers</span><span class="modal-val">${info.connected != null ? info.connected : '\u2014'}</span></div>`;
+            const ver = info.subversion || '\u2014';
+            html += mrow('Version', ver, 'Bitcoin Core user agent string', ver);
+            html += mrow('Peers', info.connected != null ? info.connected : '\u2014', 'Total number of connected peers', info.connected != null ? `${info.connected} peers connected` : '');
             if (info.blockchain) {
-                html += `<div class="modal-row"><span class="modal-label">Size (Disk)</span><span class="modal-val">${info.blockchain.size_gb} GB</span></div>`;
-                html += `<div class="modal-row"><span class="modal-label">Node Type</span><span class="modal-val">${info.blockchain.pruned ? 'Pruned' : 'Full'}</span></div>`;
-                html += `<div class="modal-row"><span class="modal-label">TX Index</span><span class="modal-val">${info.blockchain.indexed ? 'Yes' : 'No'}</span></div>`;
-                html += `<div class="modal-row"><span class="modal-label">Status</span><span class="modal-val ${info.blockchain.ibd ? 'modal-val-warn' : 'modal-val-ok'}">${info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced'}</span></div>`;
+                html += mrow('Size (Disk)', `${info.blockchain.size_gb} GB`, 'Total blockchain data stored on disk', `${info.blockchain.size_gb} GB`);
+                html += mrow('Node Type', info.blockchain.pruned ? 'Pruned' : 'Full', 'Whether this node stores all blocks (Full) or only recent ones (Pruned)', info.blockchain.pruned ? 'Pruned node \u2014 older blocks deleted to save space' : 'Full node \u2014 all blocks stored');
+                html += mrow('TX Index', info.blockchain.indexed ? 'Yes' : 'No', 'Transaction index allows looking up any TX by its hash', info.blockchain.indexed ? 'Enabled \u2014 all transactions are indexed' : 'Disabled');
+                const syncVal = info.blockchain.ibd ? 'Syncing (IBD)' : 'Synced';
+                html += mrow('Status', syncVal, 'Whether the node has finished initial block download', syncVal, info.blockchain.ibd ? 'modal-val-warn' : 'modal-val-ok');
             }
             if (info.last_block) {
                 const t = info.last_block.time ? new Date(info.last_block.time * 1000).toLocaleTimeString() : '';
-                html += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014'}${t ? ' (' + t + ')' : ''}</span></div>`;
+                const heightStr = info.last_block.height ? info.last_block.height.toLocaleString() : '\u2014';
+                const display = heightStr + (t ? ` (${t})` : '');
+                html += mrow('Block Height', display, 'Latest block height seen by this node', display);
             }
             if (info.mempool_size != null) {
-                html += `<div class="modal-row"><span class="modal-label">Mempool Size</span><span class="modal-val">${info.mempool_size.toLocaleString()} tx</span></div>`;
+                html += mrow('Mempool Size', `${info.mempool_size.toLocaleString()} tx`, 'Number of unconfirmed transactions in the mempool', `${info.mempool_size.toLocaleString()} transactions`);
             }
         } else {
             html += '<div style="color:var(--text-muted);padding:4px 0">No node data yet</div>';
@@ -1216,28 +1356,33 @@
             if (!mp) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
             const price = data.btc_price || 0;
             let mhtml = '';
-            mhtml += `<div class="modal-row"><span class="modal-label">Pending Transactions</span><span class="modal-val modal-val-highlight">${(mp.size || 0).toLocaleString()}</span></div>`;
-            mhtml += `<div class="modal-row"><span class="modal-label">Data Size</span><span class="modal-val">${((mp.bytes || 0) / 1e6).toFixed(2)} MB</span></div>`;
-            mhtml += `<div class="modal-row"><span class="modal-label">Memory Usage</span><span class="modal-val">${((mp.usage || 0) / 1e6).toFixed(2)} MB</span></div>`;
+            const pendingVal = (mp.size || 0).toLocaleString();
+            mhtml += mrow('Pending TXs', pendingVal, 'Unconfirmed transactions waiting to be mined', `${pendingVal} transactions`);
+            const dataSz = ((mp.bytes || 0) / 1e6).toFixed(2) + ' MB';
+            mhtml += mrow('Data Size', dataSz, 'Raw serialized size of all mempool transactions', dataSz);
+            const memUsg = ((mp.usage || 0) / 1e6).toFixed(2) + ' MB';
+            mhtml += mrow('Memory Usage', memUsg, 'Actual RAM used by the mempool', memUsg);
             const totalFeesBTC = mp.total_fee || 0;
-            const totalFeesFiat = price ? ` ($${(totalFeesBTC * price).toFixed(2)})` : '';
-            mhtml += `<div class="modal-row"><span class="modal-label">Total Fees</span><span class="modal-val">${totalFeesBTC.toFixed(8)} BTC${totalFeesFiat}</span></div>`;
-            mhtml += `<div class="modal-row"><span class="modal-label">Max Mempool Size</span><span class="modal-val">${((mp.maxmempool || 0) / 1e6).toFixed(0)} MB</span></div>`;
+            const feesMeta2 = CURRENCY_META[btcCurrency] || { symbol: '$', decimals: 2 };
+            const totalFeesFiat = price ? ` (${feesMeta2.symbol}${(totalFeesBTC * price).toFixed(feesMeta2.decimals)})` : '';
+            const feesVal = totalFeesBTC.toFixed(8) + ' BTC' + totalFeesFiat;
+            mhtml += mrow('Total Fees', feesVal, 'Sum of all fees from pending transactions', feesVal);
+            const maxMp = ((mp.maxmempool || 0) / 1e6).toFixed(0) + ' MB';
+            mhtml += mrow('Max Size', maxMp, 'Maximum allowed mempool size before evicting low-fee transactions', maxMp);
             if (mp.mempoolminfee != null) {
-                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2);
-                mhtml += `<div class="modal-row"><span class="modal-label">Min Accepted Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+                const satVb = (mp.mempoolminfee * 1e8 / 1000).toFixed(2) + ' sat/vB';
+                mhtml += mrow('Min Accepted Fee', satVb, 'Minimum fee rate to enter the mempool (rises when mempool is full)', satVb);
             }
             if (mp.minrelaytxfee != null) {
-                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2);
-                mhtml += `<div class="modal-row"><span class="modal-label">Min Relay Fee</span><span class="modal-val">${satVb} sat/vB</span></div>`;
+                const satVb = (mp.minrelaytxfee * 1e8 / 1000).toFixed(2) + ' sat/vB';
+                mhtml += mrow('Min Relay Fee', satVb, 'Minimum fee rate for a transaction to be relayed to other nodes', satVb);
             }
             if (mp.fullrbf != null) {
-                const cls = mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn';
-                mhtml += `<div class="modal-row"><span class="modal-label">Full RBF</span><span class="modal-val ${cls}">${mp.fullrbf ? 'Enabled' : 'Disabled'}</span></div>`;
+                const val = mp.fullrbf ? 'Enabled' : 'Disabled';
+                mhtml += mrow('Full RBF', val, 'Replace-by-fee policy \u2014 whether any transaction can be replaced by a higher-fee version', val, mp.fullrbf ? 'modal-val-ok' : 'modal-val-warn');
             }
             if (mp.unbroadcastcount != null) {
-                const cls = mp.unbroadcastcount === 0 ? 'modal-val-ok' : 'modal-val-highlight';
-                mhtml += `<div class="modal-row"><span class="modal-label">Unbroadcast Txs</span><span class="modal-val ${cls}">${mp.unbroadcastcount}</span></div>`;
+                mhtml += mrow('Unbroadcast TXs', mp.unbroadcastcount.toString(), 'Transactions submitted locally but not yet seen relayed back by any peer', `${mp.unbroadcastcount} transactions`);
             }
             section.innerHTML = mhtml;
         }).catch(err => {
@@ -1253,35 +1398,38 @@
             const bc = data.blockchain;
             if (!bc) { section.innerHTML = '<div style="color:var(--text-muted)">No data</div>'; return; }
             let bhtml = '';
-            bhtml += `<div class="modal-row"><span class="modal-label">Chain</span><span class="modal-val modal-val-highlight">${bc.chain || '\u2014'}</span></div>`;
-            bhtml += `<div class="modal-row"><span class="modal-label">Block Height</span><span class="modal-val modal-val-ok">${(bc.blocks || 0).toLocaleString()}</span></div>`;
+            bhtml += mrow('Chain', bc.chain || '\u2014', 'Bitcoin network this node is connected to', bc.chain || '');
+            bhtml += mrow('Block Height', (bc.blocks || 0).toLocaleString(), 'Number of validated blocks in the local chain', `${(bc.blocks || 0).toLocaleString()} blocks`);
             if (bc.headers) {
                 const pct = bc.blocks && bc.headers ? ((bc.blocks / bc.headers) * 100).toFixed(2) : '100';
-                bhtml += `<div class="modal-row"><span class="modal-label">Sync Progress</span><span class="modal-val">${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)</span></div>`;
+                const syncVal = `${bc.blocks.toLocaleString()} / ${bc.headers.toLocaleString()} (${pct}%)`;
+                bhtml += mrow('Sync Progress', syncVal, 'Validated blocks vs known block headers \u2014 100% means fully synced', syncVal);
             }
             if (bc.bestblockhash) {
-                const short = bc.bestblockhash.substring(0, 20) + '...';
-                bhtml += `<div class="modal-row"><span class="modal-label">Best Block Hash</span><span class="modal-val" title="${bc.bestblockhash}">${short}</span></div>`;
+                const short = bc.bestblockhash.substring(0, 24) + '\u2026';
+                bhtml += mrow('Best Block Hash', short, 'Hash of the most recent validated block', bc.bestblockhash);
             }
             if (bc.difficulty) {
                 const diff = parseFloat(bc.difficulty);
                 const humanDiff = diff > 1e12 ? (diff / 1e12).toFixed(2) + 'T' : diff.toLocaleString();
-                bhtml += `<div class="modal-row"><span class="modal-label">Difficulty</span><span class="modal-val" title="${bc.difficulty}">${humanDiff}</span></div>`;
+                bhtml += mrow('Difficulty', humanDiff, 'Current mining difficulty \u2014 adjusts every 2,016 blocks', bc.difficulty.toString());
             }
             if (bc.mediantime) {
-                bhtml += `<div class="modal-row"><span class="modal-label">Median Time</span><span class="modal-val">${new Date(bc.mediantime * 1000).toLocaleString()}</span></div>`;
+                const mtVal = new Date(bc.mediantime * 1000).toLocaleString();
+                bhtml += mrow('Median Time', mtVal, 'Median timestamp of the last 11 blocks \u2014 used for time-locked transactions', mtVal);
             }
-            bhtml += `<div class="modal-row"><span class="modal-label">IBD Status</span><span class="modal-val ${bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok'}">${bc.initialblockdownload ? 'Yes' : 'No'}</span></div>`;
+            const ibdVal = bc.initialblockdownload ? 'Yes' : 'No';
+            bhtml += mrow('IBD Status', ibdVal, 'Initial Block Download \u2014 whether the node is still catching up to the network', ibdVal, bc.initialblockdownload ? 'modal-val-warn' : 'modal-val-ok');
             if (bc.size_on_disk) {
-                bhtml += `<div class="modal-row"><span class="modal-label">Size on Disk</span><span class="modal-val">${(bc.size_on_disk / 1e9).toFixed(1)} GB</span></div>`;
+                const diskVal = (bc.size_on_disk / 1e9).toFixed(1) + ' GB';
+                bhtml += mrow('Size on Disk', diskVal, 'Total blockchain data stored on disk', diskVal);
             }
-            bhtml += `<div class="modal-row"><span class="modal-label">Pruning</span><span class="modal-val">${bc.pruned ? 'Yes' : 'No'}</span></div>`;
+            bhtml += mrow('Pruning', bc.pruned ? 'Yes' : 'No', 'Whether old blocks are deleted to save disk space', bc.pruned ? 'Pruned \u2014 old blocks removed' : 'Not pruned \u2014 all blocks stored');
             if (bc.softforks && Object.keys(bc.softforks).length > 0) {
                 bhtml += '<div class="modal-section-title" style="margin-top:6px;padding-top:4px">Softforks</div>';
                 for (const [name, sf] of Object.entries(bc.softforks)) {
                     const status = sf.active ? 'Active' : (sf.type || 'Defined');
-                    const cls = sf.active ? 'modal-val-ok' : '';
-                    bhtml += `<div class="modal-row"><span class="modal-label">${name}</span><span class="modal-val ${cls}">${status}</span></div>`;
+                    bhtml += mrow(name, status, `Consensus rule upgrade: ${name}`, `${name}: ${status} (${sf.type || 'bip9'})`, sf.active ? 'modal-val-ok' : '');
                 }
             }
             section.innerHTML = bhtml;
@@ -1300,7 +1448,7 @@
 
         if (info.btc_price) {
             const price = parseFloat(info.btc_price);
-            priceEl.textContent = `$${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+            priceEl.textContent = formatCurrencyPrice(price, btcCurrency);
 
             // Persistent coloring on price element (red/green on change)
             const dir = pulseOnChange('mo-btc-price', price, 'persistent');
@@ -1329,10 +1477,12 @@
         const txt = document.getElementById('status-text');
         if (connected) {
             dot.classList.add('online');
-            txt.textContent = 'Connected';
+            dot.title = 'MBCore is running';
+            txt.textContent = 'Running';
         } else {
             dot.classList.remove('online');
-            txt.textContent = 'Offline';
+            dot.title = 'MBCore service not running, please check your terminal/process';
+            txt.textContent = 'Stopped';
         }
     }
 
@@ -1627,24 +1777,25 @@
      * @param {number} brightness - connection-age brightness (0..1)
      */
     function drawNodeAt(sx, sy, c, r, gr, pulse, opacity, brightness) {
-        // Outer glow (radial gradient) — modulated by brightness
+        // Outer glow (radial gradient) — modulated by brightness and pulse
         const grad = ctx.createRadialGradient(sx, sy, r, sx, sy, gr);
-        grad.addColorStop(0, rgba(c, 0.5 * pulse * opacity * brightness));
-        grad.addColorStop(0.5, rgba(c, 0.15 * pulse * opacity * brightness));
+        grad.addColorStop(0, rgba(c, 0.55 * pulse * opacity * brightness));
+        grad.addColorStop(0.5, rgba(c, 0.18 * pulse * opacity * brightness));
         grad.addColorStop(1, rgba(c, 0));
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(sx, sy, gr, 0, Math.PI * 2);
         ctx.fill();
 
-        // Core dot — brightness affects base opacity
-        ctx.fillStyle = rgba(c, (0.5 + 0.4 * brightness) * opacity);
+        // Core dot — now subtly modulated by pulse for continuous twinkle
+        const coreTwinkle = 0.88 + 0.12 * pulse;
+        ctx.fillStyle = rgba(c, (0.5 + 0.4 * brightness) * opacity * coreTwinkle);
         ctx.beginPath();
         ctx.arc(sx, sy, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright white centre highlight — scales with brightness
-        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.6 * pulse * opacity * brightness);
+        // Bright white centre highlight — scales with brightness and pulse
+        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.65 * pulse * opacity * brightness);
         ctx.beginPath();
         ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2);
         ctx.fill();
@@ -2131,7 +2282,7 @@
         { key: 'connection_type', label: 'Type',     get: p => peerTypeShort(p),                           full: p => peerTypeFull(p), vis: true, w: 70 },
         { key: 'addr',            label: 'IP:Port',  get: p => p.addr || `${p.ip}:${p.port}`,             full: null,  vis: true,  w: 130 },
         { key: 'subver',          label: 'Software', get: p => p.subver || '—',                            full: null,  vis: true,  w: 90  },
-        { key: 'services_abbrev', label: 'Services', get: p => p.services_abbrev || '—',                   full: null,  vis: true,  w: 70  },
+        { key: 'services_abbrev', label: 'Services', get: p => serviceAbbrev(p.services),                    full: p => serviceHover(p.services),  vis: true,  w: 70  },
         { key: 'city',            label: 'City',     get: p => p.city || '—',                              full: null,  vis: true,  w: 60  },
         { key: 'regionName',      label: 'Region',   get: p => p.regionName || '—',                        full: null,  vis: true,  w: 55  },
         { key: 'country',         label: 'Country',  get: p => p.country || '—',                           full: null,  vis: true,  w: 70  },
@@ -2144,7 +2295,7 @@
         // Advanced columns (hidden by default)
         { key: 'direction',       label: 'Dir',      get: p => p.direction === 'IN' ? 'IN' : 'OUT',        full: p => p.direction === 'IN' ? 'Inbound' : 'Outbound', vis: false, w: 40 },
         { key: 'countryCode',     label: 'CC',       get: p => p.countryCode || '—',                       full: null,  vis: false, w: 35  },
-        { key: 'continentCode',   label: 'CC',       get: p => p.continentCode || '—',                     full: null,  vis: false, w: 35  },
+        { key: 'continentCode',   label: 'CntC',     get: p => p.continentCode || '—',                     full: null,  vis: false, w: 40  },
         { key: 'lat',             label: 'Lat',      get: p => p.lat != null ? p.lat.toFixed(2) : '—',     full: null,  vis: false, w: 55  },
         { key: 'lon',             label: 'Lon',      get: p => p.lon != null ? p.lon.toFixed(2) : '—',     full: null,  vis: false, w: 55  },
         { key: 'region',          label: 'Rgn',      get: p => p.region || '—',                             full: null,  vis: false, w: 60  },
@@ -2162,7 +2313,8 @@
     ];
 
     // Visible column keys (start with defaults, can be toggled later)
-    let visibleColumns = COLUMNS.filter(c => c.vis).map(c => c.key);
+    const DEFAULT_VISIBLE_COLUMNS = COLUMNS.filter(c => c.vis).map(c => c.key);
+    let visibleColumns = [...DEFAULT_VISIBLE_COLUMNS];
 
     // Sort state
     let sortKey = 'id';
@@ -2178,9 +2330,10 @@
     let tbodyEl = document.getElementById('peer-tbody');
     const handleCountEl = { textContent: '' };  // peer count now shown in badge only
 
-    // Panel toggle
+    // Panel toggle (clicking the title bar)
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
         panelEl.classList.toggle('collapsed');
+        setTimeout(repositionMapControls, 350);
     });
 
     /** Get sorted copy of lastPeers based on current sort state.
@@ -2348,13 +2501,12 @@
     // ── Named event handlers (for reattachment after ban list close) ──
 
     let resizingColumn = false;  // suppress sort click when resize drag occurred
+    let draggingColumn = false;  // suppress sort click when column reorder drag occurred
 
     function handleTheadClick(e) {
-        // Suppress sort if this click followed a column resize drag
-        if (resizingColumn) {
-            resizingColumn = false;
-            return;
-        }
+        // Suppress sort if this click followed a column resize or reorder drag
+        if (resizingColumn) { resizingColumn = false; return; }
+        if (draggingColumn) { draggingColumn = false; return; }
         // Ignore clicks on resize handles
         if (e.target.closest('.th-resize')) return;
         const th = e.target.closest('th[data-sort]');
@@ -2415,6 +2567,80 @@
         window.addEventListener('mouseup', onUp);
     }
 
+    // ── Column drag-to-reorder ──
+    let colDragState = null;
+    let colDragIndicator = null;
+
+    function handleTheadDragStart(e) {
+        // Only start column drag on th text area (not resize handle)
+        if (e.target.closest('.th-resize')) return;
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+
+        const key = th.dataset.sort;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const thRect = th.getBoundingClientRect();
+        let moved = false;
+
+        const onMove = (me) => {
+            const dx = me.clientX - startX;
+            const dy = me.clientY - startY;
+            // Only activate drag after 10px horizontal movement
+            if (!moved && Math.abs(dx) < 10) return;
+            if (!moved) {
+                moved = true;
+                draggingColumn = true;
+                // Create floating indicator
+                colDragIndicator = document.createElement('div');
+                colDragIndicator.className = 'col-drag-indicator';
+                colDragIndicator.textContent = th.querySelector('.th-text') ? th.querySelector('.th-text').textContent.trim() : key;
+                colDragIndicator.style.width = thRect.width + 'px';
+                document.body.appendChild(colDragIndicator);
+            }
+            if (colDragIndicator) {
+                colDragIndicator.style.left = (me.clientX - thRect.width / 2) + 'px';
+                colDragIndicator.style.top = (thRect.top - 2) + 'px';
+            }
+            // Highlight drop target
+            const allThs = Array.from(theadEl.querySelectorAll('th[data-sort]'));
+            allThs.forEach(t => t.classList.remove('col-drag-over'));
+            const targetTh = document.elementFromPoint(me.clientX, thRect.top + thRect.height / 2);
+            const dropTh = targetTh ? targetTh.closest('th[data-sort]') : null;
+            if (dropTh && dropTh !== th) dropTh.classList.add('col-drag-over');
+        };
+
+        const onUp = (me) => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            if (colDragIndicator) { colDragIndicator.remove(); colDragIndicator = null; }
+            // Clean up highlight
+            theadEl.querySelectorAll('.col-drag-over').forEach(t => t.classList.remove('col-drag-over'));
+
+            if (!moved) return;
+            // Find drop target
+            const targetEl = document.elementFromPoint(me.clientX, thRect.top + thRect.height / 2);
+            const dropTh = targetEl ? targetEl.closest('th[data-sort]') : null;
+            if (dropTh && dropTh.dataset.sort !== key) {
+                const fromIdx = visibleColumns.indexOf(key);
+                const toIdx = visibleColumns.indexOf(dropTh.dataset.sort);
+                if (fromIdx !== -1 && toIdx !== -1) {
+                    // Move column in visibleColumns array
+                    visibleColumns.splice(fromIdx, 1);
+                    visibleColumns.splice(toIdx, 0, key);
+                    renderColgroup();
+                    renderPeerTableHead();
+                    renderPeerTable();
+                }
+            }
+        };
+
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }
+
+    theadEl.addEventListener('mousedown', handleTheadDragStart);
+
     // Sort on column header click
     theadEl.addEventListener('click', handleTheadClick);
     // Column resize via drag on th-resize handles
@@ -2426,18 +2652,143 @@
         autoFitBtn.classList.toggle('active', autoFitColumns);
     }
     updateAutoFitBtn();
-    autoFitBtn.addEventListener('click', () => {
+    autoFitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         autoFitColumns = !autoFitColumns;
         if (autoFitColumns) userColumnWidths = {};
         updateAutoFitBtn();
         renderColgroup();
     });
 
+    // ── Table Settings gear popup (column toggles + transparency) ──
+    const tableSettingsBtn = document.getElementById('btn-table-settings');
+    let tableSettingsEl = null;
+    let panelOpacity = 0; // default percentage (0 = invisible, 100 = opaque)
+
+    if (tableSettingsBtn) {
+        tableSettingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (tableSettingsEl) { closeTableSettings(); return; }
+            openTableSettings();
+        });
+    }
+
+    function openTableSettings() {
+        closeTableSettings();
+        const popup = document.createElement('div');
+        popup.className = 'table-settings-popup';
+        popup.id = 'table-settings-popup';
+
+        let html = '<div class="tsp-header"><span class="tsp-title">Table Settings</span><button class="tsp-defaults-btn" id="tsp-defaults">Defaults</button></div>';
+
+        // ── Transparency slider ──
+        html += '<div class="tsp-section">Transparency</div>';
+        html += `<div class="tsp-slider-row"><input type="range" class="tsp-slider" id="tsp-opacity" min="0" max="100" value="${panelOpacity}"><span class="tsp-slider-val" id="tsp-opacity-val">${panelOpacity}%</span></div>`;
+
+        // ── Column toggles ──
+        html += '<div class="tsp-section">Columns</div>';
+        html += '<div class="tsp-col-grid">';
+        for (const col of COLUMNS) {
+            const checked = visibleColumns.includes(col.key) ? 'checked' : '';
+            html += `<label class="tsp-col-item"><input type="checkbox" data-col="${col.key}" ${checked}>${col.label}</label>`;
+        }
+        html += '</div>';
+
+        popup.innerHTML = html;
+        document.body.appendChild(popup);
+        tableSettingsEl = popup;
+
+        // Position below the gear button
+        if (tableSettingsBtn) {
+            const rect = tableSettingsBtn.getBoundingClientRect();
+            popup.style.right = (window.innerWidth - rect.right) + 'px';
+            popup.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+        }
+
+        // Bind opacity slider
+        const opacitySlider = document.getElementById('tsp-opacity');
+        const opacityVal = document.getElementById('tsp-opacity-val');
+        if (opacitySlider) {
+            opacitySlider.addEventListener('input', () => {
+                panelOpacity = parseInt(opacitySlider.value);
+                opacityVal.textContent = panelOpacity + '%';
+                applyPanelOpacity();
+            });
+        }
+
+        // Bind column toggles
+        popup.querySelectorAll('input[data-col]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const key = cb.dataset.col;
+                if (cb.checked) {
+                    if (!visibleColumns.includes(key)) {
+                        visibleColumns.push(key);
+                    }
+                } else {
+                    // Don't allow removing all columns
+                    const remaining = visibleColumns.filter(k => k !== key);
+                    if (remaining.length === 0) { cb.checked = true; return; }
+                    visibleColumns = remaining;
+                }
+                renderColgroup();
+                renderPeerTableHead();
+                renderPeerTable();
+            });
+        });
+
+        // Bind Defaults button
+        const defaultsBtn = document.getElementById('tsp-defaults');
+        if (defaultsBtn) {
+            defaultsBtn.addEventListener('click', () => {
+                // Reset columns to defaults
+                visibleColumns = [...DEFAULT_VISIBLE_COLUMNS];
+                // Reset transparency to 0%
+                panelOpacity = 0;
+                applyPanelOpacity();
+                // Reset auto-fit
+                autoFitColumns = true;
+                userColumnWidths = {};
+                updateAutoFitBtn();
+                // Re-render table
+                renderColgroup();
+                renderPeerTableHead();
+                renderPeerTable();
+                // Refresh the popup to reflect changes
+                closeTableSettings();
+                openTableSettings();
+            });
+        }
+
+        setTimeout(() => {
+            document.addEventListener('click', closeTableSettingsOnOutside);
+        }, 0);
+    }
+
+    function applyPanelOpacity() {
+        const alpha = panelOpacity / 100;
+        const handle = document.querySelector('.peer-panel-handle');
+        const body = document.querySelector('.peer-panel-body');
+        if (handle) handle.style.background = `rgba(10, 14, 20, ${alpha})`;
+        if (body) body.style.background = `rgba(10, 14, 20, ${alpha})`;
+    }
+
+    function closeTableSettingsOnOutside(e) {
+        if (tableSettingsEl && !tableSettingsEl.contains(e.target) && e.target !== tableSettingsBtn) {
+            closeTableSettings();
+        }
+    }
+
+    function closeTableSettings() {
+        if (tableSettingsEl) { tableSettingsEl.remove(); tableSettingsEl = null; }
+        document.removeEventListener('click', closeTableSettingsOnOutside);
+    }
+
     // ── Ban list modal (overlay — peer table stays visible underneath) ──
     const bansBtn = document.getElementById('btn-bans');
     let banModalOpen = false;
 
-    bansBtn.addEventListener('click', () => {
+    bansBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (banModalOpen) {
             closeBanModal();
         } else {
@@ -3233,31 +3584,134 @@
         }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // DISPLAY SETTINGS POPUP — right overlay Update/Status rows
+    // ═══════════════════════════════════════════════════════════
+
+    let displaySettingsEl = null;
+
+    function openDisplaySettingsPopup(anchorEl) {
+        closeDisplaySettingsPopup();
+        const popup = document.createElement('div');
+        popup.className = 'display-settings-popup';
+        popup.id = 'display-settings-popup';
+
+        const pollSec = Math.round(CFG.pollInterval / 1000);
+        const infoSec = Math.round(CFG.infoPollInterval / 1000);
+
+        // Right-side display toggle states
+        const rightItems = [
+            { id: 'ro-row-statusmsg', label: 'Map Status', visible: true },
+            { id: 'ro-row-nodestatus', label: 'Node Info', visible: true },
+            { id: 'ro-row-geodb', label: 'MBCore DB', visible: true },
+        ];
+        // Check actual visibility
+        rightItems.forEach(item => {
+            const el = document.getElementById(item.id);
+            if (el) item.visible = el.style.display !== 'none';
+        });
+
+        let html = '<div class="dsp-title">Display Settings</div>';
+        html += '<div class="dsp-section">Update Frequency</div>';
+        html += `<div class="dsp-row"><span class="dsp-label" title="How often peer list is fetched from Bitcoin Core">Peer list</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += `<div class="dsp-row"><span class="dsp-label" title="How often node info and BTC price are refreshed">Node info &amp; price</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += '<div class="dsp-section">Show / Hide</div>';
+        rightItems.forEach(item => {
+            html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
+        });
+        popup.innerHTML = html;
+        document.body.appendChild(popup);
+        displaySettingsEl = popup;
+
+        // Position near anchor
+        if (anchorEl) {
+            const rect = anchorEl.getBoundingClientRect();
+            popup.style.right = (window.innerWidth - rect.right) + 'px';
+            popup.style.top = (rect.bottom + 6) + 'px';
+        }
+
+        // Bind frequency inputs
+        const pollInput = document.getElementById('dsp-poll-sec');
+        if (pollInput) {
+            pollInput.addEventListener('change', () => {
+                const v = clamp(parseInt(pollInput.value) || 10, 3, 120);
+                pollInput.value = v;
+                CFG.pollInterval = v * 1000;
+            });
+        }
+        const infoInput = document.getElementById('dsp-info-sec');
+        if (infoInput) {
+            infoInput.addEventListener('change', () => {
+                const v = clamp(parseInt(infoInput.value) || 15, 5, 120);
+                infoInput.value = v;
+                CFG.infoPollInterval = v * 1000;
+            });
+        }
+
+        // Bind show/hide toggles
+        popup.querySelectorAll('.dsp-toggle input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const target = document.getElementById(cb.dataset.target);
+                if (target) target.style.display = cb.checked ? '' : 'none';
+            });
+        });
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', closeDisplaySettingsOnOutside);
+        }, 0);
+    }
+
+    function closeDisplaySettingsOnOutside(e) {
+        if (displaySettingsEl && !displaySettingsEl.contains(e.target)) {
+            closeDisplaySettingsPopup();
+        }
+    }
+
+    function closeDisplaySettingsPopup() {
+        if (displaySettingsEl) {
+            displaySettingsEl.remove();
+            displaySettingsEl = null;
+        }
+        document.removeEventListener('click', closeDisplaySettingsOnOutside);
+    }
+
     /** Store latest system stats for modal use */
     let lastSystemStats = null;
 
-    function renderSystemInfoCard(stats) {
-        // Store the stats for modal use
-        lastSystemStats = stats;
+    /** SSE stream reference (declared early so renderSystemInfoCard can check it) */
+    let sysStreamSource = null;
+    let sysStreamRetryDelay = 1000;
 
-        // Update right overlay CPU/RAM display
-        const cpuEl = document.getElementById('ro-cpu');
-        const ramEl = document.getElementById('ro-ram');
-        if (cpuEl && stats.cpu_pct != null) {
-            const cpuPct = Math.round(stats.cpu_pct);
-            cpuEl.textContent = cpuPct + '%';
-            pulseOnChange('ro-cpu', cpuPct, 'white');
-        }
-        if (ramEl && stats.mem_pct != null) {
-            const memPct = Math.round(stats.mem_pct);
-            const memUsed = stats.mem_used_mb;
-            const memTotal = stats.mem_total_mb;
-            if (memUsed && memTotal) {
-                ramEl.textContent = `${memPct}% (${memUsed}/${memTotal}MB)`;
-            } else {
-                ramEl.textContent = memPct + '%';
+    function renderSystemInfoCard(stats) {
+        // Merge modal-only fields (uptime, load, disk) into lastSystemStats
+        // CPU/RAM/NET are driven by the SSE stream — don't overwrite those here
+        if (!lastSystemStats) lastSystemStats = {};
+        if (stats.uptime) lastSystemStats.uptime = stats.uptime;
+        if (stats.uptime_sec) lastSystemStats.uptime_sec = stats.uptime_sec;
+        if (stats.load_1 != null) lastSystemStats.load_1 = stats.load_1;
+        if (stats.load_5 != null) lastSystemStats.load_5 = stats.load_5;
+        if (stats.load_15 != null) lastSystemStats.load_15 = stats.load_15;
+        if (stats.disk_total_gb != null) lastSystemStats.disk_total_gb = stats.disk_total_gb;
+        if (stats.disk_used_gb != null) lastSystemStats.disk_used_gb = stats.disk_used_gb;
+        if (stats.disk_free_gb != null) lastSystemStats.disk_free_gb = stats.disk_free_gb;
+        if (stats.disk_pct != null) lastSystemStats.disk_pct = stats.disk_pct;
+        if (stats.cpu_breakdown) lastSystemStats.cpu_breakdown = stats.cpu_breakdown;
+
+        // Only update CPU/RAM display if SSE stream is not active (fallback)
+        if (!sysStreamSource) {
+            const cpuEl = document.getElementById('ro-cpu');
+            const ramEl = document.getElementById('ro-ram');
+            if (cpuEl && stats.cpu_pct != null) {
+                const cpuPct = Math.round(stats.cpu_pct);
+                cpuEl.textContent = cpuPct + '%';
+                pulseOnChange('ro-cpu', cpuPct, 'white');
             }
-            pulseOnChange('ro-ram', memPct, 'white');
+            if (ramEl && stats.mem_pct != null) {
+                const memPct = Math.round(stats.mem_pct);
+                ramEl.textContent = memPct + '%';
+                pulseOnChange('ro-ram', memPct, 'white');
+            }
         }
 
         // Update right overlay MBCore DB entry count
@@ -3267,7 +3721,7 @@
         }
     }
 
-    /** Open combined System Info modal — system stats + GeoDB + traffic + recent changes */
+    /** Open combined System Info modal — system stats + NET bar settings + display toggles + recent changes */
     function openSystemInfoModal() {
         const existing = document.getElementById('system-info-modal');
         if (existing) existing.remove();
@@ -3275,22 +3729,22 @@
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.id = 'system-info-modal';
-        overlay.innerHTML = `<div class="modal-box" style="max-width:520px"><div class="modal-header"><span class="modal-title">System Info</span><button class="modal-close" id="system-info-close">&times;</button></div><div class="modal-body" id="system-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
+        overlay.innerHTML = `<div class="modal-box" style="max-width:560px"><div class="modal-header"><span class="modal-title">System Info</span><button class="modal-close" id="system-info-close">&times;</button></div><div class="modal-body" id="system-info-body"><div style="color:var(--text-muted);text-align:center;padding:16px">Loading...</div></div></div>`;
         document.body.appendChild(overlay);
         document.getElementById('system-info-close').addEventListener('click', () => overlay.remove());
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
         const body = document.getElementById('system-info-body');
-        let html = '';
-
-        // ── Section 1: System Stats ──
-        html += '<div class="modal-section-title">System</div>';
         const stats = lastSystemStats || {};
         const cpuPct = stats.cpu_pct != null ? Math.round(stats.cpu_pct) : null;
         const memPct = stats.mem_pct != null ? Math.round(stats.mem_pct) : null;
         const memUsed = stats.mem_used_mb;
         const memTotal = stats.mem_total_mb;
+        let html = '';
 
+        // ── Section 1: System Overview ──
+        html += '<div class="modal-section-title">System</div>';
+        // CPU with bar
         html += '<div class="info-row"><span class="info-label">CPU</span>';
         if (cpuPct != null) {
             html += `<span class="info-val info-bar-wrap"><span class="info-bar" style="width:${cpuPct}%"></span><span class="info-bar-text">${cpuPct}%</span></span>`;
@@ -3298,7 +3752,7 @@
             html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
-
+        // RAM with bar
         html += '<div class="info-row"><span class="info-label">RAM</span>';
         if (memPct != null) {
             const memStr = (memUsed && memTotal) ? `${memPct}% (${memUsed}/${memTotal} MB)` : `${memPct}%`;
@@ -3307,89 +3761,102 @@
             html += '<span class="info-val">\u2014</span>';
         }
         html += '</div>';
+        // Uptime
+        if (stats.uptime) {
+            html += `<div class="info-row"><span class="info-label">Uptime</span><span class="info-val">${stats.uptime}</span></div>`;
+        }
+        // Load average
+        if (stats.load_1 != null) {
+            html += `<div class="info-row"><span class="info-label">Load Avg</span><span class="info-val">${stats.load_1.toFixed(2)} / ${stats.load_5.toFixed(2)} / ${stats.load_15.toFixed(2)}</span></div>`;
+        }
+        // Disk usage
+        if (stats.disk_pct != null) {
+            const diskStr = `${stats.disk_pct}% (${stats.disk_used_gb} / ${stats.disk_total_gb} GB)`;
+            html += `<div class="info-row"><span class="info-label">Disk</span><span class="info-val info-bar-wrap"><span class="info-bar" style="width:${stats.disk_pct}%"></span><span class="info-bar-text">${diskStr}</span></span></div>`;
+        }
 
-        // Network traffic
+        // ── Section 2: Network Traffic ──
+        html += '<div class="modal-section-title">Network Traffic</div>';
         if (lastNetTraffic) {
             const rx = lastNetTraffic.rx_bps || 0;
             const tx = lastNetTraffic.tx_bps || 0;
-            const maxBps = Math.max(rx, tx, 1);
-            const rxPct = Math.min(100, (rx / maxBps) * 100);
-            const txPct = Math.min(100, (tx / maxBps) * 100);
-            html += `<div class="info-row"><span class="info-label">NET \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
-            html += `<div class="info-row"><span class="info-label">NET \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
-        }
-
-        // ── Section 2: MBCore DB ──
-        html += '<div class="modal-section-title">MBCore DB</div>';
-        if (lastNodeInfo && lastNodeInfo.geo_db_stats) {
-            const geoStats = lastNodeInfo.geo_db_stats;
-            const statusText = geoStats.status || 'unknown';
-            const statusCls = statusText === 'ok' ? 'ok' : (statusText === 'disabled' ? 'disabled' : 'error');
-            html += `<div class="modal-row"><span class="modal-label">Status</span><span class="geodb-status-badge ${statusCls}">${statusText.toUpperCase()}</span></div>`;
-            if (geoStats.entries != null) html += `<div class="modal-row"><span class="modal-label">Entries</span><span class="modal-val">${geoStats.entries.toLocaleString()}</span></div>`;
-            if (geoStats.size_bytes != null) html += `<div class="modal-row"><span class="modal-label">Size</span><span class="modal-val">${(geoStats.size_bytes / 1e6).toFixed(1)} MB</span></div>`;
-            if (geoStats.oldest_age_days != null) html += `<div class="modal-row"><span class="modal-label">Oldest Entry</span><span class="modal-val">${geoStats.oldest_age_days} days</span></div>`;
-            if (geoStats.path) html += `<div class="modal-row"><span class="modal-label">Path</span><span class="modal-val" style="font-size:9px;max-width:200px" title="${geoStats.path}">${geoStats.path}</span></div>`;
-            const alCls = geoStats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn';
-            html += `<div class="modal-row"><span class="modal-label">Auto-lookup</span><span class="modal-val ${alCls}">${geoStats.auto_lookup ? 'On' : 'Off'}</span></div>`;
-            const auCls = geoStats.auto_update ? 'modal-val-ok' : 'modal-val-warn';
-            html += `<div class="modal-row"><span class="modal-label">Auto-update</span><span class="modal-val ${auCls}">${geoStats.auto_update ? 'On' : 'Off'}</span></div>`;
-            html += '<button class="geodb-update-btn" id="si-geodb-update-btn">Update Database</button>';
-            html += '<div class="geodb-result" id="si-geodb-result"></div>';
+            const curMaxIn = netBarMode === 'manual' ? netBarManualMaxIn : getAdaptiveMax(netHistoryIn);
+            const curMaxOut = netBarMode === 'manual' ? netBarManualMaxOut : getAdaptiveMax(netHistoryOut);
+            const rxPct = Math.min(100, (rx / curMaxIn) * 100);
+            const txPct = Math.min(100, (tx / curMaxOut) * 100);
+            html += `<div class="info-row"><span class="info-label">IN \u2193</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-in" style="width:${rxPct}%"></span></span><span class="net-traffic-rate">${formatBps(rx)}</span></span></div>`;
+            html += `<div class="info-row"><span class="info-label">OUT \u2191</span><span class="info-val net-traffic-bar-wrap"><span class="net-traffic-bar-bg"><span class="net-traffic-bar traffic-out" style="width:${txPct}%"></span></span><span class="net-traffic-rate">${formatBps(tx)}</span></span></div>`;
+            html += `<div class="info-row" style="margin-top:2px"><span class="info-label">Current Max</span><span class="info-val" style="font-size:10px">IN: ${formatBps(curMaxIn)} \u00b7 OUT: ${formatBps(curMaxOut)}</span></div>`;
         } else {
-            html += '<div style="color:var(--text-muted);padding:4px 0">No GeoDB data available</div>';
+            html += '<div style="color:var(--text-muted);padding:4px 0">No traffic data yet</div>';
         }
 
-        // ── Section 3: Recent Changes ──
-        html += '<div class="modal-section-title">Recent Changes</div>';
-        html += '<div id="si-changes-section" style="color:var(--text-muted);padding:4px 0">Loading...</div>';
+        // ── Section 3: NET Bar Settings ──
+        html += '<div class="modal-section-title">NET Bar Scaling</div>';
+        const manualMaxInKB = Math.round(netBarManualMaxIn / 1024);
+        const manualMaxOutKB = Math.round(netBarManualMaxOut / 1024);
+        html += '<div class="si-net-mode">';
+        html += `<label class="si-radio"><input type="radio" name="si-netbar-mode" value="auto" ${netBarMode === 'auto' ? 'checked' : ''}><span class="si-radio-dot"></span><span class="si-radio-text"><span class="si-radio-label">Auto-detect</span><span class="si-radio-desc">Adapts to p90 of recent traffic (recommended)</span></span></label>`;
+        html += `<label class="si-radio"><input type="radio" name="si-netbar-mode" value="manual" ${netBarMode === 'manual' ? 'checked' : ''}><span class="si-radio-dot"></span><span class="si-radio-text"><span class="si-radio-label">Manual</span><span class="si-radio-desc">Set fixed max values for bar scaling</span></span></label>`;
+        html += '</div>';
+        html += `<div class="si-manual-fields" id="si-manual-fields" style="display:${netBarMode === 'manual' ? 'block' : 'none'}">`;
+        html += `<div class="info-row"><span class="info-label">Max IN</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="si-max-in" value="${manualMaxInKB}" min="1" max="999999"><span class="dsp-unit">KB/s</span></div></div>`;
+        html += `<div class="info-row"><span class="info-label">Max OUT</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="si-max-out" value="${manualMaxOutKB}" min="1" max="999999"><span class="dsp-unit">KB/s</span></div></div>`;
+        html += '</div>';
+
+        // ── Section 4: Dashboard Display ──
+        html += '<div class="modal-section-title">Dashboard Display</div>';
+        const dashItems = [
+            { id: 'mo-row-cpu', label: 'CPU' },
+            { id: 'mo-row-ram', label: 'RAM' },
+            { id: 'mo-row-netin', label: 'NET \u2193 (Download)' },
+            { id: 'mo-row-netout', label: 'NET \u2191 (Upload)' },
+        ];
+        dashItems.forEach(item => {
+            const el = document.getElementById(item.id);
+            const vis = el ? el.style.display !== 'none' : true;
+            html += `<div class="info-row"><span class="info-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" class="si-dash-toggle" data-target="${item.id}" ${vis ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
+        });
 
         body.innerHTML = html;
 
-        // Bind GeoDB update button
-        const geodbBtn = document.getElementById('si-geodb-update-btn');
-        if (geodbBtn) {
-            geodbBtn.addEventListener('click', async () => {
-                const resultEl = document.getElementById('si-geodb-result');
-                resultEl.textContent = 'Updating...';
-                resultEl.style.color = 'var(--text-secondary)';
-                try {
-                    const resp = await fetch('/api/geodb/update', { method: 'POST' });
-                    const data = await resp.json();
-                    resultEl.textContent = data.message || (data.success ? 'Done' : 'Failed');
-                    resultEl.style.color = data.success ? 'var(--ok)' : 'var(--err)';
-                } catch (err) {
-                    resultEl.textContent = 'Error: ' + err.message;
-                    resultEl.style.color = 'var(--err)';
-                }
+        // ── Bind NET bar mode radios ──
+        const modeRadios = body.querySelectorAll('input[name="si-netbar-mode"]');
+        const manualFields = document.getElementById('si-manual-fields');
+        modeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                netBarMode = radio.value;
+                if (manualFields) manualFields.style.display = netBarMode === 'manual' ? 'block' : 'none';
+                updateHandleTrafficBars();
+            });
+        });
+
+        // ── Bind manual max inputs ──
+        const maxInInput = document.getElementById('si-max-in');
+        const maxOutInput = document.getElementById('si-max-out');
+        if (maxInInput) {
+            maxInInput.addEventListener('change', () => {
+                const v = clamp(parseInt(maxInInput.value) || 100, 1, 999999);
+                maxInInput.value = v;
+                netBarManualMaxIn = v * 1024;
+                if (netBarMode === 'manual') updateHandleTrafficBars();
+            });
+        }
+        if (maxOutInput) {
+            maxOutInput.addEventListener('change', () => {
+                const v = clamp(parseInt(maxOutInput.value) || 100, 1, 999999);
+                maxOutInput.value = v;
+                netBarManualMaxOut = v * 1024;
+                if (netBarMode === 'manual') updateHandleTrafficBars();
             });
         }
 
-        // Fetch recent changes
-        fetch('/api/changes').then(r => r.json()).then(changes => {
-            const section = document.getElementById('si-changes-section');
-            if (!section) return;
-            if (!changes || changes.length === 0) {
-                section.innerHTML = '<div class="changes-empty">No recent changes</div>';
-                return;
-            }
-            const recent = changes.slice(-5).reverse();
-            let chtml = '';
-            for (const c of recent) {
-                const isConnect = c.type === 'connected';
-                const dotClass = isConnect ? 'connected' : 'disconnected';
-                const ip = c.peer ? (c.peer.ip || '') : '';
-                const port = c.peer ? (c.peer.port || '') : '';
-                const net = c.peer ? (c.peer.network || 'ipv4') : 'ipv4';
-                const label = ip ? `${ip}:${port}` : '\u2014';
-                const d = new Date(c.time * 1000);
-                const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-                chtml += `<div class="change-entry" data-ip="${ip}" data-connected="${isConnect}" data-net="${net}"><span class="change-dot ${dotClass}"></span><span class="change-ip" title="${label}">${label}</span><span class="change-time">${t}</span></div>`;
-            }
-            section.innerHTML = chtml;
-        }).catch(err => {
-            const section = document.getElementById('si-changes-section');
-            if (section) section.innerHTML = `<div style="color:var(--err)">Error: ${err.message}</div>`;
+        // ── Bind dashboard display toggles ──
+        body.querySelectorAll('.si-dash-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const target = document.getElementById(cb.dataset.target);
+                if (target) target.style.display = cb.checked ? '' : 'none';
+            });
         });
     }
 
@@ -3416,21 +3883,15 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // NETWORK TRAFFIC — from /api/netspeed
+    // NETWORK TRAFFIC + SYSTEM STATS — SSE stream with dual-EMA
     // ═══════════════════════════════════════════════════════════
 
     let lastNetTraffic = null;
 
-    async function fetchNetSpeed() {
-        try {
-            const resp = await fetch('/api/netspeed');
-            if (!resp.ok) return;
-            lastNetTraffic = await resp.json();
-            updateHandleTrafficBars();
-        } catch (err) {
-            console.error('[vNext] Failed to fetch netspeed:', err);
-        }
-    }
+    // NET bar scaling mode: 'auto' uses p90 adaptive, 'manual' uses fixed max values
+    let netBarMode = 'auto';
+    let netBarManualMaxIn = 1024 * 1024;   // 1 MB/s default manual max for IN
+    let netBarManualMaxOut = 1024 * 1024;  // 1 MB/s default manual max for OUT
 
     // History arrays for adaptive max (from original dashboard)
     const netHistoryIn = [];
@@ -3451,14 +3912,14 @@
         const rx = lastNetTraffic.rx_bps || 0;
         const tx = lastNetTraffic.tx_bps || 0;
 
-        // Push to history for adaptive scaling (like original dashboard)
+        // Push to history for adaptive scaling
         netHistoryIn.push(rx);
         netHistoryOut.push(tx);
         if (netHistoryIn.length > NET_HISTORY_SIZE) netHistoryIn.shift();
         if (netHistoryOut.length > NET_HISTORY_SIZE) netHistoryOut.shift();
 
-        const maxIn = getAdaptiveMax(netHistoryIn);
-        const maxOut = getAdaptiveMax(netHistoryOut);
+        const maxIn = netBarMode === 'manual' ? netBarManualMaxIn : getAdaptiveMax(netHistoryIn);
+        const maxOut = netBarMode === 'manual' ? netBarManualMaxOut : getAdaptiveMax(netHistoryOut);
 
         const rxPct = Math.min(100, (rx / maxIn) * 100);
         const txPct = Math.min(100, (tx / maxOut) * 100);
@@ -3479,6 +3940,111 @@
         if (bps < 1024) return `${Math.round(bps)} B/s`;
         if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
         return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+    }
+
+    // ── Number tweening state for smooth CPU/RAM text ──
+    let tweenCpu = { current: null, target: null, el: null };
+    let tweenRam = { current: null, target: null, el: null };
+    let tweenRafId = null;
+
+    function startTweenLoop() {
+        if (tweenRafId) return;
+        function tick() {
+            tweenRafId = requestAnimationFrame(tick);
+            // Lerp CPU (slow glide, ~600ms to settle)
+            if (tweenCpu.current !== null && tweenCpu.target !== null && tweenCpu.el) {
+                const diff = tweenCpu.target - tweenCpu.current;
+                if (Math.abs(diff) < 0.15) {
+                    tweenCpu.current = tweenCpu.target;
+                } else {
+                    tweenCpu.current += diff * 0.06;
+                }
+                tweenCpu.el.textContent = Math.round(tweenCpu.current) + '%';
+            }
+            // Lerp RAM (slow glide)
+            if (tweenRam.current !== null && tweenRam.target !== null && tweenRam.el) {
+                const diff = tweenRam.target - tweenRam.current;
+                if (Math.abs(diff) < 0.15) {
+                    tweenRam.current = tweenRam.target;
+                } else {
+                    tweenRam.current += diff * 0.06;
+                }
+                tweenRam.el.textContent = Math.round(tweenRam.current) + '%';
+            }
+        }
+        tweenRafId = requestAnimationFrame(tick);
+    }
+
+    // ── SSE EventSource for real-time system stats ──
+    function connectSystemStream() {
+        if (sysStreamSource) { sysStreamSource.close(); sysStreamSource = null; }
+        sysStreamSource = new EventSource('/api/stream/system');
+
+        sysStreamSource.addEventListener('system', (e) => {
+            try {
+                const d = JSON.parse(e.data);
+
+                // ── NET traffic (deadband: ignore changes < 2 KB/s) ──
+                const newRx = d.rx_bps || 0;
+                const newTx = d.tx_bps || 0;
+                const prevRx = lastNetTraffic ? lastNetTraffic.rx_bps : 0;
+                const prevTx = lastNetTraffic ? lastNetTraffic.tx_bps : 0;
+                if (Math.abs(newRx - prevRx) > 2048 || Math.abs(newTx - prevTx) > 2048 || !lastNetTraffic) {
+                    lastNetTraffic = { rx_bps: newRx, tx_bps: newTx };
+                    updateHandleTrafficBars();
+                }
+
+                // ── CPU with tweening (deadband: ignore changes < 1%) ──
+                const cpuEl = document.getElementById('ro-cpu');
+                if (cpuEl && d.cpu_pct != null) {
+                    tweenCpu.el = cpuEl;
+                    if (tweenCpu.current === null) {
+                        tweenCpu.current = d.cpu_pct;
+                        tweenCpu.target = d.cpu_pct;
+                    } else if (Math.abs(d.cpu_pct - tweenCpu.target) >= 1.0) {
+                        tweenCpu.target = d.cpu_pct;
+                        pulseOnChange('ro-cpu', Math.round(d.cpu_pct), 'white');
+                    }
+                }
+
+                // ── RAM with tweening (deadband: ignore changes < 0.5%) ──
+                const ramEl = document.getElementById('ro-ram');
+                if (ramEl && d.mem_pct != null) {
+                    tweenRam.el = ramEl;
+                    if (tweenRam.current === null) {
+                        tweenRam.current = d.mem_pct;
+                        tweenRam.target = d.mem_pct;
+                    } else if (Math.abs(d.mem_pct - tweenRam.target) >= 0.5) {
+                        tweenRam.target = d.mem_pct;
+                        pulseOnChange('ro-ram', Math.round(d.mem_pct), 'white');
+                    }
+                    // Update hover tooltip
+                    let hoverParts = [`Memory: ${Math.round(d.mem_pct)}%`];
+                    if (d.mem_used_mb && d.mem_total_mb) hoverParts.push(`Used: ${d.mem_used_mb} / ${d.mem_total_mb} MB`);
+                    if (d.cpu_pct != null) hoverParts.push(`CPU: ${Math.round(d.cpu_pct)}%`);
+                    ramEl.title = hoverParts.join('\n');
+                }
+
+                // Store for modal use (merge with existing lastSystemStats)
+                if (!lastSystemStats) lastSystemStats = {};
+                lastSystemStats.cpu_pct = d.cpu_pct;
+                lastSystemStats.mem_pct = d.mem_pct;
+                lastSystemStats.mem_used_mb = d.mem_used_mb;
+                lastSystemStats.mem_total_mb = d.mem_total_mb;
+
+                sysStreamRetryDelay = 1000; // reset on success
+            } catch (err) {
+                console.error('[vNext] SSE parse error:', err);
+            }
+        });
+
+        sysStreamSource.onerror = () => {
+            sysStreamSource.close();
+            sysStreamSource = null;
+            // Reconnect with backoff (max 10s)
+            setTimeout(connectSystemStream, sysStreamRetryDelay);
+            sysStreamRetryDelay = Math.min(sysStreamRetryDelay * 1.5, 10000);
+        };
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3509,17 +4075,18 @@
         fetchInfo();
         btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
 
-        // Fetch system stats (CPU/RAM) immediately, then poll every 10s
+        // System stats + NET speed: real-time SSE stream (dual-EMA smoothed, ~250ms updates)
+        connectSystemStream();
+        startTweenLoop();
+
+        // Still fetch full system stats once for modal data (uptime, load, disk)
         fetchSystemStats();
-        setInterval(fetchSystemStats, CFG.pollInterval);
+        // Re-fetch full stats every 30s for modal freshness (uptime, load, disk only)
+        setInterval(fetchSystemStats, 30000);
 
         // Fetch recent changes immediately, then poll every 10s
         fetchChanges();
         setInterval(fetchChanges, CFG.pollInterval);
-
-        // Fetch network traffic speed immediately, then poll every 5s
-        fetchNetSpeed();
-        setInterval(fetchNetSpeed, 5000);
 
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)
