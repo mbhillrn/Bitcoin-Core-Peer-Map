@@ -21,7 +21,6 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -1985,48 +1984,53 @@ def main():
     print(f"  MIT License – Free to use, modify, and distribute")
     print(f"  {C_BOLD}{C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
+
+    # Detect if this process was launched from an SSH session.
+    # SSH env vars are per-process-tree (set by sshd for that connection),
+    # so they reliably tell us about THIS launch, not other sessions.
+    is_remote = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
+
+    # Center the title relative to the line width
+    title_text = "Instructions"
+    title_pad = (line_w - len(title_text)) // 2
     print("")
-    print(f"  {C_BOLD}{C_WHITE}Open your dashboard in any web browser:{C_RESET}")
+    print(f"{' ' * title_pad}{C_BOLD}{C_YELLOW}{title_text}{C_RESET}")
     print("")
-    print(f"      {C_BOLD}{C_CYAN}{url_local}{C_RESET}")
+    print(f"  {C_WHITE}Instructions provided based on detected system:{C_RESET}")
+    if is_remote:
+        print(f"  {C_YELLOW}Detected Settings: MBCore running on {C_DIM}local/{C_RESET}{C_RED}remote(ssh/headless){C_RESET}{C_YELLOW} terminal{C_RESET}")
+    else:
+        print(f"  {C_YELLOW}Detected Settings: MBCore running on {C_RED}local{C_RESET}{C_DIM}/remote(ssh/headless){C_RESET}{C_YELLOW} terminal{C_RESET}")
     print("")
-    print(f"  {C_WHITE}From another device on your network:{C_RESET}")
-    print("")
-    print(f"      {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
-    if firewall_active and firewall_name:
-        print(f"      {C_RED}Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
-        print(f"      {C_RED}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
+
+    if is_remote:
+        # --- SSH / headless: primary = LAN URL ---
+        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
+        if firewall_active and firewall_name:
+            print(f"      {C_RED}**Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
+            print(f"      {C_RED}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
+        else:
+            print(f"      {C_WHITE}If using a firewall, make sure port {port} is open.{C_RESET}")
+        print("")
+        print(f"  {C_DIM}If running Dashboard on the local node machine:{C_RESET}")
+        print(f"      {C_DIM}Open: {url_local} on your local browser{C_RESET}")
+    else:
+        # --- Local: primary = localhost URL ---
+        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_local}{C_RESET} {C_WHITE}on your local browser{C_RESET}")
+        if firewall_active and firewall_name:
+            print(f"      {C_DIM}Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
+            print(f"      {C_DIM}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
+        else:
+            print(f"      {C_DIM}If using a firewall, make sure port {port} is open.{C_RESET}")
+        print("")
+        print(f"  {C_DIM}From any other device on your network:{C_RESET}")
+        print(f"      {C_BLUE}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
+
     print("")
     print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
     print(f"  {C_RED}Need help?{C_RESET} See the {C_RED}README{C_RESET} or visit github.com/mbhillrn/Bitcoin-Core-Peer-Map")
     print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
-    print("")
-
-    # Decide whether it's safe to auto-open a browser.
-    # Requirements: a graphical display available to THIS process AND this
-    # process was NOT launched from an SSH session.  SSH env vars are
-    # per-process-tree so they reliably tell us about *this* launch, not
-    # other sessions on the box.  DISPLAY / WAYLAND_DISPLAY tell us
-    # there's an actual graphical desktop we can target.
-    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-    from_ssh = bool(os.environ.get("SSH_CLIENT") or os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
-
-    if has_display and not from_ssh:
-        # Local graphical desktop — safe to open a browser.
-        # Run in a daemon thread so a slow/missing browser can never hang the server.
-        def _open():
-            try:
-                webbrowser.open(url_local)
-            except Exception:
-                pass
-        t = threading.Thread(target=_open, daemon=True)
-        t.start()
-        print(f"  {C_GREEN}✓ Opening dashboard in your default browser...{C_RESET}")
-    else:
-        # SSH, headless, or no graphical session — don't touch a browser.
-        print(f"  {C_DIM}SSH or headless session detected.{C_RESET}")
-        print(f"  {C_DIM}Open {C_RESET}{C_BOLD}{C_CYAN}{url_lan}{C_RESET}{C_DIM} on any device on your network.{C_RESET}")
     print("")
 
     # Signal handler for fast shutdown
