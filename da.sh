@@ -209,8 +209,8 @@ run_web_dashboard() {
 
 run_detection() {
     "$MBTC_DIR/scripts/detect.sh"
-    # Reload config after detection
-    load_config
+    # Reload config after detection (|| true: don't crash under set -e if config missing)
+    load_config 2>/dev/null || true
 }
 
 run_manual_config() {
@@ -1108,7 +1108,7 @@ check_for_updates() {
 
     # Fetch the VERSION file from GitHub (with 3 second timeout)
     local remote_version
-    remote_version=$(curl -s --connect-timeout 3 "$GITHUB_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
+    remote_version=$(curl -s --connect-timeout 3 --max-time 10 "$GITHUB_VERSION_URL" 2>/dev/null | tr -d '[:space:]')
 
     if [[ -z "$remote_version" ]]; then
         return 1
@@ -1168,15 +1168,15 @@ run_update() {
         echo ""
         echo -en "${T_DIM}Press Enter to continue...${RST}"
         read -r
-        return 1
+        return 0
     fi
 
     # Check for uncommitted changes
-    cd "$MBTC_DIR" || return 1
+    cd "$MBTC_DIR" || return 0
 
     if ! git diff-index --quiet HEAD -- 2>/dev/null; then
         msg_warn "You have uncommitted changes. Stashing them..."
-        git stash
+        git stash || true
     fi
 
     # Pull the latest changes
@@ -1196,7 +1196,7 @@ run_update() {
         echo ""
         echo -en "${T_DIM}Press Enter to continue...${RST}"
         read -r
-        return 1
+        return 0
     fi
 }
 
