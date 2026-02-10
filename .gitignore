@@ -19,6 +19,10 @@ data/*.log
 *.swp
 *.swo
 
+# Working notes
+OFFLINE-MODE-SPEC.md
+OFFLINE-MODE-PLAN.md
+
 # OS
 .DS_Store
 Thumbs.db
