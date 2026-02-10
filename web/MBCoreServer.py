@@ -1827,12 +1827,6 @@ async def api_cli_info():
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serve the main dashboard page"""
-    return templates.TemplateResponse("index.html", {"request": request, "version": VERSION})
-
-
-@app.get("/vnext", response_class=HTMLResponse)
-async def vnext(request: Request):
-    """Serve the experimental vNext dashboard"""
     return templates.TemplateResponse("bitindex.html", {"request": request, "version": VERSION})
 
 
@@ -1969,6 +1963,9 @@ def main():
     # Print access info with colors and formatting
     line_w = 84
     logo_w = 52  # Width of MBCORE ASCII art
+    url_local = f"http://127.0.0.1:{port}"
+    url_lan = f"http://{lan_ip}:{port}"
+
     print("")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print(f"  {C_BOLD}{C_BLUE}███╗   ███╗██████╗  ██████╗ ██████╗ ██████╗ ███████╗{C_RESET}")
@@ -1983,42 +1980,21 @@ def main():
     print(f"  MIT License – Free to use, modify, and distribute")
     print(f"  {C_BOLD}{C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
-    print(f"  {C_BOLD}{C_YELLOW}** INSTRUCTIONS TO VIEW DASHBOARD! **{C_RESET}")
-    print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print("")
-    print(f"  The dashboard is viewed in your WEB BROWSER (Chrome, Firefox, etc).")
-    print(f"  This is easy — just open ONE of the links below.")
+    print(f"  {C_BOLD}{C_WHITE}Open your dashboard in any web browser:{C_RESET}")
     print("")
-    url_lan = f"http://{lan_ip}:{port}"
-    url_local = f"http://127.0.0.1:{port}"
-    print(f"  {C_BOLD}{C_YELLOW}Opening your browser on the SAME computer this program is running on:{C_RESET}")
-    print(f"      {C_CYAN}{url_local}{C_RESET}")
+    print(f"      {C_BOLD}{C_CYAN}{url_local}{C_RESET}")
     print("")
-    print(f"  {C_BOLD}{C_YELLOW}Opening your browser on ANOTHER computer on your local network:{C_RESET}")
-    print(f"    {C_BOLD}{C_YELLOW}Option A{C_RESET} – Direct network access {C_BOLD}{C_YELLOW}(recommended){C_RESET}")
-    print(f"      {C_CYAN}{url_lan}{C_RESET}  {C_DIM}<- auto-detected node IP{C_RESET}")
-    # Show firewall warning if detected
+    print(f"  {C_YELLOW}From another device on your network:{C_RESET}")
+    print("")
+    print(f"      {C_YELLOW}{url_lan}{C_RESET}  {C_DIM}(auto-detected IP){C_RESET}")
     if firewall_active and firewall_name:
-        print(f"      {C_RED}Firewall detected ({firewall_name}): may need configuring for port {port}{C_RESET}")
-    print(f"      {C_DIM}(If you use a firewall, it may need to be configured.{C_RESET}")
-    print(f"      {C_DIM} Please see the README or run the Firewall Helper Tool{C_RESET}")
-    print(f"      {C_DIM} from the main menu (Option 3).){C_RESET}")
-    print("")
-    print(f"    {C_BOLD}{C_YELLOW}Option B{C_RESET} – SSH tunnel (advanced, see README)")
-    print(f"      {C_CYAN}{url_local}{C_RESET}")
+        print(f"      {C_RED}Firewall detected ({firewall_name}) — may need port {port} opened.{C_RESET}")
+        print(f"      {C_DIM}Run the Firewall Helper (Option 3) from the main menu.{C_RESET}")
     print("")
     print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
-    print(f"  {C_RED}🔴 The README has been created to guide you through this process.{C_RESET}")
-    print(f"  {C_RED}🔴 Please review it if this is your first time running MBCore or need to troubleshoot.{C_RESET}")
-    print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
-    # vNext experimental dashboard links
-    vnext_local = f"http://127.0.0.1:{port}/vnext"
-    vnext_lan = f"http://{lan_ip}:{port}/vnext"
-    print(f"  {C_BOLD}{C_PINK}⚡ vNext Dashboard (experimental):{C_RESET}")
-    print(f"      {C_CYAN}{vnext_local}{C_RESET}  {C_DIM}(same machine){C_RESET}")
-    print(f"      {C_CYAN}{vnext_lan}{C_RESET}  {C_DIM}(network){C_RESET}")
-    print(f"{C_BLUE}{'─' * line_w}{C_RESET}")
-    print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard (press twice to force)")
+    print(f"  {C_DIM}Need help? See the README or visit github.com/mbhillrn/Bitcoin-Core-Peer-Map{C_RESET}")
+    print(f"  Press {C_PINK}Ctrl+C{C_RESET} to stop the dashboard")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
     print("")
 
