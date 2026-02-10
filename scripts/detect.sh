@@ -619,6 +619,13 @@ display_detection_results() {
 }
 
 confirm_detection_results() {
+    # Auto mode: skip prompt and auto-save
+    if [[ "${MBTC_AUTO_DETECT:-0}" == "1" ]]; then
+        save_config
+        msg_ok "Configuration saved!"
+        return 0
+    fi
+
     echo ""
     echo -e "${T_WARN}?${RST} Choose an option:"
     echo ""
@@ -961,7 +968,9 @@ run_detection() {
 # If run directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     run_detection
-    echo ""
-    echo -en "${T_DIM}Press Enter to continue...${RST}"
-    read -r
+    if [[ "${MBTC_AUTO_DETECT:-0}" != "1" ]]; then
+        echo ""
+        echo -en "${T_DIM}Press Enter to continue...${RST}"
+        read -r
+    fi
 fi

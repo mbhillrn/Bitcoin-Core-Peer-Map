@@ -147,7 +147,6 @@ show_menu() {
     echo -e "  ${T_DIM}─────────────────────────────────────────────────────────────${RST}"
     echo ""
     echo -e "  ${T_SECONDARY}g)${RST} Geo/IP Database     ${T_DIM}- Configure IP location database${RST}"
-    echo -e "  ${T_SECONDARY}d)${RST} Rerun Detection     ${T_DIM}- Re-detect Bitcoin Core settings${RST}"
     echo -e "  ${T_SECONDARY}m)${RST} Manual Settings     ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
     echo -e "  ${T_SECONDARY}p)${RST} Port Settings       ${T_DIM}- Change dashboard port (current: ${MBTC_WEB_PORT:-58333})${RST}"
     if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
@@ -749,50 +748,24 @@ show_first_run_db_setup() {
     echo -e "  ${T_DIM}The Geo/IP Database caches location data for Bitcoin nodes.${RST}"
     echo -e "  ${T_DIM}This reduces API calls and improves performance.${RST}"
     echo ""
-    echo -e "  ${T_DIM}How would you like to manage the database?${RST}"
-    echo ""
-    echo -e "    ${T_INFO}1)${RST} Enable and keep updated"
-    echo -e "       ${T_DIM}(Recommended - fast lookups, auto-updates on start)${RST}"
-    echo ""
-    echo -e "    ${T_INFO}2)${RST} Enable, self-managed"
-    echo -e "       ${T_DIM}(Only stores peers you discover yourself)${RST}"
-    echo ""
-    echo -e "    ${T_INFO}3)${RST} Don't use a database"
-    echo -e "       ${T_DIM}(Rely on API only - limited to 1 lookup per 1.5 sec)${RST}"
-    echo ""
-    read -r -p "  Enter choice [1]: " db_choice
 
-    case "$db_choice" in
-        1|"")
-            set_config "GEO_DB_ENABLED" "true"
-            set_config "GEO_DB_AUTO_UPDATE" "true"
-            msg_ok "Database enabled with auto-updates"
-            echo ""
-            msg_info "Downloading Bitcoin Node GeoIP Dataset..."
-            if ! download_geoip_dataset; then
-                msg_warn "Bitcoin Node GeoIP Dataset is not currently available"
-                echo -e "  ${T_DIM}Will attempt again on dashboard startup.${RST}"
-                echo -e "  ${T_DIM}Your local database will cache peers you discover.${RST}"
-            fi
-            ;;
-        2)
-            set_config "GEO_DB_ENABLED" "true"
-            set_config "GEO_DB_AUTO_UPDATE" "false"
-            msg_ok "Database enabled (self-managed)"
-            echo -e "  ${T_DIM}Your database will cache peers you discover.${RST}"
-            echo -e "  ${T_DIM}Turn on auto-updates via: Geo/IP Database Settings (option g)${RST}"
-            ;;
-        3)
-            set_config "GEO_DB_ENABLED" "false"
-            set_config "GEO_DB_AUTO_UPDATE" "false"
-            msg_info "Database disabled - using API only"
-            echo -e "  ${T_DIM}Enable anytime via: Geo/IP Database Settings (option g)${RST}"
-            ;;
-    esac
-
+    # On first boot, auto-choose option 1 (recommended)
+    echo -e "  ${T_INFO}Enabling database with auto-updates (recommended)...${RST}"
     echo ""
-    echo -en "${T_DIM}Press Enter to continue...${RST}"
-    read -r
+    set_config "GEO_DB_ENABLED" "true"
+    set_config "GEO_DB_AUTO_UPDATE" "true"
+    msg_ok "Database enabled with auto-updates"
+    echo ""
+    msg_info "Downloading Bitcoin Node GeoIP Dataset..."
+    if ! download_geoip_dataset; then
+        echo ""
+        msg_warn "Bitcoin Node GeoIP Dataset is not currently available"
+        echo -e "  ${T_DIM}Will attempt again on dashboard startup.${RST}"
+        echo -e "  ${T_DIM}Your local database will cache peers you discover.${RST}"
+        echo -e "  ${T_DIM}Change settings via: Geo/IP Database Settings (option g) in the main menu${RST}"
+    fi
+    echo ""
+    sleep 1
 }
 
 show_advanced_purge() {
@@ -1247,12 +1220,22 @@ main() {
         exit 1
     fi
 
-    # Check if config exists
+    # Check if config exists — first boot auto-detects without prompts
     if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
         echo ""
         msg_info "No MBCore configuration found. Running Bitcoin Core detection..."
         sleep 1
+        export MBTC_AUTO_DETECT=1
         run_detection
+        # Reload config — if detection failed, tell user to use manual
+        load_config 2>/dev/null || true
+        if [[ "$MBTC_CONFIGURED" -ne 1 ]]; then
+            echo ""
+            msg_warn "Detection could not fully configure Bitcoin Core."
+            msg_info "Use ${T_SECONDARY}m) Manual Settings${RST} from the main menu to enter paths manually."
+            sleep 2
+        fi
+        unset MBTC_AUTO_DETECT
     fi
 
     # Wait for update check to complete (with timeout)
@@ -1303,9 +1286,6 @@ main() {
                 ;;
             g|G)
                 show_geo_db_settings
-                ;;
-            d|D)
-                run_detection
                 ;;
             m|M)
                 run_manual_config

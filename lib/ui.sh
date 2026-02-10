@@ -275,7 +275,7 @@ prompt_yn() {
     local response
 
     local hint="[y/N]"
-    [[ "$default" == "y" ]] && hint="[Y/n]"
+    [[ "$default" == "y" ]] && hint="[Y]"
 
     echo -en "${T_WARN}?${RST} ${msg} ${T_DIM}${hint}${RST} "
     read -r response
