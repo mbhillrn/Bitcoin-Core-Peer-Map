@@ -1735,10 +1735,13 @@ async def api_info(currency: str = "USD"):
             newest_age_days = None
             if stats.get('oldest_updated'):
                 oldest_age_days = int((time.time() - stats['oldest_updated']) / 86400)
+            newest_age_secs = None
             if stats.get('last_updated'):
-                newest_age_days = int((time.time() - stats['last_updated']) / 86400)
+                newest_age_secs = time.time() - stats['last_updated']
+                newest_age_days = int(newest_age_secs / 86400)
             stats['oldest_age_days'] = oldest_age_days
             stats['newest_age_days'] = newest_age_days
+            stats['newest_age_seconds'] = int(newest_age_secs) if newest_age_secs is not None else None
         stats['auto_lookup'] = geo_db_enabled
         stats['auto_update'] = geo_db_auto_update
         stats['db_only_mode'] = geo_db_only_mode
