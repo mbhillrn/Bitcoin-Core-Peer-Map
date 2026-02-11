@@ -138,9 +138,50 @@ The bottom panel shows all connected peers in a sortable, filterable table. The 
 
 ![Display Settings](docs/images/14.displaysettings.png)
 
-Click the gear icon in the peer panel handle to access Display Settings:
+Click the **Update in** or **Map Status** rows in the right overlay to open Display Settings:
 - **Update Frequency** configure how often peer data and node info are refreshed (3-120 seconds)
 - **Show/Hide** toggle visibility of Map Status, Node Info, and MBCore DB on the right overlay
+- **Advanced** opens the Advanced Display Settings panel (see below)
+
+### Advanced Display Settings
+
+![Advanced Display Settings](docs/images/17.advanced-display.png)
+
+Click **Advanced** at the bottom of the Display Settings popup to open a floating, draggable panel with full control over the map's visual appearance. All changes are live — you see the effect immediately as you drag each slider.
+
+![Advanced Display Example — Green land, blue ocean, snowy poles](docs/images/18.advanced-display-example.png)
+
+*Example: Green land, blue ocean, and Snow the Poles enabled — your map, your style.*
+
+**Peer Effects**
+- **Shimmer** — ambient twinkle intensity for long-lived peers (0 = off, which is the default)
+- **Pulse Depth In / Out** — how deep the breathing pulse goes for inbound vs outbound peers
+- **Pulse Speed In / Out** — how fast the pulse cycles (50 = original speed)
+
+**Land**
+- **Hue** — shift the land color across the full spectrum (default 215 = dark blue-gray)
+- **Brightness** — darken or brighten the landmasses
+- **Snow the Poles** — gradually frost Antarctica and Arctic regions (Greenland, Svalbard, etc.) with an icy gray-white. Drag from 0 (off) to 100 (full ice). Tip: when using snowy poles, decrease the peer table transparency with the ⚙ gear icon on the peer list title bar so the table doesn't cover the effect.
+
+**Ocean**
+- **Hue** — shift the ocean color (default 220 = near-black blue)
+- **Brightness** — darken or brighten the ocean and lakes
+
+**Lat/Lon Grid**
+- **Visible** — toggle the latitude/longitude grid on or off
+- **Thickness** — grid line width
+- **Hue** — shift the grid line color
+- **Brightness** — grid line opacity (raise this to make hue changes more visible)
+
+**Borders**
+- **Thickness** — scale country and state/region borders together (0 = hidden, 50 = default, 100 = 2x thick)
+- **Hue** — shift the border line color
+
+**Saving and Resetting**
+- **Permanent Save** — persists your settings to localStorage so they survive browser refreshes and new sessions. Hover the button for details.
+- **Reset** — snaps every slider back to the original defaults.
+- To keep changes for the current session only, just close the panel — your settings stay active until you reload.
+- Every slider label is a clickable link that resets just that one slider to its default.
 
 ### Table Settings
 

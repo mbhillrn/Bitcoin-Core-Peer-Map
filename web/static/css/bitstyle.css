@@ -1782,7 +1782,7 @@ html, body {
 }
 /* Asterisk note below Snow the Poles */
 .adv-note {
-    font-size: 8px;
+    font-size: 10px;
     color: var(--text-muted);
     padding: 1px 0 2px;
     line-height: 1.3;

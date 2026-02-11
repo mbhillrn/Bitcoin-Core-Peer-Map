@@ -1,3 +1,5 @@
-Update checker fixed, tested, and pushed
-Streamlined first-boot setup (auto-detect + auto-geo)
-Update prompt now shows what changed in the new version
+Advanced Display Settings panel with live color/effect controls
+Peer shimmer, pulse depth, and pulse speed sliders
+Land and ocean hue/brightness sliders with Snow the Poles
+Lat/Lon grid and border thickness/hue controls
+Settings persist across sessions via Permanent Save
