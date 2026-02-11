@@ -104,6 +104,310 @@
         borderHue:      212,         // hue degrees (accent blue, matches grid default)
     };
 
+    // ═══════════════════════════════════════════════════════════
+    // THEME DEFINITIONS
+    // Each theme provides CSS variable overrides and map defaults.
+    // The 'dark' theme uses the original CSS values (no overrides).
+    // ═══════════════════════════════════════════════════════════
+
+    const THEMES = {
+        dark: {
+            label: 'Dark',
+            dot: '#0a0e14',     // preview dot colour for dropdown
+            cssVars: {},   // empty = CSS defaults (the dark theme IS the default)
+            advOverrides: {},
+            nodeHighlight: { r: 255, g: 255, b: 255 },
+            netColors: null,  // null = use default NET_COLORS
+        },
+        light: {
+            label: 'Light',
+            dot: '#e4e8ec',
+            cssVars: {
+                '--bg-void':        '#e4e8ec',
+                '--bg-deep':        '#edf0f4',
+                '--bg-surface':     '#ffffff',
+                '--bg-raised':      '#f4f6f8',
+                '--surface-overlay-rgb': '240, 242, 248',
+                '--bg-surface-rgb': '255, 255, 255',
+                '--text-primary':   '#1a1f36',
+                '--text-secondary': '#4a5568',
+                '--text-muted':     '#718096',
+                '--text-dim':       '#a0aec0',
+                '--accent':         '#2563eb',
+                '--accent-dim':     '#93b4f5',
+                '--accent-glow':    'rgba(37, 99, 235, 0.20)',
+                '--net-ipv4':       '#a67c00',
+                '--net-ipv6':       '#c2343f',
+                '--net-tor':        '#1558b0',
+                '--net-i2p':        '#6d28d9',
+                '--net-cjdns':      '#7e22ce',
+                '--net-unknown':    '#718096',
+                '--ok':             '#16a34a',
+                '--ok-bright':      '#15803d',
+                '--warn':           '#b45309',
+                '--err':            '#dc2626',
+                '--err-bright':     '#b91c1c',
+                '--map-land':       '#c8d5c0',
+                '--map-border':     '#8a9bb0',
+                '--map-grid':       'rgba(37, 99, 235, 0.08)',
+                '--title-accent':   '#9a7b1a',
+                '--section-color':  '#5a6570',
+                '--logo-primary':   '#2b5ea0',
+                '--logo-accent':    '#1a7a9e',
+            },
+            advOverrides: {
+                landHue:     120,
+                landBright:  82,
+                oceanHue:    210,
+                oceanBright: 85,
+                gridHue:     220,
+                gridBright:  45,
+                borderHue:   215,
+            },
+            nodeHighlight: { r: 30, g: 30, b: 30 },
+            netColors: {
+                ipv4:  { r: 166, g: 124, b: 0   },
+                ipv6:  { r: 194, g: 52,  b: 63  },
+                onion: { r: 21,  g: 88,  b: 176 },
+                i2p:   { r: 109, g: 40,  b: 217 },
+                cjdns: { r: 126, g: 34,  b: 206 },
+            },
+            netColorUnknown: { r: 100, g: 110, b: 130 },
+        },
+        oled: {
+            label: 'OLED',
+            dot: '#000000',
+            cssVars: {
+                '--bg-void':        '#000000',
+                '--bg-deep':        '#030303',
+                '--bg-surface':     '#0a0a0a',
+                '--bg-raised':      '#111111',
+                '--surface-overlay-rgb': '0, 0, 0',
+                '--bg-surface-rgb': '10, 10, 10',
+                '--map-land':       '#0a0a0a',
+                '--map-border':     '#1a1a1a',
+                '--map-grid':       'rgba(88, 166, 255, 0.025)',
+            },
+            advOverrides: {
+                landHue:     0,
+                landBright:  18,
+                oceanHue:    0,
+                oceanBright: 5,
+                gridBright:  35,
+            },
+            nodeHighlight: { r: 255, g: 255, b: 255 },
+            netColors: null,
+        },
+        midnight: {
+            label: 'Midnight',
+            dot: '#111b38',
+            cssVars: {
+                '--bg-void':        '#060b1a',
+                '--bg-deep':        '#0b1226',
+                '--bg-surface':     '#111b38',
+                '--bg-raised':      '#192448',
+                '--surface-overlay-rgb': '8, 14, 32',
+                '--bg-surface-rgb': '17, 27, 56',
+                '--text-primary':   '#d0dbf0',
+                '--text-secondary': '#7e90b8',
+                '--text-muted':     '#566988',
+                '--text-dim':       '#3a4d6e',
+                '--accent':         '#818cf8',
+                '--accent-dim':     '#4f46e5',
+                '--accent-glow':    'rgba(129, 140, 248, 0.30)',
+                '--net-ipv4':       '#fbbf24',
+                '--net-ipv6':       '#fb7185',
+                '--net-tor':        '#60a5fa',
+                '--net-i2p':        '#a78bfa',
+                '--net-cjdns':      '#c4b5fd',
+                '--net-unknown':    '#566988',
+                '--ok':             '#34d399',
+                '--ok-bright':      '#6ee7b7',
+                '--warn':           '#fbbf24',
+                '--err':            '#f87171',
+                '--err-bright':     '#fca5a5',
+                '--map-land':       '#111b38',
+                '--map-border':     '#283a60',
+                '--map-grid':       'rgba(129, 140, 248, 0.04)',
+                '--title-accent':   '#c9a83e',
+                '--section-color':  '#7e90b8',
+                '--logo-primary':   '#818cf8',
+                '--logo-accent':    '#a5b4fc',
+            },
+            advOverrides: {
+                landHue:     230,
+                landBright:  45,
+                oceanHue:    235,
+                oceanBright: 38,
+                gridHue:     245,
+                gridBright:  48,
+                borderHue:   240,
+            },
+            nodeHighlight: { r: 255, g: 255, b: 255 },
+            netColors: {
+                ipv4:  { r: 251, g: 191, b: 36  },
+                ipv6:  { r: 251, g: 113, b: 133 },
+                onion: { r: 96,  g: 165, b: 250 },
+                i2p:   { r: 167, g: 139, b: 250 },
+                cjdns: { r: 196, g: 181, b: 253 },
+            },
+            netColorUnknown: null,
+        },
+    };
+
+    // Current active theme name
+    let currentTheme = 'dark';
+
+    // Node centre highlight colour (white for dark themes, dark for light themes)
+    let nodeHighlightColor = { r: 255, g: 255, b: 255 };
+
+    // Canvas text label colours — adapted per theme for readability on map
+    const canvasLabelColors = {
+        countryShadow: '6,8,12',      // dark shadow behind country names
+        countryText:   '200,210,225',  // country name fill
+        stateText:     '140,160,190',  // state/province name fill
+        cityDot:       '212,218,228',  // city marker dot
+        cityText:      '212,218,228',  // city name fill
+    };
+    const CANVAS_LABEL_DARK = {
+        countryShadow: '6,8,12',
+        countryText:   '200,210,225',
+        stateText:     '140,160,190',
+        cityDot:       '212,218,228',
+        cityText:      '212,218,228',
+    };
+    const CANVAS_LABEL_LIGHT = {
+        countryShadow: '255,255,255',
+        countryText:   '40,50,65',
+        stateText:     '70,80,100',
+        cityDot:       '50,55,65',
+        cityText:      '50,55,65',
+    };
+    const CANVAS_LABEL_MIDNIGHT = {
+        countryShadow: '6,10,25',
+        countryText:   '160,175,210',
+        stateText:     '120,140,175',
+        cityDot:       '170,180,200',
+        cityText:      '170,180,200',
+    };
+
+    // Original CSS variable values from :root (captured once on init for 'dark' theme reset)
+    const DARK_CSS_VARS = {};
+
+    /** Apply a theme by name. Updates CSS variables, map defaults, and network colours. */
+    function applyTheme(themeName) {
+        const theme = THEMES[themeName];
+        if (!theme) return;
+        currentTheme = themeName;
+
+        const root = document.documentElement;
+
+        // 1. Reset all CSS vars to dark defaults first (clear any previous theme overrides)
+        for (const prop of Object.keys(DARK_CSS_VARS)) {
+            root.style.removeProperty(prop);
+        }
+        // Clear any previous theme overrides that aren't in DARK_CSS_VARS
+        for (const t of Object.values(THEMES)) {
+            for (const prop of Object.keys(t.cssVars)) {
+                root.style.removeProperty(prop);
+            }
+        }
+
+        // 2. Apply theme CSS variable overrides
+        for (const [prop, value] of Object.entries(theme.cssVars)) {
+            root.style.setProperty(prop, value);
+        }
+
+        // 3. Update node highlight colour
+        nodeHighlightColor = theme.nodeHighlight || { r: 255, g: 255, b: 255 };
+
+        // 3b. Update canvas text label colours
+        const labelMap = { light: CANVAS_LABEL_LIGHT, midnight: CANVAS_LABEL_MIDNIGHT };
+        const labelSet = labelMap[themeName] || CANVAS_LABEL_DARK;
+        Object.assign(canvasLabelColors, labelSet);
+
+        // 4. Apply map appearance overrides to advSettings
+        const mapKeys = ['landHue', 'landBright', 'oceanHue', 'oceanBright',
+                         'gridHue', 'gridBright', 'borderHue', 'gridThickness', 'borderScale'];
+        for (const k of mapKeys) {
+            advSettings[k] = (theme.advOverrides[k] !== undefined) ? theme.advOverrides[k] : ADV_DEFAULTS[k];
+        }
+        updateAdvColors();
+
+        // 5. Update NET_COLORS for canvas rendering if theme provides overrides
+        if (theme.netColors) {
+            for (const [net, c] of Object.entries(theme.netColors)) {
+                NET_COLORS[net] = c;
+            }
+        } else {
+            // Reset to dark defaults
+            NET_COLORS.ipv4  = { r: 227, g: 179, b: 65  };
+            NET_COLORS.ipv6  = { r: 240, g: 113, b: 120 };
+            NET_COLORS.onion = { r: 74,  g: 158, b: 255 };
+            NET_COLORS.i2p   = { r: 139, g: 92,  b: 246 };
+            NET_COLORS.cjdns = { r: 210, g: 168, b: 255 };
+        }
+        if (theme.netColorUnknown) {
+            NET_COLOR_UNKNOWN.r = theme.netColorUnknown.r;
+            NET_COLOR_UNKNOWN.g = theme.netColorUnknown.g;
+            NET_COLOR_UNKNOWN.b = theme.netColorUnknown.b;
+        } else {
+            NET_COLOR_UNKNOWN.r = 120; NET_COLOR_UNKNOWN.g = 130; NET_COLOR_UNKNOWN.b = 140;
+        }
+
+        // 6. Re-colour existing nodes to match new theme NET_COLORS
+        for (const node of nodes) {
+            node.color = NET_COLORS[node.net] || NET_COLOR_UNKNOWN;
+        }
+
+        // 7. Refresh advanced panel if open
+        if (advPanelEl) {
+            refreshAllAdvSliders();
+            // Update dropdown display
+            const label = document.getElementById('adv-theme-current');
+            if (label) label.textContent = theme.label;
+            const list = document.getElementById('adv-theme-list');
+            if (list) {
+                list.querySelectorAll('.adv-theme-option').forEach(o => {
+                    o.classList.toggle('active', o.dataset.theme === themeName);
+                });
+            }
+        }
+    }
+
+    /** Capture current :root CSS variable values as the 'dark' theme baseline */
+    function captureDarkDefaults() {
+        const style = getComputedStyle(document.documentElement);
+        const varsToCapture = [
+            '--bg-void', '--bg-deep', '--bg-surface', '--bg-raised',
+            '--surface-overlay-rgb', '--bg-surface-rgb',
+            '--text-primary', '--text-secondary', '--text-muted', '--text-dim',
+            '--accent', '--accent-dim', '--accent-glow',
+            '--net-ipv4', '--net-ipv6', '--net-tor', '--net-i2p', '--net-cjdns', '--net-unknown',
+            '--ok', '--ok-bright', '--warn', '--err', '--err-bright',
+            '--map-land', '--map-border', '--map-grid',
+            '--title-accent', '--section-color', '--logo-primary', '--logo-accent',
+        ];
+        for (const v of varsToCapture) {
+            DARK_CSS_VARS[v] = style.getPropertyValue(v).trim();
+        }
+    }
+
+    /** Save theme choice to localStorage */
+    function saveTheme() {
+        try { localStorage.setItem('mbcore_theme', currentTheme); } catch (e) { /* ignore */ }
+    }
+
+    /** Load theme from localStorage and apply it */
+    function loadTheme() {
+        try {
+            const saved = localStorage.getItem('mbcore_theme');
+            if (saved && THEMES[saved]) {
+                applyTheme(saved);
+            }
+        } catch (e) { /* ignore */ }
+    }
+
     // Working copy of advanced settings (mutated by sliders, saved to localStorage)
     const advSettings = Object.assign({}, ADV_DEFAULTS);
 
@@ -2018,11 +2322,11 @@
                 // Cull off-screen labels
                 if (s.x < -150 || s.x > W + 150 || s.y < -30 || s.y > H + 30) continue;
 
-                // Dark shadow behind text for readability against land
-                ctx.fillStyle = `rgba(6,8,12,${alpha * 0.6})`;
+                // Shadow behind text for readability against land
+                ctx.fillStyle = `rgba(${canvasLabelColors.countryShadow},${alpha * 0.6})`;
                 ctx.fillText(label.n, s.x + 1, s.y + 1);
-                // Country name in warm white
-                ctx.fillStyle = `rgba(200,210,225,${alpha})`;
+                // Country name fill
+                ctx.fillStyle = `rgba(${canvasLabelColors.countryText},${alpha})`;
                 ctx.fillText(label.n, s.x, s.y);
             }
         }
@@ -2068,7 +2372,7 @@
                 if (s.x < -100 || s.x > W + 100 || s.y < -20 || s.y > H + 20) continue;
 
                 // Subtle state/province name
-                ctx.fillStyle = `rgba(140,160,190,${alpha})`;
+                ctx.fillStyle = `rgba(${canvasLabelColors.stateText},${alpha})`;
                 ctx.fillText(label.n, s.x, s.y);
             }
         }
@@ -2108,7 +2412,7 @@
                 if (s.x < -50 || s.x > W + 50 || s.y < -20 || s.y > H + 20) continue;
 
                 // Small dot
-                ctx.fillStyle = `rgba(212,218,228,${alpha * 0.5})`;
+                ctx.fillStyle = `rgba(${canvasLabelColors.cityDot},${alpha * 0.5})`;
                 ctx.beginPath();
                 ctx.arc(s.x, s.y, 1.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -2116,7 +2420,7 @@
                 // City name label
                 const fontSize = city.p > 5000000 ? 10 : city.p > 1000000 ? 9 : 8;
                 ctx.font = `${fontSize}px 'SF Mono','Fira Code',Consolas,monospace`;
-                ctx.fillStyle = `rgba(212,218,228,${alpha * 0.6})`;
+                ctx.fillStyle = `rgba(${canvasLabelColors.cityText},${alpha * 0.6})`;
                 ctx.fillText(city.n, s.x + 5, s.y);
             }
         }
@@ -2144,8 +2448,8 @@
         ctx.arc(sx, sy, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright white centre highlight — scales with brightness and pulse
-        ctx.fillStyle = rgba({ r: 255, g: 255, b: 255 }, 0.65 * pulse * opacity * brightness);
+        // Centre highlight — white on dark themes, dark on light themes
+        ctx.fillStyle = rgba(nodeHighlightColor, 0.65 * pulse * opacity * brightness);
         ctx.beginPath();
         ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2);
         ctx.fill();
@@ -3591,8 +3895,8 @@
                 ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
                 ctx.stroke();
             } else {
-                // Hover: subtle white ring
-                ctx.strokeStyle = rgba({ r: 255, g: 255, b: 255 }, 0.5 * pulse);
+                // Hover: subtle highlight ring (adapts to theme)
+                ctx.strokeStyle = rgba(nodeHighlightColor, 0.5 * pulse);
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
                 ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
@@ -4496,6 +4800,27 @@
 
         h += '<div class="adv-body">';
 
+        // ── Theme Selector (custom dropdown) ──
+        h += '<div class="adv-theme-section">';
+        h += '<div class="adv-section">Theme</div>';
+        h += '<div class="adv-theme-wrap" id="adv-theme-wrap">';
+        h += '<div class="adv-theme-selected" id="adv-theme-selected">';
+        h += '<span id="adv-theme-current">' + (THEMES[currentTheme] ? THEMES[currentTheme].label : 'Dark') + '</span>';
+        h += '<span class="adv-theme-arrow">&#9660;</span>';
+        h += '</div>';
+        h += '<div class="adv-theme-list" id="adv-theme-list">';
+        for (const [key, theme] of Object.entries(THEMES)) {
+            const active = (key === currentTheme) ? ' active' : '';
+            h += '<div class="adv-theme-option' + active + '" data-theme="' + key + '">';
+            h += '<span class="adv-theme-dot" style="background:' + (theme.dot || '#888') + ';border:1px solid rgba(88,166,255,0.25)"></span>';
+            h += '<span>' + theme.label + '</span>';
+            h += '<span class="adv-theme-check">&#10003;</span>';
+            h += '</div>';
+        }
+        h += '</div>'; // end theme-list
+        h += '</div>'; // end theme-wrap
+        h += '</div>'; // end theme-section
+
         // ── Peer Effects ──
         h += '<div class="adv-section">Peer Effects</div>';
         h += advSliderHTML('adv-shimmer', 'Shimmer', advSettings.shimmerStrength, 0, 1, 0.01);
@@ -4550,6 +4875,49 @@
         // ── Bind close ──
         document.getElementById('adv-close').addEventListener('click', closeAdvancedPanel);
 
+        // ── Bind theme dropdown ──
+        const themeWrap = document.getElementById('adv-theme-wrap');
+        const themeSelected = document.getElementById('adv-theme-selected');
+        const themeList = document.getElementById('adv-theme-list');
+        if (themeSelected && themeWrap) {
+            themeSelected.addEventListener('click', (e) => {
+                e.stopPropagation();
+                themeWrap.classList.toggle('open');
+            });
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function themeOutsideClick(e) {
+                if (!themeWrap.contains(e.target)) {
+                    themeWrap.classList.remove('open');
+                }
+                // Clean up when panel is removed
+                if (!document.body.contains(themeWrap)) {
+                    document.removeEventListener('click', themeOutsideClick);
+                }
+            });
+        }
+        if (themeList) {
+            themeList.querySelectorAll('.adv-theme-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    const t = opt.dataset.theme;
+                    if (t && THEMES[t]) {
+                        applyTheme(t);
+                        // Update dropdown display
+                        const label = document.getElementById('adv-theme-current');
+                        if (label) label.textContent = THEMES[t].label;
+                        // Mark active option
+                        themeList.querySelectorAll('.adv-theme-option').forEach(o => o.classList.remove('active'));
+                        opt.classList.add('active');
+                        // Close dropdown
+                        if (themeWrap) themeWrap.classList.remove('open');
+                        // Refresh slider values for new theme map defaults
+                        refreshAllAdvSliders();
+                        const gv = document.getElementById('adv-grid-visible');
+                        if (gv) gv.checked = advSettings.gridVisible;
+                    }
+                });
+            });
+        }
+
         // ── Bind drag ──
         initAdvDrag();
 
@@ -4585,6 +4953,8 @@
 
         // ── Reset button ──
         document.getElementById('adv-reset').addEventListener('click', () => {
+            // Reset theme to Dark
+            applyTheme('dark');
             Object.assign(advSettings, ADV_DEFAULTS);
             CFG.shimmerStrength    = ADV_DEFAULTS.shimmerStrength;
             CFG.pulseDepthInbound  = ADV_DEFAULTS.pulseDepthIn;
@@ -4601,6 +4971,7 @@
         // ── Save button ──
         document.getElementById('adv-save').addEventListener('click', () => {
             saveAdvSettings();
+            saveTheme();
             showAdvFeedback('Settings saved permanently');
         });
     }
@@ -4774,8 +5145,14 @@
     // ═══════════════════════════════════════════════════════════
 
     function init() {
+        // Capture dark theme CSS defaults before any overrides
+        captureDarkDefaults();
+
         // Load any saved advanced display settings from localStorage
         loadAdvSettings();
+
+        // Load and apply saved theme (or stay on dark default)
+        loadTheme();
 
         // Setup canvas size and DPI scaling
         resize();
