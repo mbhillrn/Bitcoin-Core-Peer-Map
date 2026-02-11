@@ -374,6 +374,7 @@
 
         // 7. Refresh advanced panel if open
         if (advPanelEl) {
+            syncOceanPresetUI();
             refreshAllAdvSliders();
             // Update dropdown display
             const label = document.getElementById('adv-theme-current');
