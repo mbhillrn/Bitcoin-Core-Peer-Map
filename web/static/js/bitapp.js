@@ -82,8 +82,8 @@
 
     const ADV_DEFAULTS = {
         // Peer effects (defaults = original values before shimmer was added)
-        shimmerStrength: 0,          // 0 = off (original map had no shimmer)
-        pulseDepthIn:    0.32,       // inbound pulse amplitude
+        shimmerStrength: 0.09,       // subtle ambient twinkle
+        pulseDepthIn:    0.4,        // inbound pulse amplitude
         pulseDepthOut:   0.48,       // outbound pulse amplitude
         pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
         pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
@@ -1892,7 +1892,8 @@
 
     /** Start or stop the hourly DB auto-update timer based on current setting. */
     function syncDbAutoUpdateTimer() {
-        const autoOn = lastNodeInfo && lastNodeInfo.geo_db_stats && lastNodeInfo.geo_db_stats.auto_update;
+        const stats = lastNodeInfo && lastNodeInfo.geo_db_stats;
+        const autoOn = stats && stats.auto_lookup && stats.auto_update;
         if (autoOn && !dbAutoUpdateTimer) {
             dbAutoUpdateTimer = setInterval(performDbAutoUpdate, DB_AUTO_UPDATE_INTERVAL);
         } else if (!autoOn && dbAutoUpdateTimer) {
