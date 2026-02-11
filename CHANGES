@@ -1,3 +1,2 @@
-UI improvement and bug fixes.
-Fixed map customization problems
-Allowed settings toggles btw back/front
+Fix DB auto-update timer firing when GeoDB is disabled.
+Removed BTC address from terminal banners.
