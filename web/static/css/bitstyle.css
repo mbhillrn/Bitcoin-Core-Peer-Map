@@ -739,6 +739,28 @@ body.hud-solid .btc-price-bar {
     padding: 4px 12px;
 }
 
+/* Light theme — kill dark text-shadows on HUD elements for crisp text */
+body.theme-light .mo-label,
+body.theme-light .mo-value,
+body.theme-light .mo-status-msg,
+body.theme-light .fd-net-name,
+body.theme-light .fd-net-counts,
+body.theme-light .mo-btc-symbol,
+body.theme-light .mo-btc-price,
+body.theme-light .mo-btc-arrow,
+body.theme-light .ro-label,
+body.theme-light .ro-value,
+body.theme-light .ro-status-msg,
+body.theme-light .ro-link-blue,
+body.theme-light .ro-rate,
+body.theme-light .ro-link,
+body.theme-light .ro-geodb-count {
+    text-shadow: none;
+}
+body.theme-light .ro-link:hover {
+    text-shadow: none;
+}
+
 /* Map controls — right side, below right overlay */
 .map-controls {
     position: fixed;

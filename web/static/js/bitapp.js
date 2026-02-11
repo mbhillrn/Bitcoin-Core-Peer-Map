@@ -330,6 +330,9 @@
             root.style.setProperty(prop, value);
         }
 
+        // 2b. Toggle light-theme body class (used for HUD shadow overrides)
+        document.body.classList.toggle('theme-light', themeName === 'light');
+
         // 3. Update node highlight colour
         nodeHighlightColor = theme.nodeHighlight || { r: 255, g: 255, b: 255 };
 
