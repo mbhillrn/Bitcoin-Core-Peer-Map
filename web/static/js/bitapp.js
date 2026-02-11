@@ -94,11 +94,12 @@
         // Ocean appearance
         oceanHue:       220,         // hue degrees (current near-black blue)
         oceanBright:     50,         // slider 0-100, 50 = original L=3.5%
-        // Grid lines
+        // Grid lines & borders
         gridVisible:    true,
         gridThickness:   50,         // slider 0-100, 50 = default 0.5 lineWidth
         gridHue:        212,         // hue degrees (accent blue)
         gridBright:      50,         // slider 0-100, 50 = default alpha 0.04
+        borderScale:     50,         // slider 0-100, 50 = current size; scales country+state borders
     };
 
     // Working copy of advanced settings (mutated by sliders, saved to localStorage)
@@ -1965,10 +1966,12 @@
     /** Draw country borders at all zoom levels — always visible, zoom-aware strokes */
     function drawCountryBorders() {
         if (!bordersReady) return;
+        const bScale = advSettings.borderScale / 50;   // 0→0, 50→1 (default), 100→2
+        if (bScale < 0.01) return;                      // slider at 0 = hidden
         // Visible alpha at all zoom levels; brighter when zoomed in
-        const alpha = 0.25 + clamp((view.zoom - 1) / 3, 0, 1) * 0.15;
+        const alpha = (0.25 + clamp((view.zoom - 1) / 3, 0, 1) * 0.15) * bScale;
         // Stroke width scales with zoom so borders never become sub-pixel
-        const strokeW = Math.max(1.0, 0.8 * view.zoom);
+        const strokeW = Math.max(0.5, 0.8 * view.zoom * bScale);
         const offsets = getWrapOffsets();
         for (const off of offsets) {
             drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, strokeW, off);
@@ -2015,10 +2018,12 @@
     /** Draw state/province borders (zoom >= ZOOM_SHOW_STATES), zoom-aware strokes */
     function drawStateBorders() {
         if (!statesReady || view.zoom < ZOOM_SHOW_STATES) return;
+        const bScale = advSettings.borderScale / 50;
+        if (bScale < 0.01) return;
         // Fade in from threshold, cap at solid visibility
-        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 1.5, 0, 1) * 0.20;
-        // Stroke width scales with zoom, minimum 1 screen pixel
-        const strokeW = Math.max(1.0, 0.5 * view.zoom);
+        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 1.5, 0, 1) * 0.20 * bScale;
+        // Stroke width scales with zoom, minimum 0.5 screen pixel
+        const strokeW = Math.max(0.5, 0.5 * view.zoom * bScale);
         const offsets = getWrapOffsets();
         for (const off of offsets) {
             drawLineSet(stateLines, `rgba(88,166,255,${alpha})`, strokeW, off);
@@ -4491,22 +4496,23 @@
         h += '<div class="adv-section">Land</div>';
         h += advSliderHTML('adv-land-hue', 'Hue', advSettings.landHue, 0, 360, 1, true);
         h += advSliderHTML('adv-land-bright', 'Brightness', advSettings.landBright, 0, 100, 1);
-        h += advSliderHTML('adv-snow-poles', 'Snow the Poles', advSettings.snowPoles, 0, 100, 1);
+        h += advSliderHTML('adv-snow-poles', 'Snow the Poles', advSettings.snowPoles, 0, 100, 1, false, true);
 
         // ── Ocean ──
         h += '<div class="adv-section">Ocean</div>';
         h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
         h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
 
-        // ── Grid Lines ──
-        h += '<div class="adv-section">Grid Lines</div>';
+        // ── Grid & Borders ──
+        h += '<div class="adv-section">Grid &amp; Borders</div>';
         h += '<div class="adv-toggle-row">';
-        h += '<span class="adv-toggle-label adv-reset-link" data-default-key="gridVisible" title="Click to reset">Visible</span>';
+        h += '<span class="adv-toggle-label adv-reset-link" data-default-key="gridVisible" title="Click to reset">Grid Visible</span>';
         h += '<label class="dsp-toggle"><input type="checkbox" id="adv-grid-visible" ' + (advSettings.gridVisible ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
         h += '</div>';
-        h += advSliderHTML('adv-grid-thick', 'Thickness', advSettings.gridThickness, 0, 100, 1);
-        h += advSliderHTML('adv-grid-hue', 'Hue', advSettings.gridHue, 0, 360, 1, true);
-        h += advSliderHTML('adv-grid-bright', 'Brightness', advSettings.gridBright, 0, 100, 1);
+        h += advSliderHTML('adv-grid-thick', 'Grid Thickness', advSettings.gridThickness, 0, 100, 1);
+        h += advSliderHTML('adv-grid-hue', 'Grid Hue', advSettings.gridHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-grid-bright', 'Grid Brightness', advSettings.gridBright, 0, 100, 1);
+        h += advSliderHTML('adv-border-scale', 'Borders', advSettings.borderScale, 0, 100, 1);
 
         h += '</div>'; // end adv-body
 
@@ -4549,6 +4555,7 @@
         bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-border-scale', v => { advSettings.borderScale = v; });
 
         // ── Bind grid visibility toggle ──
         const gridVisCB = document.getElementById('adv-grid-visible');
@@ -4583,11 +4590,12 @@
     }
 
     /** Generate HTML for a single slider row — label is a clickable reset link */
-    function advSliderHTML(id, label, value, min, max, step, isHue) {
+    function advSliderHTML(id, label, value, min, max, step, isHue, bold) {
         const cls = isHue ? 'adv-slider hue-slider' : 'adv-slider';
         const display = (step < 1) ? parseFloat(value).toFixed(2) : Math.round(value);
+        const bOpen = bold ? '<b>' : '', bClose = bold ? '</b>' : '';
         return '<div class="adv-slider-row">' +
-            '<span class="adv-slider-label adv-reset-link" data-slider="' + id + '" title="Click to reset to default">' + label + '</span>' +
+            '<span class="adv-slider-label adv-reset-link" data-slider="' + id + '" title="Click to reset to default">' + bOpen + label + bClose + '</span>' +
             '<input type="range" class="' + cls + '" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '">' +
             '<span class="adv-slider-val" id="' + id + '-val">' + display + '</span>' +
             '</div>';
@@ -4630,6 +4638,7 @@
         setSliderValue('adv-grid-thick', advSettings.gridThickness);
         setSliderValue('adv-grid-hue', advSettings.gridHue);
         setSliderValue('adv-grid-bright', advSettings.gridBright);
+        setSliderValue('adv-border-scale', advSettings.borderScale);
     }
 
     /** Map slider IDs to their advSettings key and default value */
@@ -4647,6 +4656,7 @@
         'adv-grid-thick':  { key: 'gridThickness',   recolor: true },
         'adv-grid-hue':    { key: 'gridHue',         recolor: true },
         'adv-grid-bright': { key: 'gridBright',      recolor: true },
+        'adv-border-scale':{ key: 'borderScale' },
     };
 
     /** Bind every .adv-reset-link label to reset its slider/toggle to default on click */
