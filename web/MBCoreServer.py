@@ -2114,6 +2114,68 @@ async def api_cli_info():
     }
 
 
+# ── Update check cache (avoid hammering GitHub) ──
+_update_cache = {'latest': None, 'changes': None, 'checked_at': 0}
+GITHUB_REPO = "mbhillrn/Bitcoin-Core-Peer-Map"
+GITHUB_VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/VERSION"
+GITHUB_CHANGES_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/CHANGES"
+
+def _compare_versions(local: str, remote: str) -> bool:
+    """Return True if remote is newer than local (semver major.minor.patch)."""
+    try:
+        lp = [int(x) for x in local.split('.')]
+        rp = [int(x) for x in remote.split('.')]
+        for i in range(max(len(lp), len(rp))):
+            l = lp[i] if i < len(lp) else 0
+            r = rp[i] if i < len(rp) else 0
+            if r > l:
+                return True
+            if r < l:
+                return False
+    except Exception:
+        pass
+    return False
+
+@app.get("/api/update-check")
+async def api_update_check():
+    """Check GitHub for a newer version. Caches result for 30 minutes."""
+    now = time.time()
+    # Return cached result if fresh (30 min = 1800s)
+    if now - _update_cache['checked_at'] < 1800 and _update_cache['latest'] is not None:
+        return {
+            'current': VERSION,
+            'latest': _update_cache['latest'],
+            'available': _compare_versions(VERSION, _update_cache['latest']),
+            'changes': _update_cache['changes'] or '',
+        }
+    # Fetch from GitHub
+    latest = None
+    changes = None
+    try:
+        r = requests.get(f"{GITHUB_VERSION_URL}?cb={int(now)}", timeout=5)
+        if r.status_code == 200:
+            latest = r.text.strip()
+    except Exception:
+        pass
+    if latest and _compare_versions(VERSION, latest):
+        try:
+            r2 = requests.get(GITHUB_CHANGES_URL, timeout=5)
+            if r2.status_code == 200:
+                changes = r2.text.strip()
+        except Exception:
+            pass
+    # Cache result
+    _update_cache['latest'] = latest or VERSION
+    _update_cache['changes'] = changes
+    _update_cache['checked_at'] = now
+    return {
+        'current': VERSION,
+        'latest': _update_cache['latest'],
+        'available': _compare_versions(VERSION, _update_cache['latest']),
+        'changes': changes or '',
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Serve the main dashboard page"""
