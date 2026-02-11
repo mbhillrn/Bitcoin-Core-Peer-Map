@@ -306,8 +306,10 @@
     // Original CSS variable values from :root (captured once on init for 'dark' theme reset)
     const DARK_CSS_VARS = {};
 
-    /** Apply a theme by name. Updates CSS variables, map defaults, and network colours. */
-    function applyTheme(themeName) {
+    /** Apply a theme by name. Updates CSS variables, map defaults, and network colours.
+     *  opts.preserveAdvSettings — when true, skip overwriting map slider values
+     *  (used on init to respect user's permanently saved settings). */
+    function applyTheme(themeName, opts) {
         const theme = THEMES[themeName];
         if (!theme) return;
         currentTheme = themeName;
@@ -342,16 +344,20 @@
         Object.assign(canvasLabelColors, labelSet);
 
         // 4. Apply map appearance overrides to advSettings
-        const mapKeys = ['landHue', 'landBright', 'oceanHue', 'oceanBright',
-                         'gridHue', 'gridBright', 'borderHue', 'gridThickness', 'borderScale',
-                         'snowPoles'];
-        for (const k of mapKeys) {
-            advSettings[k] = (theme.advOverrides[k] !== undefined) ? theme.advOverrides[k] : ADV_DEFAULTS[k];
+        //    Skip when preserveAdvSettings is set (init with saved settings — don't
+        //    let the theme stomp over the user's permanently saved slider values).
+        if (!(opts && opts.preserveAdvSettings)) {
+            const mapKeys = ['landHue', 'landBright', 'oceanHue', 'oceanBright',
+                             'gridHue', 'gridBright', 'borderHue', 'gridThickness', 'borderScale',
+                             'snowPoles'];
+            for (const k of mapKeys) {
+                advSettings[k] = (theme.advOverrides[k] !== undefined) ? theme.advOverrides[k] : ADV_DEFAULTS[k];
+            }
+            // Ocean light blue preset flag
+            advSettings.oceanLightBlue = !!theme.oceanLightBlue;
+            // HUD solid background flag
+            advSettings.hudSolidBg = !!theme.hudSolidBg;
         }
-        // Ocean light blue preset flag
-        advSettings.oceanLightBlue = !!theme.oceanLightBlue;
-        // HUD solid background flag
-        advSettings.hudSolidBg = !!theme.hudSolidBg;
         applyHudSolidBg();
         updateAdvColors();
 
@@ -424,12 +430,15 @@
         try { localStorage.setItem('mbcore_theme', currentTheme); } catch (e) { /* ignore */ }
     }
 
-    /** Load theme from localStorage and apply it */
+    /** Load theme from localStorage and apply it.
+     *  If the user has permanently saved adv settings, preserve those slider
+     *  values instead of letting the theme overwrite them with its defaults. */
     function loadTheme() {
         try {
             const saved = localStorage.getItem('mbcore_theme');
             if (saved && THEMES[saved]) {
-                applyTheme(saved);
+                const hasSavedAdv = !!localStorage.getItem('mbcore_adv_display');
+                applyTheme(saved, hasSavedAdv ? { preserveAdvSettings: true } : undefined);
             }
         } catch (e) { /* ignore */ }
     }
@@ -1187,20 +1196,57 @@
             html += `<div class="modal-row"><span class="modal-label" title="Database health status">Status</span><span class="geodb-status-badge ${statusCls}" title="${statusText.toUpperCase()}">${statusText.toUpperCase()}</span></div>`;
             if (stats.entries != null) html += mrow('Entries', stats.entries.toLocaleString(), 'Total number of IP geolocation records in the database', `${stats.entries.toLocaleString()} records`);
             if (stats.size_bytes != null) html += mrow('Size', (stats.size_bytes / 1e6).toFixed(1) + ' MB', 'Database file size on disk', `${(stats.size_bytes / 1e6).toFixed(1)} MB`);
-            if (stats.newest_age_days != null) html += mrow('Newest Entry', stats.newest_age_days + ' days', 'Age of the newest geolocation record', `${stats.newest_age_days} days old`);
+            if (stats.newest_age_seconds != null) {
+                const secs = stats.newest_age_seconds;
+                let newestText;
+                if (secs >= 86400) {
+                    newestText = Math.floor(secs / 86400) + ' days';
+                } else if (secs >= 3600) {
+                    const h = Math.floor(secs / 3600);
+                    const m = Math.floor((secs % 3600) / 60);
+                    newestText = h + 'h ' + m + 'm';
+                } else if (secs >= 60) {
+                    const m = Math.floor(secs / 60);
+                    const s = secs % 60;
+                    newestText = m + 'm ' + s + 's';
+                } else {
+                    newestText = secs + 's';
+                }
+                html += mrow('Newest Entry', newestText, 'Age of the newest geolocation record', newestText + ' old');
+            } else if (stats.newest_age_days != null) {
+                html += mrow('Newest Entry', stats.newest_age_days + ' days', 'Age of the newest geolocation record', `${stats.newest_age_days} days old`);
+            }
             if (stats.oldest_age_days != null) html += mrow('Oldest Entry', stats.oldest_age_days + ' days', 'Age of the oldest geolocation record', `${stats.oldest_age_days} days old`);
             if (stats.path) html += `<div class="modal-row"><span class="modal-label" title="File system path to the database">Path</span><span class="modal-val" style="font-size:9px;max-width:260px" title="${stats.path}">${stats.path}</span></div>`;
             const alVal = stats.auto_lookup ? 'On' : 'Off';
             html += mrow('Auto-resolve', alVal, 'Master switch — enables the GeoIP system that resolves peer IPs to locations on the map', alVal, stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn');
-            const auVal = stats.auto_update ? 'On' : 'Off';
-            html += mrow('Auto-update', auVal, 'Automatically refresh stale geolocation entries', auVal, stats.auto_update ? 'modal-val-ok' : 'modal-val-warn');
-            // API Lookup toggle switch
+            // Auto-update toggle switch (persists to config.conf, syncs with terminal menu)
+            const auOn = !!stats.auto_update;
+            html += `<div class="modal-row"><span class="modal-label" title="Automatically update the geolocation database (at startup and once per hour while the map is open)">Auto-update</span><span class="modal-val" style="display:flex;align-items:center;gap:6px"><label class="geodb-toggle" title="${auOn ? 'Click to disable auto-update' : 'Click to enable auto-update'}"><input type="checkbox" id="geodb-autoupdate-toggle" ${auOn ? 'checked' : ''}><span class="geodb-toggle-slider"></span></label></span></div>`;
+            // API Lookup toggle switch (no On/Off text — slider colour shows state)
             const dbOnly = stats.db_only_mode || false;
             const apiOn = !dbOnly;
-            html += `<div class="modal-row"><span class="modal-label" title="When ON, unknown IPs are looked up via ip-api.com. When OFF, only cached database entries are used.">API Lookup</span><span class="modal-val" style="display:flex;align-items:center;gap:6px"><span class="${apiOn ? 'modal-val-ok' : 'modal-val-warn'}" title="${apiOn ? 'Unknown IPs will be resolved via ip-api.com' : 'Only using cached database entries — no external API calls'}">${apiOn ? 'On' : 'Off'}</span><label class="geodb-toggle" title="${apiOn ? 'Click to disable API lookups' : 'Click to enable API lookups'}"><input type="checkbox" id="geodb-dbonly-toggle" ${apiOn ? 'checked' : ''}><span class="geodb-toggle-slider"></span></label></span></div>`;
+            html += `<div class="modal-row"><span class="modal-label" title="When ON, unknown IPs are looked up via ip-api.com. When OFF, only cached database entries are used.">API Lookup</span><span class="modal-val" style="display:flex;align-items:center;gap:6px"><label class="geodb-toggle" title="${apiOn ? 'Click to disable API lookups' : 'Click to enable API lookups'}"><input type="checkbox" id="geodb-dbonly-toggle" ${apiOn ? 'checked' : ''}><span class="geodb-toggle-slider"></span></label></span></div>`;
             html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
             html += '<div class="geodb-result" id="geodb-result"></div>';
             body.innerHTML = html;
+
+            // Auto-update toggle handler (persists to config.conf)
+            document.getElementById('geodb-autoupdate-toggle').addEventListener('change', async () => {
+                try {
+                    const resp = await fetch('/api/geodb/toggle-auto-update', { method: 'POST' });
+                    const data = await resp.json();
+                    if (data.success) {
+                        // Refresh info + modal, and start/stop the hourly timer
+                        fetchInfo().then(() => {
+                            syncDbAutoUpdateTimer();
+                            openGeoDBDropdown();
+                        });
+                    }
+                } catch (err) {
+                    console.error('Toggle auto-update failed:', err);
+                }
+            });
 
             // DB-only toggle handler
             document.getElementById('geodb-dbonly-toggle').addEventListener('change', async () => {
@@ -1768,8 +1814,8 @@
     let _prevInternetState = 'green';
     let _lastRestoredToastTime = 0;
 
-    // ── Update checker — polls /api/update-check every 30 min ──
-    const UPDATE_CHECK_INTERVAL = 60 * 1000; // 1 minute
+    // ── System update checker — polls /api/update-check every 55 minutes ──
+    const UPDATE_CHECK_INTERVAL = 55 * 60 * 1000; // 55 minutes
     const updateBadge = document.getElementById('update-badge');
 
     async function checkForUpdate() {
@@ -1796,6 +1842,63 @@
             }
         } catch (e) {
             // silently ignore network errors
+        }
+    }
+
+    // ── DB auto-update — once per hour while map is open ──
+    const DB_AUTO_UPDATE_INTERVAL = 60 * 60 * 1000; // 1 hour
+    let dbAutoUpdateTimer = null;
+    const dbStatusEl = document.getElementById('db-update-status');
+
+    /** Show a temporary message in the top bar DB status area.
+     *  Intentionally overlaps the update-badge area — this is by design since
+     *  the DB status is temporary (~3s) and the update badge is persistent. */
+    function showDbStatus(text, cls) {
+        if (!dbStatusEl) return;
+        dbStatusEl.textContent = text;
+        dbStatusEl.className = 'db-update-status' + (cls ? ' ' + cls : '');
+        dbStatusEl.style.display = '';
+    }
+    function hideDbStatus() {
+        if (!dbStatusEl) return;
+        dbStatusEl.style.display = 'none';
+        dbStatusEl.textContent = '';
+        dbStatusEl.className = 'db-update-status';
+    }
+
+    /** Run the DB auto-update sequence: countdown → check → result. */
+    async function performDbAutoUpdate() {
+        // 3-second countdown
+        for (let i = 3; i >= 1; i--) {
+            showDbStatus(`Updating DB in ${i}...`);
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        showDbStatus('Checking for DB update...');
+        try {
+            const resp = await fetch('/api/geodb/update', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                const isUpToDate = data.message && data.message.toLowerCase().includes('up to date');
+                showDbStatus(isUpToDate ? 'DB already up to date' : 'DB successfully updated', 'success');
+            } else {
+                showDbStatus('DB update failed', 'error');
+            }
+        } catch (e) {
+            showDbStatus('DB update failed', 'error');
+        }
+        // Auto-dismiss after 3 seconds
+        setTimeout(hideDbStatus, 3000);
+    }
+
+    /** Start or stop the hourly DB auto-update timer based on current setting. */
+    function syncDbAutoUpdateTimer() {
+        const autoOn = lastNodeInfo && lastNodeInfo.geo_db_stats && lastNodeInfo.geo_db_stats.auto_update;
+        if (autoOn && !dbAutoUpdateTimer) {
+            dbAutoUpdateTimer = setInterval(performDbAutoUpdate, DB_AUTO_UPDATE_INTERVAL);
+        } else if (!autoOn && dbAutoUpdateTimer) {
+            clearInterval(dbAutoUpdateTimer);
+            dbAutoUpdateTimer = null;
+            hideDbStatus();
         }
     }
 
@@ -5329,11 +5432,12 @@
         peerPollTimer = setInterval(fetchPeers, CFG.pollInterval);
         startCountdownTimer();
 
-        // Fetch node info (block height, BTC price, etc) immediately, then poll
-        fetchInfo();
+        // Fetch node info (block height, BTC price, etc) immediately, then poll.
+        // Once the first fetch resolves, start the DB auto-update timer if enabled.
+        fetchInfo().then(() => syncDbAutoUpdateTimer());
         btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
 
-        // Check for updates on startup and every 30 minutes
+        // Check for system updates on startup and every 55 minutes
         checkForUpdate();
         setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL);
 

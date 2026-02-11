@@ -116,7 +116,7 @@ Click CPU, RAM, or NET for a detailed **System Info** modal with full breakdowns
 
 The Node Info modal has three sections: **Node** (version, peers, disk size, pruning, sync status), **Mempool** (pending TXs, data size, memory usage, total fees, min accepted/relay fees, Full RBF status), and **Blockchain** (chain, block height, sync progress, best block hash, difficulty, median time, softforks).
 
-- **MBCORE DB** click for GeoIP database stats: entry count, database size, newest/oldest entry age, file path, auto-lookup and auto-update status, and an **Update Database** button to pull new geolocations without leaving the dashboard
+- **MBCORE DB** click for GeoIP database stats: entry count, database size, newest/oldest entry age, file path, auto-resolve status, and an **Update Database** button to pull new geolocations without leaving the dashboard. Toggle **Auto-update** (green/red slider) to enable automatic database updates at startup and once per hour while the map is open — this setting persists across restarts and syncs with the terminal menu. Toggle **API Lookup** (green/red slider) to control whether unknown IPs are resolved via ip-api.com or only cached database entries are used
 
 ![GeoIP Database Modal](docs/images/16.geodb-modal.png)
 
@@ -236,7 +236,7 @@ Click the **Disconnect** button on any peer row in the table to open the disconn
 
 ![Geo/IP Database Settings](docs/images/3.geomenu.png)
 
-Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries.
+Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries. The auto-update setting syncs with the web dashboard — toggling it from either location updates the same config.
 
 ### Port Settings
 
