@@ -219,8 +219,12 @@ run_web_dashboard() {
 }
 
 run_detection() {
-    # || true: don't let detection failure kill the script under set -e
-    "$MBTC_DIR/scripts/detect.sh" || true
+    local rc=0
+    "$MBTC_DIR/scripts/detect.sh" || rc=$?
+    # Propagate user abort (Ctrl+C) instead of swallowing it
+    if [[ $rc -eq 130 ]]; then
+        exit 130
+    fi
     # Reload config after detection (|| true: don't crash under set -e if config missing)
     load_config 2>/dev/null || true
 }
