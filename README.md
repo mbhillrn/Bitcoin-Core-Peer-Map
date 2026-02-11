@@ -1,4 +1,4 @@
-# MBCore Dashboard (Bitcoin Core GUI, Geolocated Peer Map, and Tools)
+# MBCore Dashboard (Bitcoin Core Geolocated Peer Map, GUI, and Tools)
 
 A real-time monitoring dashboard for your personal Bitcoin Core node. Automatically geolocates your connected peers, places them on an interactive canvas world map, and provides tools to manage connections, all from your browser.
 
