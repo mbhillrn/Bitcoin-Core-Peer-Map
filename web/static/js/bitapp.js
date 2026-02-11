@@ -61,9 +61,150 @@
         nervousnessMax: 0.003,     // extra pulse speed added to young peers
         nervousnessRampSec: 1800,  // seconds for nervousness to decay to zero (30 min)
 
+        // ── Ambient shimmer (residual twinkle for veteran peers) ──
+        // Three sine waves at incommensurate frequencies; when they align
+        // positively a peer gets a brief bright "twinkle."  Each node's
+        // unique phase keeps the sparkles scattered across the map.
+        shimmerStrength: 0.36,     // how bright the twinkle spikes get (0 = off)
+        shimmerFreq1: 0.00293,    // primary wave   (period ≈ 2.1 s)
+        shimmerFreq2: 0.00517,    // secondary wave  (period ≈ 1.2 s)
+        shimmerFreq3: 0.00711,    // tertiary wave   (period ≈ 0.88 s)
+
         // ── Fade-out ──
         fadeOutEase: 2.0,          // exponent for ease-out curve
     };
+
+    // ═══════════════════════════════════════════════════════════
+    // ADVANCED DISPLAY SETTINGS — tuneable from the floating panel
+    // Persisted to localStorage when user clicks "Save".
+    // Defaults restore the map to its original pre-shimmer appearance.
+    // ═══════════════════════════════════════════════════════════
+
+    const ADV_DEFAULTS = {
+        // Peer effects (defaults = original values before shimmer was added)
+        shimmerStrength: 0,          // 0 = off (original map had no shimmer)
+        pulseDepthIn:    0.32,       // inbound pulse amplitude
+        pulseDepthOut:   0.48,       // outbound pulse amplitude
+        pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
+        pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
+        // Land appearance
+        landHue:        215,         // hue degrees (current dark blue-gray)
+        landBright:      50,         // slider 0-100, 50 = original L=12%
+        snowPoles:       0,          // slider 0-100, 0 = off, 100 = full ice
+        // Ocean appearance
+        oceanHue:       220,         // hue degrees (current near-black blue)
+        oceanBright:     50,         // slider 0-100, 50 = original L=3.5%
+        // Grid lines
+        gridVisible:    true,
+        gridThickness:   50,         // slider 0-100, 50 = default 0.5 lineWidth
+        gridHue:        212,         // hue degrees (accent blue)
+        gridBright:      50,         // slider 0-100, 50 = default alpha 0.04
+        // Borders
+        borderScale:     50,         // slider 0-100, 50 = current size; scales country+state borders
+        borderHue:      212,         // hue degrees (accent blue, matches grid default)
+    };
+
+    // Working copy of advanced settings (mutated by sliders, saved to localStorage)
+    const advSettings = Object.assign({}, ADV_DEFAULTS);
+
+    // Pre-computed colour strings, updated whenever a slider changes
+    const advColors = {
+        landFill:   '#151d28',
+        landStroke: '#253040',
+        iceFill:    'hsl(210, 15%, 82%)',
+        iceStroke:  'hsl(210, 12%, 65%)',
+        oceanFill:  '#06080c',
+        lakeFill:   '#06080c',
+        lakeStroke: '#1a2230',
+        gridColor:  'rgba(88,166,255,0.04)',
+        gridWidth:  0.5,
+        borderRGB:  '88,166,255',   // border colour as r,g,b for rgba()
+    };
+
+    // Polar polygon classification (populated when world geometry loads)
+    let polarPolygons = [];
+    let nonPolarPolygons = [];
+
+    /** Map brightness slider (0-100, centered at 50) to HSL lightness */
+    function brightnessToL(slider, defaultL) {
+        return defaultL * Math.pow(2, (slider - 50) / 25);
+    }
+
+    /** Rebuild advColors from current advSettings */
+    function updateAdvColors() {
+        // Land
+        const ll = Math.max(0.5, Math.min(60, brightnessToL(advSettings.landBright, 12)));
+        advColors.landFill   = 'hsl(' + advSettings.landHue + ', 31%, ' + ll.toFixed(1) + '%)';
+        advColors.landStroke = 'hsl(' + advSettings.landHue + ', 25%, ' + Math.min(70, ll + 8).toFixed(1) + '%)';
+
+        // Ocean
+        const ol = Math.max(0.2, Math.min(30, brightnessToL(advSettings.oceanBright, 3.5)));
+        advColors.oceanFill  = 'hsl(' + advSettings.oceanHue + ', 33%, ' + ol.toFixed(1) + '%)';
+        advColors.lakeFill   = advColors.oceanFill;
+        advColors.lakeStroke = 'hsl(' + advSettings.oceanHue + ', 25%, ' + Math.min(40, ol + 10).toFixed(1) + '%)';
+
+        // Grid — alpha range: 0.005 (slider=0) to 0.04 (slider=50) to 0.35 (slider=100)
+        const ga = Math.min(0.5, 0.04 * Math.pow(2, (advSettings.gridBright - 50) / 18));
+        advColors.gridColor = 'hsla(' + advSettings.gridHue + ', 100%, 67%, ' + ga.toFixed(4) + ')';
+        advColors.gridWidth = 0.2 + (advSettings.gridThickness / 100) * 1.8;
+
+        // Borders — convert hue to r,g,b at S=100%, L=67% (same as accent blue default)
+        advColors.borderRGB = hslToRgbStr(advSettings.borderHue, 100, 67);
+
+        // Ice (constant cool gray)
+        advColors.iceFill   = 'hsl(210, 15%, 82%)';
+        advColors.iceStroke = 'hsl(210, 12%, 65%)';
+    }
+
+    /** Convert HSL to "r,g,b" string for use in rgba() */
+    function hslToRgbStr(h, s, l) {
+        s /= 100; l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+        return Math.round(f(0) * 255) + ',' + Math.round(f(8) * 255) + ',' + Math.round(f(4) * 255);
+    }
+
+    /** Classify world polygons into polar vs non-polar for "Snow the Poles" */
+    function classifyPolarPolygons() {
+        polarPolygons = [];
+        nonPolarPolygons = [];
+        for (let i = 0; i < worldPolygons.length; i++) {
+            const ring = worldPolygons[i][0];
+            if (!ring || ring.length === 0) { nonPolarPolygons.push(worldPolygons[i]); continue; }
+            let sumLat = 0;
+            for (let j = 0; j < ring.length; j++) sumLat += ring[j][1];
+            const avgLat = sumLat / ring.length;
+            if (avgLat < -60 || avgLat > 66) polarPolygons.push(worldPolygons[i]);
+            else nonPolarPolygons.push(worldPolygons[i]);
+        }
+    }
+
+    /** Load saved settings from localStorage */
+    function loadAdvSettings() {
+        try {
+            const raw = localStorage.getItem('mbcore_adv_display');
+            if (raw) {
+                const saved = JSON.parse(raw);
+                for (const k of Object.keys(ADV_DEFAULTS)) {
+                    if (saved[k] !== undefined) advSettings[k] = saved[k];
+                }
+            }
+        } catch (e) { /* ignore corrupt data */ }
+        // Always sync CFG from advSettings (whether loaded or defaults)
+        CFG.shimmerStrength    = advSettings.shimmerStrength;
+        CFG.pulseDepthInbound  = advSettings.pulseDepthIn;
+        CFG.pulseDepthOutbound = advSettings.pulseDepthOut;
+        CFG.pulseSpeedInbound  = 0.0014 * Math.pow(2, (advSettings.pulseSpeedIn - 50) / 30);
+        CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (advSettings.pulseSpeedOut - 50) / 30);
+        updateAdvColors();
+    }
+
+    /** Save current settings to localStorage */
+    function saveAdvSettings() {
+        try {
+            localStorage.setItem('mbcore_adv_display', JSON.stringify(advSettings));
+        } catch (e) { /* quota exceeded, silently fail */ }
+    }
 
     // ═══════════════════════════════════════════════════════════
     // NETWORK COLOURS (match bitstyle.css --net-* variables)
@@ -1008,7 +1149,8 @@
             // The first ring is the outer boundary, subsequent rings are holes (lakes etc)
             worldPolygons = polygons;
             worldReady = true;
-            console.log(`[vNext] Loaded ${polygons.length} land polygons`);
+            classifyPolarPolygons();
+            console.log(`[vNext] Loaded ${polygons.length} land polygons (${polarPolygons.length} polar)`);
         } catch (err) {
             console.error('[vNext] Failed to load world geometry, using fallback:', err);
             // Fallback: minimal hand-traced outlines so the map isn't blank
@@ -1021,6 +1163,7 @@
                 [[[115,-15],[120,-14],[130,-12],[135,-14],[140,-16],[148,-20],[152,-25],[153,-28],[150,-33],[145,-38],[137,-35],[130,-32],[122,-33],[116,-32],[114,-28],[114,-22],[118,-20],[120,-18],[115,-15]]],
             ];
             worldReady = true;
+            classifyPolarPolygons();
         }
     }
 
@@ -1734,8 +1877,9 @@
 
     /** Draw subtle lat/lon grid lines (with wrap) */
     function drawGrid() {
-        ctx.strokeStyle = 'rgba(88,166,255,0.04)';
-        ctx.lineWidth = 0.5;
+        if (!advSettings.gridVisible) return;
+        ctx.strokeStyle = advColors.gridColor;
+        ctx.lineWidth = advColors.gridWidth;
         const offsets = getWrapOffsets();
 
         for (const off of offsets) {
@@ -1792,8 +1936,17 @@
     function drawLandmasses() {
         if (!worldReady) return;
         const offsets = getWrapOffsets();
+        // Draw all land with land colour
         for (const off of offsets) {
-            drawPolygonSet(worldPolygons, '#151d28', '#253040', off);
+            drawPolygonSet(worldPolygons, advColors.landFill, advColors.landStroke, off);
+        }
+        // Overdraw polar regions with ice at snowPoles opacity (0-100 slider → 0-1 alpha)
+        if (advSettings.snowPoles > 0 && polarPolygons.length > 0) {
+            ctx.globalAlpha = advSettings.snowPoles / 100;
+            for (const off of offsets) {
+                drawPolygonSet(polarPolygons, advColors.iceFill, advColors.iceStroke, off);
+            }
+            ctx.globalAlpha = 1;
         }
     }
 
@@ -1802,8 +1955,7 @@
         if (!lakesReady) return;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            // Lakes filled with ocean colour, subtle darker stroke
-            drawPolygonSet(lakePolygons, '#06080c', '#1a2230', off);
+            drawPolygonSet(lakePolygons, advColors.lakeFill, advColors.lakeStroke, off);
         }
     }
 
@@ -1828,13 +1980,14 @@
     /** Draw country borders at all zoom levels — always visible, zoom-aware strokes */
     function drawCountryBorders() {
         if (!bordersReady) return;
-        // Visible alpha at all zoom levels; brighter when zoomed in
-        const alpha = 0.25 + clamp((view.zoom - 1) / 3, 0, 1) * 0.15;
-        // Stroke width scales with zoom so borders never become sub-pixel
-        const strokeW = Math.max(1.0, 0.8 * view.zoom);
+        const bScale = advSettings.borderScale / 50;   // 0→0, 50→1 (default), 100→2
+        if (bScale < 0.01) return;                      // slider at 0 = hidden
+        const alpha = (0.25 + clamp((view.zoom - 1) / 3, 0, 1) * 0.15) * bScale;
+        const strokeW = Math.max(0.5, 0.8 * view.zoom * bScale);
+        const rgb = advColors.borderRGB;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, strokeW, off);
+            drawLineSet(borderLines, `rgba(${rgb},${alpha})`, strokeW, off);
         }
     }
 
@@ -1878,13 +2031,14 @@
     /** Draw state/province borders (zoom >= ZOOM_SHOW_STATES), zoom-aware strokes */
     function drawStateBorders() {
         if (!statesReady || view.zoom < ZOOM_SHOW_STATES) return;
-        // Fade in from threshold, cap at solid visibility
-        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 1.5, 0, 1) * 0.20;
-        // Stroke width scales with zoom, minimum 1 screen pixel
-        const strokeW = Math.max(1.0, 0.5 * view.zoom);
+        const bScale = advSettings.borderScale / 50;
+        if (bScale < 0.01) return;
+        const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 1.5, 0, 1) * 0.20 * bScale;
+        const strokeW = Math.max(0.5, 0.5 * view.zoom * bScale);
+        const rgb = advColors.borderRGB;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            drawLineSet(stateLines, `rgba(88,166,255,${alpha})`, strokeW, off);
+            drawLineSet(stateLines, `rgba(${rgb},${alpha})`, strokeW, off);
         }
     }
 
@@ -2071,6 +2225,20 @@
     }
 
     /**
+     * Ambient shimmer — residual twinkle for long-lived peers.
+     * Three sine waves at incommensurate frequencies are multiplied
+     * together; positive products create brief bright spikes.
+     * Returns a value in [0, 1], concentrated near 0 (mostly quiet,
+     * occasional sparkles).
+     */
+    function getAmbientShimmer(phase, ageMs) {
+        const w1 = Math.sin(phase * 3.71  + ageMs * CFG.shimmerFreq1);
+        const w2 = Math.sin(phase * 7.13  + ageMs * CFG.shimmerFreq2);
+        const w3 = Math.sin(phase * 11.07 + ageMs * CFG.shimmerFreq3);
+        return Math.max(0, w1 * w2 * w3);
+    }
+
+    /**
      * Draw a single node on the canvas at all visible wrap positions.
      * Lifecycle phases:
      *   1. Arrival bloom (first ~5s) — expanding ring + energetic glow
@@ -2111,10 +2279,13 @@
         // ── Pulse (direction-aware + nervousness for young peers) ──
         let pulse;
         if (inArrival) {
-            // During arrival: fast energetic pulse
+            // During arrival: fast energetic pulse (unchanged)
             pulse = 0.55 + 0.45 * Math.abs(Math.sin(node.phase + ageMs * CFG.arrivalPulseSpeed));
         } else {
             pulse = getDirectionPulse(node, ageMs, connAgeSec);
+            // Ambient shimmer: occasional bright twinkle spikes for all peers
+            const shimmer = getAmbientShimmer(node.phase, ageMs);
+            pulse = Math.min(pulse + CFG.shimmerStrength * shimmer, 1);
         }
 
         // Spawn "pop" scale effect (first 600ms)
@@ -3493,7 +3664,7 @@
         clampView();
 
         // Clear canvas with ocean colour
-        ctx.fillStyle = '#06080c';
+        ctx.fillStyle = advColors.oceanFill;
         ctx.fillRect(0, 0, W, H);
 
         // Compute wrap offsets once per frame
@@ -3847,9 +4018,20 @@
         rightItems.forEach(item => {
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
+        html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
         popup.innerHTML = html;
         document.body.appendChild(popup);
         displaySettingsEl = popup;
+
+        // Bind Advanced button
+        const advBtn = document.getElementById('dsp-advanced-btn');
+        if (advBtn) {
+            advBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeDisplaySettingsPopup();
+                openAdvancedPanel();
+            });
+        }
 
         // Position near anchor
         if (anchorEl) {
@@ -3902,6 +4084,8 @@
     }
 
     function closeDisplaySettingsOnOutside(e) {
+        const advPanel = document.getElementById('adv-panel');
+        if (advPanel && advPanel.contains(e.target)) return;
         if (displaySettingsEl && !displaySettingsEl.contains(e.target)) {
             closeDisplaySettingsPopup();
         }
@@ -4290,10 +4474,309 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // ADVANCED DISPLAY SETTINGS — Floating draggable panel
+    // ═══════════════════════════════════════════════════════════
+
+    let advPanelEl = null;
+
+    function openAdvancedPanel() {
+        if (advPanelEl) { advPanelEl.remove(); advPanelEl = null; }
+
+        const panel = document.createElement('div');
+        panel.className = 'adv-panel';
+        panel.id = 'adv-panel';
+
+        // ── Build HTML ──
+        let h = '';
+        // Titlebar
+        h += '<div class="adv-titlebar" id="adv-titlebar">';
+        h += '<span class="adv-titlebar-text">Advanced Display</span>';
+        h += '<button class="adv-close" id="adv-close" title="Close">&times;</button>';
+        h += '</div>';
+
+        h += '<div class="adv-body">';
+
+        // ── Peer Effects ──
+        h += '<div class="adv-section">Peer Effects</div>';
+        h += advSliderHTML('adv-shimmer', 'Shimmer', advSettings.shimmerStrength, 0, 1, 0.01);
+        h += advSliderHTML('adv-pdepth-in', 'Pulse Depth In', advSettings.pulseDepthIn, 0, 1, 0.01);
+        h += advSliderHTML('adv-pdepth-out', 'Pulse Depth Out', advSettings.pulseDepthOut, 0, 1, 0.01);
+        h += advSliderHTML('adv-pspeed-in', 'Pulse Speed In', advSettings.pulseSpeedIn, 0, 100, 1);
+        h += advSliderHTML('adv-pspeed-out', 'Pulse Speed Out', advSettings.pulseSpeedOut, 0, 100, 1);
+
+        // ── Land ──
+        h += '<div class="adv-section">Land</div>';
+        h += advSliderHTML('adv-land-hue', 'Hue', advSettings.landHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-land-bright', 'Brightness', advSettings.landBright, 0, 100, 1);
+        h += advSliderHTML('adv-snow-poles', 'Snow the Poles', advSettings.snowPoles, 0, 100, 1, false, true);
+        h += '<div class="adv-note">*Use Peer table <span style="font-size:11px">&#9881;</span> below to adjust its transparency</div>';
+
+        // ── Ocean ──
+        h += '<div class="adv-section">Ocean</div>';
+        h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
+
+        // ── Lat/Lon Grid ──
+        h += '<div class="adv-section">Lat/Lon Grid</div>';
+        h += '<div class="adv-toggle-row">';
+        h += '<span class="adv-toggle-label adv-reset-link" data-default-key="gridVisible" title="Click to reset">Visible</span>';
+        h += '<label class="dsp-toggle"><input type="checkbox" id="adv-grid-visible" ' + (advSettings.gridVisible ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
+        h += '</div>';
+        h += advSliderHTML('adv-grid-thick', 'Thickness', advSettings.gridThickness, 0, 100, 1);
+        h += advSliderHTML('adv-grid-hue', 'Hue', advSettings.gridHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-grid-bright', 'Brightness', advSettings.gridBright, 0, 100, 1);
+
+        // ── Borders ──
+        h += '<div class="adv-section">Borders</div>';
+        h += advSliderHTML('adv-border-scale', 'Thickness', advSettings.borderScale, 0, 100, 1);
+        h += advSliderHTML('adv-border-hue', 'Hue', advSettings.borderHue, 0, 360, 1, true);
+
+        h += '</div>'; // end adv-body
+
+        // Footer buttons + feedback area
+        h += '<div class="adv-footer">';
+        h += '<button class="adv-btn adv-btn-reset" id="adv-reset">Reset</button>';
+        h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves across sessions. To save for this session only, just close the menu.">Permanent Save</button>';
+        h += '</div>';
+        h += '<div class="adv-feedback" id="adv-feedback"></div>';
+
+        panel.innerHTML = h;
+        document.body.appendChild(panel);
+        advPanelEl = panel;
+
+        // ── Position: top-right, offset from edge ──
+        positionAdvPanel();
+
+        // ── Bind close ──
+        document.getElementById('adv-close').addEventListener('click', closeAdvancedPanel);
+
+        // ── Bind drag ──
+        initAdvDrag();
+
+        // ── Bind all sliders ──
+        bindAdvSlider('adv-shimmer', v => { advSettings.shimmerStrength = v; CFG.shimmerStrength = v; });
+        bindAdvSlider('adv-pdepth-in', v => { advSettings.pulseDepthIn = v; CFG.pulseDepthInbound = v; });
+        bindAdvSlider('adv-pdepth-out', v => { advSettings.pulseDepthOut = v; CFG.pulseDepthOutbound = v; });
+        bindAdvSlider('adv-pspeed-in', v => {
+            advSettings.pulseSpeedIn = v;
+            CFG.pulseSpeedInbound = 0.0014 * Math.pow(2, (v - 50) / 30);
+        });
+        bindAdvSlider('adv-pspeed-out', v => {
+            advSettings.pulseSpeedOut = v;
+            CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (v - 50) / 30);
+        });
+        bindAdvSlider('adv-land-hue', v => { advSettings.landHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-land-bright', v => { advSettings.landBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-snow-poles', v => { advSettings.snowPoles = v; });
+        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
+        bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-border-scale', v => { advSettings.borderScale = v; });
+        bindAdvSlider('adv-border-hue', v => { advSettings.borderHue = v; updateAdvColors(); });
+
+        // ── Bind grid visibility toggle ──
+        const gridVisCB = document.getElementById('adv-grid-visible');
+        if (gridVisCB) gridVisCB.addEventListener('change', () => { advSettings.gridVisible = gridVisCB.checked; });
+
+        // ── Bind slider labels as reset-to-default links ──
+        bindLabelResets(panel);
+
+        // ── Reset button ──
+        document.getElementById('adv-reset').addEventListener('click', () => {
+            Object.assign(advSettings, ADV_DEFAULTS);
+            CFG.shimmerStrength    = ADV_DEFAULTS.shimmerStrength;
+            CFG.pulseDepthInbound  = ADV_DEFAULTS.pulseDepthIn;
+            CFG.pulseDepthOutbound = ADV_DEFAULTS.pulseDepthOut;
+            CFG.pulseSpeedInbound  = 0.0014;
+            CFG.pulseSpeedOutbound = 0.0026;
+            updateAdvColors();
+            refreshAllAdvSliders();
+            const gv = document.getElementById('adv-grid-visible');
+            if (gv) gv.checked = ADV_DEFAULTS.gridVisible;
+            showAdvFeedback('All settings reset to defaults');
+        });
+
+        // ── Save button ──
+        document.getElementById('adv-save').addEventListener('click', () => {
+            saveAdvSettings();
+            showAdvFeedback('Settings saved permanently');
+        });
+    }
+
+    /** Generate HTML for a single slider row — label is a clickable reset link */
+    function advSliderHTML(id, label, value, min, max, step, isHue, bold) {
+        const cls = isHue ? 'adv-slider hue-slider' : 'adv-slider';
+        const display = (step < 1) ? parseFloat(value).toFixed(2) : Math.round(value);
+        const bOpen = bold ? '<b>' : '', bClose = bold ? '</b>' : '';
+        return '<div class="adv-slider-row">' +
+            '<span class="adv-slider-label adv-reset-link" data-slider="' + id + '" title="Click to reset to default">' + bOpen + label + bClose + '</span>' +
+            '<input type="range" class="' + cls + '" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '">' +
+            '<span class="adv-slider-val" id="' + id + '-val">' + display + '</span>' +
+            '</div>';
+    }
+
+    /** Bind a slider to a callback, fires on every input event (live) */
+    function bindAdvSlider(id, callback) {
+        const slider = document.getElementById(id);
+        const valEl  = document.getElementById(id + '-val');
+        if (!slider) return;
+        slider.addEventListener('input', () => {
+            const v = parseFloat(slider.value);
+            if (valEl) valEl.textContent = (parseFloat(slider.step) < 1) ? v.toFixed(2) : Math.round(v);
+            callback(v);
+        });
+    }
+
+    /** Set a slider value programmatically and update its display */
+    function setSliderValue(id, val) {
+        const slider = document.getElementById(id);
+        const valEl  = document.getElementById(id + '-val');
+        if (slider) {
+            slider.value = val;
+            if (valEl) valEl.textContent = (parseFloat(slider.step) < 1) ? parseFloat(val).toFixed(2) : Math.round(val);
+        }
+    }
+
+    /** Refresh all slider positions from current advSettings */
+    function refreshAllAdvSliders() {
+        setSliderValue('adv-shimmer', advSettings.shimmerStrength);
+        setSliderValue('adv-pdepth-in', advSettings.pulseDepthIn);
+        setSliderValue('adv-pdepth-out', advSettings.pulseDepthOut);
+        setSliderValue('adv-pspeed-in', advSettings.pulseSpeedIn);
+        setSliderValue('adv-pspeed-out', advSettings.pulseSpeedOut);
+        setSliderValue('adv-land-hue', advSettings.landHue);
+        setSliderValue('adv-land-bright', advSettings.landBright);
+        setSliderValue('adv-snow-poles', advSettings.snowPoles);
+        setSliderValue('adv-ocean-hue', advSettings.oceanHue);
+        setSliderValue('adv-ocean-bright', advSettings.oceanBright);
+        setSliderValue('adv-grid-thick', advSettings.gridThickness);
+        setSliderValue('adv-grid-hue', advSettings.gridHue);
+        setSliderValue('adv-grid-bright', advSettings.gridBright);
+        setSliderValue('adv-border-scale', advSettings.borderScale);
+        setSliderValue('adv-border-hue', advSettings.borderHue);
+    }
+
+    /** Map slider IDs to their advSettings key and default value */
+    const SLIDER_DEFAULTS = {
+        'adv-shimmer':     { key: 'shimmerStrength', cfg: 'shimmerStrength' },
+        'adv-pdepth-in':   { key: 'pulseDepthIn',   cfg: 'pulseDepthInbound' },
+        'adv-pdepth-out':  { key: 'pulseDepthOut',   cfg: 'pulseDepthOutbound' },
+        'adv-pspeed-in':   { key: 'pulseSpeedIn',    cfgFn: v => { CFG.pulseSpeedInbound = 0.0014 * Math.pow(2, (v - 50) / 30); } },
+        'adv-pspeed-out':  { key: 'pulseSpeedOut',   cfgFn: v => { CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (v - 50) / 30); } },
+        'adv-land-hue':    { key: 'landHue',         recolor: true },
+        'adv-land-bright': { key: 'landBright',      recolor: true },
+        'adv-snow-poles':  { key: 'snowPoles' },
+        'adv-ocean-hue':   { key: 'oceanHue',        recolor: true },
+        'adv-ocean-bright':{ key: 'oceanBright',     recolor: true },
+        'adv-grid-thick':  { key: 'gridThickness',   recolor: true },
+        'adv-grid-hue':    { key: 'gridHue',         recolor: true },
+        'adv-grid-bright': { key: 'gridBright',      recolor: true },
+        'adv-border-scale':{ key: 'borderScale' },
+        'adv-border-hue':  { key: 'borderHue',      recolor: true },
+    };
+
+    /** Bind every .adv-reset-link label to reset its slider/toggle to default on click */
+    function bindLabelResets(panel) {
+        panel.querySelectorAll('.adv-reset-link').forEach(label => {
+            // Slider reset
+            const sliderId = label.dataset.slider;
+            if (sliderId) {
+                label.addEventListener('click', () => {
+                    const info = SLIDER_DEFAULTS[sliderId];
+                    if (!info) return;
+                    const defVal = ADV_DEFAULTS[info.key];
+                    advSettings[info.key] = defVal;
+                    setSliderValue(sliderId, defVal);
+                    if (info.cfg) CFG[info.cfg] = defVal;
+                    if (info.cfgFn) info.cfgFn(defVal);
+                    if (info.recolor) updateAdvColors();
+                });
+                return;
+            }
+            // Toggle reset (e.g. grid visibility)
+            const defKey = label.dataset.defaultKey;
+            if (defKey && ADV_DEFAULTS[defKey] !== undefined) {
+                label.addEventListener('click', () => {
+                    advSettings[defKey] = ADV_DEFAULTS[defKey];
+                    // Sync the checkbox if there's a matching one
+                    const cb = panel.querySelector('#adv-grid-visible');
+                    if (defKey === 'gridVisible' && cb) cb.checked = ADV_DEFAULTS[defKey];
+                });
+            }
+        });
+    }
+
+    /** Position advanced panel in viewport, anchored top-right */
+    function positionAdvPanel() {
+        if (!advPanelEl) return;
+        const pad = 12;
+        const panelW = 310;
+        // Default: top-right area, below topbar
+        let left = window.innerWidth - panelW - pad;
+        let top = 56;
+        // Ensure it stays on screen
+        left = Math.max(pad, Math.min(left, window.innerWidth - panelW - pad));
+        top = Math.max(pad, top);
+        advPanelEl.style.left = left + 'px';
+        advPanelEl.style.top = top + 'px';
+    }
+
+    /** Make the panel draggable by its titlebar */
+    function initAdvDrag() {
+        const titlebar = document.getElementById('adv-titlebar');
+        if (!titlebar) return;
+        let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+        titlebar.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('adv-close')) return;
+            dragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = parseInt(advPanelEl.style.left) || 0;
+            startTop  = parseInt(advPanelEl.style.top) || 0;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            let nx = startLeft + (e.clientX - startX);
+            let ny = startTop  + (e.clientY - startY);
+            // Clamp within viewport
+            const pw = advPanelEl.offsetWidth;
+            const ph = advPanelEl.offsetHeight;
+            nx = Math.max(0, Math.min(nx, window.innerWidth - pw));
+            ny = Math.max(0, Math.min(ny, window.innerHeight - ph));
+            advPanelEl.style.left = nx + 'px';
+            advPanelEl.style.top  = ny + 'px';
+        });
+
+        window.addEventListener('mouseup', () => { dragging = false; });
+    }
+
+    function closeAdvancedPanel() {
+        if (advPanelEl) { advPanelEl.remove(); advPanelEl = null; }
+    }
+
+    /** Show brief feedback text at bottom of the advanced panel */
+    function showAdvFeedback(msg) {
+        const el = document.getElementById('adv-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
 
     function init() {
+        // Load any saved advanced display settings from localStorage
+        loadAdvSettings();
+
         // Setup canvas size and DPI scaling
         resize();
         window.addEventListener('resize', resize);
