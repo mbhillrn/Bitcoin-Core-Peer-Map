@@ -56,6 +56,10 @@
     --logo-primary:   #4a90d9;
     --logo-accent:    #7ec8e3;
 
+    /* Panel backgrounds (allows per-theme override for transparency) */
+    --peer-panel-bg:  rgba(10, 14, 20, 0);
+    --peer-panel-blur: blur(12px);
+
     /* Misc */
     --radius:         6px;
     --transition:     0.2s ease;
@@ -163,6 +167,59 @@ html, body {
     align-items: center;
     gap: 12px;
     flex-shrink: 0;
+}
+/* Update available badge */
+.update-badge {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-data);
+    color: var(--warn);
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+.update-badge:hover {
+    color: #e8b84a;
+}
+.update-tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 200;
+    width: 280px;
+    padding: 10px 12px;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+    font-family: var(--font-ui);
+    white-space: normal;
+}
+.update-badge:hover .update-tooltip {
+    display: block;
+}
+.update-tooltip-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--warn);
+    margin-bottom: 6px;
+}
+.update-tooltip-changes {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 8px;
+    max-height: 80px;
+    overflow-y: auto;
+}
+.update-tooltip-restart {
+    font-size: 9px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    padding-top: 6px;
+    border-top: 1px solid rgba(88, 166, 255, 0.08);
 }
 .topbar-clock {
     font-size: 13px;
@@ -825,9 +882,9 @@ html, body {
 .peer-panel-handle {
     display: flex;
     flex-direction: column;
-    background: rgba(var(--surface-overlay-rgb), 0);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--peer-panel-bg);
+    backdrop-filter: var(--peer-panel-blur);
+    -webkit-backdrop-filter: var(--peer-panel-blur);
     border-top: 1px solid rgba(88, 166, 255, 0.12);
     cursor: pointer;
     user-select: none;
@@ -1147,9 +1204,9 @@ html, body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: rgba(var(--surface-overlay-rgb), 0);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--peer-panel-bg);
+    backdrop-filter: var(--peer-panel-blur);
+    -webkit-backdrop-filter: var(--peer-panel-blur);
 }
 
 /* ==========================================================
@@ -1732,6 +1789,7 @@ html, body {
     background: none;
     width: 100%;
     text-align: left;
+    position: relative;
 }
 .adv-theme-option:hover {
     color: var(--text-primary);
@@ -1741,12 +1799,6 @@ html, body {
     color: var(--accent);
     background: rgba(88, 166, 255, 0.1);
 }
-.adv-theme-option .adv-theme-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
 .adv-theme-option .adv-theme-check {
     margin-left: auto;
     font-size: 11px;
@@ -1755,6 +1807,82 @@ html, body {
 }
 .adv-theme-option.active .adv-theme-check {
     opacity: 1;
+}
+/* Hover tooltip for theme descriptions */
+.adv-theme-tip {
+    display: none;
+    position: absolute;
+    left: calc(100% + 6px);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+    width: 180px;
+    padding: 8px 10px;
+    background: var(--bg-raised);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 5px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+.adv-theme-option:hover .adv-theme-tip {
+    display: block;
+}
+.adv-theme-tip-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.adv-theme-tip-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    flex-shrink: 0;
+}
+.adv-theme-tip-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.adv-theme-tip-desc {
+    font-size: 9px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+/* Ocean preset toggle row */
+.adv-preset-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0 4px;
+}
+.adv-preset-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    min-width: 50px;
+    flex-shrink: 0;
+}
+.adv-preset-chip {
+    padding: 2px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid rgba(88, 166, 255, 0.15);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.adv-preset-chip:hover {
+    color: var(--text-primary);
+    border-color: rgba(88, 166, 255, 0.3);
+}
+.adv-preset-chip.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(88, 166, 255, 0.1);
 }
 .adv-section {
     font-size: 9px;

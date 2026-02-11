@@ -94,6 +94,7 @@
         // Ocean appearance
         oceanHue:       220,         // hue degrees (current near-black blue)
         oceanBright:     50,         // slider 0-100, 50 = original L=3.5%
+        oceanLightBlue: false,       // light blue preset active
         // Grid lines
         gridVisible:    true,
         gridThickness:   50,         // slider 0-100, 50 = default 0.5 lineWidth
@@ -113,7 +114,8 @@
     const THEMES = {
         dark: {
             label: 'Dark',
-            dot: '#0a0e14',     // preview dot colour for dropdown
+            dot: '#0a0e14',
+            desc: 'The original dark canvas dashboard. Ideal for low-light environments.',
             cssVars: {},   // empty = CSS defaults (the dark theme IS the default)
             advOverrides: {},
             nodeHighlight: { r: 255, g: 255, b: 255 },
@@ -122,6 +124,7 @@
         light: {
             label: 'Light',
             dot: '#e4e8ec',
+            desc: 'Bright, clean interface with green land and blue ocean. Best for well-lit rooms.',
             cssVars: {
                 '--bg-void':        '#e4e8ec',
                 '--bg-deep':        '#edf0f4',
@@ -154,16 +157,20 @@
                 '--section-color':  '#5a6570',
                 '--logo-primary':   '#2b5ea0',
                 '--logo-accent':    '#1a7a9e',
+                '--peer-panel-bg':  'rgba(255, 255, 255, 0.95)',
+                '--peer-panel-blur': 'blur(8px)',
             },
             advOverrides: {
                 landHue:     120,
                 landBright:  82,
-                oceanHue:    210,
-                oceanBright: 85,
+                oceanHue:    200,
+                oceanBright: 78,
                 gridHue:     220,
                 gridBright:  45,
                 borderHue:   215,
+                snowPoles:   94,
             },
+            oceanLightBlue: true,  // light blue ocean preset enabled by default
             nodeHighlight: { r: 30, g: 30, b: 30 },
             netColors: {
                 ipv4:  { r: 166, g: 124, b: 0   },
@@ -177,6 +184,7 @@
         oled: {
             label: 'OLED',
             dot: '#000000',
+            desc: 'Pure black for OLED screens. Maximum contrast, minimum power draw.',
             cssVars: {
                 '--bg-void':        '#000000',
                 '--bg-deep':        '#030303',
@@ -201,6 +209,7 @@
         midnight: {
             label: 'Midnight',
             dot: '#111b38',
+            desc: 'Deep indigo-blue tones with purple accents. Rich and atmospheric.',
             cssVars: {
                 '--bg-void':        '#060b1a',
                 '--bg-deep':        '#0b1226',
@@ -328,10 +337,13 @@
 
         // 4. Apply map appearance overrides to advSettings
         const mapKeys = ['landHue', 'landBright', 'oceanHue', 'oceanBright',
-                         'gridHue', 'gridBright', 'borderHue', 'gridThickness', 'borderScale'];
+                         'gridHue', 'gridBright', 'borderHue', 'gridThickness', 'borderScale',
+                         'snowPoles'];
         for (const k of mapKeys) {
             advSettings[k] = (theme.advOverrides[k] !== undefined) ? theme.advOverrides[k] : ADV_DEFAULTS[k];
         }
+        // Ocean light blue preset flag
+        advSettings.oceanLightBlue = !!theme.oceanLightBlue;
         updateAdvColors();
 
         // 5. Update NET_COLORS for canvas rendering if theme provides overrides
@@ -387,6 +399,7 @@
             '--ok', '--ok-bright', '--warn', '--err', '--err-bright',
             '--map-land', '--map-border', '--map-grid',
             '--title-accent', '--section-color', '--logo-primary', '--logo-accent',
+            '--peer-panel-bg', '--peer-panel-blur',
         ];
         for (const v of varsToCapture) {
             DARK_CSS_VARS[v] = style.getPropertyValue(v).trim();
@@ -1725,6 +1738,37 @@
     // Track previous internet state for toast notifications
     let _prevInternetState = 'green';
     let _lastRestoredToastTime = 0;
+
+    // ── Update checker — polls /api/update-check every 30 min ──
+    const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    const updateBadge = document.getElementById('update-badge');
+
+    async function checkForUpdate() {
+        if (!updateBadge) return;
+        try {
+            const resp = await fetch('/api/update-check');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data.available) {
+                const vText = 'Update Available! v' + data.current + ' \u2192 v' + data.latest;
+                updateBadge.style.display = '';
+                // Build inner HTML with hover tooltip
+                let tip = '<div class="update-tooltip">';
+                tip += '<div class="update-tooltip-title">v' + data.current + ' \u2192 v' + data.latest + '</div>';
+                if (data.changes) {
+                    tip += '<div class="update-tooltip-changes">' + data.changes.replace(/\n/g, '<br>') + '</div>';
+                }
+                tip += '<div class="update-tooltip-restart">To update: close this browser tab, press Ctrl+C in the terminal, then re-run <b>./da.sh</b></div>';
+                tip += '</div>';
+                updateBadge.innerHTML = vText + tip;
+            } else {
+                updateBadge.style.display = 'none';
+                updateBadge.innerHTML = '';
+            }
+        } catch (e) {
+            // silently ignore network errors
+        }
+    }
 
     async function fetchInfo() {
         try {
@@ -4812,9 +4856,16 @@
         for (const [key, theme] of Object.entries(THEMES)) {
             const active = (key === currentTheme) ? ' active' : '';
             h += '<div class="adv-theme-option' + active + '" data-theme="' + key + '">';
-            h += '<span class="adv-theme-dot" style="background:' + (theme.dot || '#888') + ';border:1px solid rgba(88,166,255,0.25)"></span>';
             h += '<span>' + theme.label + '</span>';
             h += '<span class="adv-theme-check">&#10003;</span>';
+            // Hover tooltip with color dot + description
+            h += '<div class="adv-theme-tip">';
+            h += '<div class="adv-theme-tip-head">';
+            h += '<span class="adv-theme-tip-dot" style="background:' + (theme.dot || '#888') + '"></span>';
+            h += '<span class="adv-theme-tip-name">' + theme.label + '</span>';
+            h += '</div>';
+            h += '<div class="adv-theme-tip-desc">' + (theme.desc || '') + '</div>';
+            h += '</div>';
             h += '</div>';
         }
         h += '</div>'; // end theme-list
@@ -4838,6 +4889,11 @@
 
         // ── Ocean ──
         h += '<div class="adv-section">Ocean</div>';
+        h += '<div class="adv-preset-row">';
+        h += '<span class="adv-preset-label">Preset</span>';
+        h += '<span class="adv-preset-chip' + (advSettings.oceanLightBlue ? '' : ' active') + '" id="adv-ocean-original">Original</span>';
+        h += '<span class="adv-preset-chip' + (advSettings.oceanLightBlue ? ' active' : '') + '" id="adv-ocean-lightblue">Light Blue</span>';
+        h += '</div>';
         h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
         h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
 
@@ -4936,8 +4992,30 @@
         bindAdvSlider('adv-land-hue', v => { advSettings.landHue = v; updateAdvColors(); });
         bindAdvSlider('adv-land-bright', v => { advSettings.landBright = v; updateAdvColors(); });
         bindAdvSlider('adv-snow-poles', v => { advSettings.snowPoles = v; });
-        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; updateAdvColors(); });
-        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; advSettings.oceanLightBlue = false; syncOceanPresetUI(); updateAdvColors(); });
+        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; advSettings.oceanLightBlue = false; syncOceanPresetUI(); updateAdvColors(); });
+
+        // ── Bind ocean preset chips ──
+        const oceanOrigBtn = document.getElementById('adv-ocean-original');
+        const oceanLBBtn   = document.getElementById('adv-ocean-lightblue');
+        if (oceanOrigBtn) oceanOrigBtn.addEventListener('click', () => {
+            advSettings.oceanLightBlue = false;
+            advSettings.oceanHue = ADV_DEFAULTS.oceanHue;
+            advSettings.oceanBright = ADV_DEFAULTS.oceanBright;
+            setSliderValue('adv-ocean-hue', advSettings.oceanHue);
+            setSliderValue('adv-ocean-bright', advSettings.oceanBright);
+            syncOceanPresetUI();
+            updateAdvColors();
+        });
+        if (oceanLBBtn) oceanLBBtn.addEventListener('click', () => {
+            advSettings.oceanLightBlue = true;
+            advSettings.oceanHue = 200;
+            advSettings.oceanBright = 78;
+            setSliderValue('adv-ocean-hue', advSettings.oceanHue);
+            setSliderValue('adv-ocean-bright', advSettings.oceanBright);
+            syncOceanPresetUI();
+            updateAdvColors();
+        });
         bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
@@ -5131,6 +5209,14 @@
     }
 
     /** Show brief feedback text at bottom of the advanced panel */
+    /** Sync ocean preset chip active states with current advSettings */
+    function syncOceanPresetUI() {
+        const orig = document.getElementById('adv-ocean-original');
+        const lb = document.getElementById('adv-ocean-lightblue');
+        if (orig) orig.classList.toggle('active', !advSettings.oceanLightBlue);
+        if (lb) lb.classList.toggle('active', !!advSettings.oceanLightBlue);
+    }
+
     function showAdvFeedback(msg) {
         const el = document.getElementById('adv-feedback');
         if (!el) return;
@@ -5176,6 +5262,10 @@
         // Fetch node info (block height, BTC price, etc) immediately, then poll
         fetchInfo();
         btcPriceTimer = setInterval(fetchInfo, CFG.infoPollInterval);
+
+        // Check for updates on startup and every 30 minutes
+        checkForUpdate();
+        setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL);
 
         // System stats + NET speed: real-time SSE stream (dual-EMA smoothed, ~250ms updates)
         connectSystemStream();
