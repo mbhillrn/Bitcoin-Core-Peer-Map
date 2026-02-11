@@ -114,6 +114,26 @@ def save_port_to_config(port: int):
         print(f"Warning: Could not save port to config: {e}")
 
 
+def save_config_value(key: str, value: str):
+    """Save a key=value pair to config.conf (same format as da.sh set_config)."""
+    try:
+        if CONFIG_FILE.exists():
+            lines = CONFIG_FILE.read_text().splitlines()
+            found = False
+            new_lines = []
+            for line in lines:
+                if line.startswith(f'{key}='):
+                    new_lines.append(f'{key}="{value}"')
+                    found = True
+                else:
+                    new_lines.append(line)
+            if not found:
+                new_lines.append(f'{key}="{value}"')
+            CONFIG_FILE.write_text('\n'.join(new_lines) + '\n')
+    except Exception as e:
+        print(f"Warning: Could not save {key} to config: {e}")
+
+
 def detect_active_firewall():
     """Detect if ufw or firewalld is active. Returns (name, is_active) or (None, False)"""
     try:
@@ -2039,6 +2059,20 @@ async def api_toggle_db_only():
         'success': True,
         'geo_db_only_mode': geo_db_only_mode,
         'message': 'API lookup disabled. To re-enable, return to this menu.' if geo_db_only_mode else 'API lookup re-enabled.'
+    }
+
+
+@app.post("/api/geodb/toggle-auto-update")
+async def api_toggle_auto_update():
+    """Toggle geo DB auto-update and persist to config.conf.
+    Syncs with the terminal menu's GEO_DB_AUTO_UPDATE setting."""
+    global geo_db_auto_update
+    geo_db_auto_update = not geo_db_auto_update
+    save_config_value('GEO_DB_AUTO_UPDATE', 'true' if geo_db_auto_update else 'false')
+    return {
+        'success': True,
+        'auto_update': geo_db_auto_update,
+        'message': 'Auto-update enabled' if geo_db_auto_update else 'Auto-update disabled'
     }
 
 

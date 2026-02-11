@@ -168,6 +168,22 @@ html, body {
     gap: 12px;
     flex-shrink: 0;
 }
+/* DB auto-update status (temporary messages in top bar) */
+.db-update-status {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-data);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    transition: opacity 0.3s ease;
+}
+.db-update-status.error {
+    color: var(--err);
+}
+.db-update-status.success {
+    color: var(--ok);
+}
+
 /* Update available badge */
 .update-badge {
     font-size: 11px;
@@ -2278,8 +2294,8 @@ body.theme-light .ro-link:hover {
     position: absolute;
     inset: 0;
     border-radius: 8px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(248,81,73,0.15);
+    border: 1px solid rgba(248,81,73,0.3);
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -2292,7 +2308,7 @@ body.theme-light .ro-link:hover {
     top: 50%;
     transform: translateY(-50%);
     border-radius: 50%;
-    background: var(--text-muted);
+    background: var(--err);
     transition: all 0.2s ease;
 }
 .geodb-toggle input:checked + .geodb-toggle-slider {
