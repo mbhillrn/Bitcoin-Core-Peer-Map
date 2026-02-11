@@ -103,6 +103,8 @@
         // Borders
         borderScale:     50,         // slider 0-100, 50 = current size; scales country+state borders
         borderHue:      212,         // hue degrees (accent blue, matches grid default)
+        // HUD overlay backgrounds
+        hudSolidBg:    false,        // when true, HUD overlays get semi-opaque backgrounds
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -171,6 +173,7 @@
                 snowPoles:   94,
             },
             oceanLightBlue: true,  // light blue ocean preset enabled by default
+            hudSolidBg: true,      // solid HUD backgrounds for readability on light ocean
             nodeHighlight: { r: 30, g: 30, b: 30 },
             netColors: {
                 ipv4:  { r: 166, g: 124, b: 0   },
@@ -344,6 +347,9 @@
         }
         // Ocean light blue preset flag
         advSettings.oceanLightBlue = !!theme.oceanLightBlue;
+        // HUD solid background flag
+        advSettings.hudSolidBg = !!theme.hudSolidBg;
+        applyHudSolidBg();
         updateAdvColors();
 
         // 5. Update NET_COLORS for canvas rendering if theme provides overrides
@@ -376,6 +382,9 @@
         if (advPanelEl) {
             syncOceanPresetUI();
             refreshAllAdvSliders();
+            // Sync HUD solid checkbox
+            const hsc = document.getElementById('adv-hud-solid');
+            if (hsc) hsc.checked = advSettings.hudSolidBg;
             // Update dropdown display
             const label = document.getElementById('adv-theme-current');
             if (label) label.textContent = theme.label;
@@ -483,6 +492,11 @@
         // Ice (constant cool gray)
         advColors.iceFill   = 'hsl(210, 15%, 82%)';
         advColors.iceStroke = 'hsl(210, 12%, 65%)';
+    }
+
+    /** Toggle solid backgrounds on HUD overlays (map-overlay, flight-deck, btc-price-bar, right-overlay) */
+    function applyHudSolidBg() {
+        document.body.classList.toggle('hud-solid', !!advSettings.hudSolidBg);
     }
 
     /** Convert HSL to "r,g,b" string for use in rgba() */
@@ -4931,6 +4945,14 @@
         h += advSliderHTML('adv-border-scale', 'Thickness', advSettings.borderScale, 0, 100, 1);
         h += advSliderHTML('adv-border-hue', 'Hue', advSettings.borderHue, 0, 360, 1, true);
 
+        // ── HUD ──
+        h += '<div class="adv-section">HUD Overlays</div>';
+        h += '<div class="adv-toggle-row">';
+        h += '<span class="adv-toggle-label">Solid Backgrounds</span>';
+        h += '<label class="dsp-toggle"><input type="checkbox" id="adv-hud-solid" ' + (advSettings.hudSolidBg ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
+        h += '</div>';
+        h += '<div class="adv-note">Adds backgrounds behind stats, price &amp; info panels for readability on lighter maps</div>';
+
         h += '</div>'; // end adv-body
 
         // Footer buttons + feedback area
@@ -5045,6 +5067,10 @@
         const gridVisCB = document.getElementById('adv-grid-visible');
         if (gridVisCB) gridVisCB.addEventListener('change', () => { advSettings.gridVisible = gridVisCB.checked; });
 
+        // ── Bind HUD solid background toggle ──
+        const hudSolidCB = document.getElementById('adv-hud-solid');
+        if (hudSolidCB) hudSolidCB.addEventListener('change', () => { advSettings.hudSolidBg = hudSolidCB.checked; applyHudSolidBg(); });
+
         // ── Apply blue-hue-slider class if Light Blue mode is active ──
         syncOceanPresetUI();
 
@@ -5066,6 +5092,9 @@
             refreshAllAdvSliders();
             const gv = document.getElementById('adv-grid-visible');
             if (gv) gv.checked = ADV_DEFAULTS.gridVisible;
+            const hs = document.getElementById('adv-hud-solid');
+            if (hs) hs.checked = ADV_DEFAULTS.hudSolidBg;
+            applyHudSolidBg();
             showAdvFeedback('All settings reset to defaults');
         });
 

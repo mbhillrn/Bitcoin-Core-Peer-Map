@@ -716,6 +716,29 @@ html, body {
     color: var(--text-primary);
     font-family: var(--font-data);
 }
+/* HUD solid backgrounds — toggled via body.hud-solid class */
+body.hud-solid .map-overlay,
+body.hud-solid .right-overlay {
+    background: rgba(var(--surface-overlay-rgb), 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+body.hud-solid .flight-deck .fd-content {
+    background: rgba(var(--surface-overlay-rgb), 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+}
+body.hud-solid .btc-price-bar {
+    background: rgba(var(--surface-overlay-rgb), 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 4px 12px;
+}
+
 /* Map controls — right side, below right overlay */
 .map-controls {
     position: fixed;
