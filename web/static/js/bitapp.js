@@ -163,8 +163,8 @@
             advOverrides: {
                 landHue:     120,
                 landBright:  82,
-                oceanHue:    200,
-                oceanBright: 78,
+                oceanHue:    210,     // center of light-blue range (190-230)
+                oceanBright: 50,      // midpoint = soft sky blue
                 gridHue:     220,
                 gridBright:  45,
                 borderHue:   215,
@@ -455,11 +455,22 @@
         advColors.landStroke = 'hsl(' + advSettings.landHue + ', 25%, ' + Math.min(70, ll + 8).toFixed(1) + '%)';
 
         // Ocean
-        const ol = Math.max(0.2, Math.min(30, brightnessToL(advSettings.oceanBright, 3.5)));
-        advColors.oceanFill  = 'hsl(' + advSettings.oceanHue + ', 33%, ' + ol.toFixed(1) + '%)';
-        advColors.lakeFill   = advColors.oceanFill;
-        advColors.lakeStroke = 'hsl(' + advSettings.oceanHue + ', 25%, ' + Math.min(40, ol + 10).toFixed(1) + '%)';
-
+        if (advSettings.oceanLightBlue) {
+            // Light Blue mode: soft sky-blue ocean
+            // Hue is constrained to 190-230 by the slider, brightness 0-100 maps to L 75%→50%
+            const lbHue = advSettings.oceanHue;  // already in 190-230 range
+            const lbL   = 75 - (advSettings.oceanBright / 100) * 25;  // 75% (pale) → 50% (medium)
+            const lbS   = 48 + (advSettings.oceanBright / 100) * 12;  // 48-60% saturation
+            advColors.oceanFill  = 'hsl(' + lbHue + ', ' + lbS.toFixed(1) + '%, ' + lbL.toFixed(1) + '%)';
+            advColors.lakeFill   = advColors.oceanFill;
+            advColors.lakeStroke = 'hsl(' + lbHue + ', ' + Math.max(30, lbS - 10).toFixed(1) + '%, ' + Math.max(40, lbL - 8).toFixed(1) + '%)';
+        } else {
+            // Original mode: near-black ocean with full hue range
+            const ol = Math.max(0.2, Math.min(30, brightnessToL(advSettings.oceanBright, 3.5)));
+            advColors.oceanFill  = 'hsl(' + advSettings.oceanHue + ', 33%, ' + ol.toFixed(1) + '%)';
+            advColors.lakeFill   = advColors.oceanFill;
+            advColors.lakeStroke = 'hsl(' + advSettings.oceanHue + ', 25%, ' + Math.min(40, ol + 10).toFixed(1) + '%)';
+        }
         // Grid — alpha range: 0.005 (slider=0) to 0.04 (slider=50) to 0.35 (slider=100)
         const ga = Math.min(0.5, 0.04 * Math.pow(2, (advSettings.gridBright - 50) / 18));
         advColors.gridColor = 'hsla(' + advSettings.gridHue + ', 100%, 67%, ' + ga.toFixed(4) + ')';
@@ -4894,7 +4905,14 @@
         h += '<span class="adv-preset-chip' + (advSettings.oceanLightBlue ? '' : ' active') + '" id="adv-ocean-original">Original</span>';
         h += '<span class="adv-preset-chip' + (advSettings.oceanLightBlue ? ' active' : '') + '" id="adv-ocean-lightblue">Light Blue</span>';
         h += '</div>';
-        h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
+        // Hue slider range depends on mode: Light Blue = 190-230, Original = 0-360
+        if (advSettings.oceanLightBlue) {
+            const clampedHue = Math.max(190, Math.min(230, advSettings.oceanHue));
+            h += advSliderHTML('adv-ocean-hue', 'Hue', clampedHue, 190, 230, 1, false);
+            // Swap class after build — blue-hue-slider applied by syncOceanPresetUI on bind
+        } else {
+            h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
+        }
         h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
 
         // ── Lat/Lon Grid ──
@@ -4992,8 +5010,8 @@
         bindAdvSlider('adv-land-hue', v => { advSettings.landHue = v; updateAdvColors(); });
         bindAdvSlider('adv-land-bright', v => { advSettings.landBright = v; updateAdvColors(); });
         bindAdvSlider('adv-snow-poles', v => { advSettings.snowPoles = v; });
-        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; advSettings.oceanLightBlue = false; syncOceanPresetUI(); updateAdvColors(); });
-        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; advSettings.oceanLightBlue = false; syncOceanPresetUI(); updateAdvColors(); });
+        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; updateAdvColors(); });
 
         // ── Bind ocean preset chips ──
         const oceanOrigBtn = document.getElementById('adv-ocean-original');
@@ -5002,18 +5020,18 @@
             advSettings.oceanLightBlue = false;
             advSettings.oceanHue = ADV_DEFAULTS.oceanHue;
             advSettings.oceanBright = ADV_DEFAULTS.oceanBright;
+            syncOceanPresetUI();            // restores hue slider to 0-360
             setSliderValue('adv-ocean-hue', advSettings.oceanHue);
             setSliderValue('adv-ocean-bright', advSettings.oceanBright);
-            syncOceanPresetUI();
             updateAdvColors();
         });
         if (oceanLBBtn) oceanLBBtn.addEventListener('click', () => {
             advSettings.oceanLightBlue = true;
-            advSettings.oceanHue = 200;
-            advSettings.oceanBright = 78;
+            advSettings.oceanHue = 210;     // center of blue range
+            advSettings.oceanBright = 50;   // midpoint — soft sky blue
+            syncOceanPresetUI();            // constrains hue slider to 190-230
             setSliderValue('adv-ocean-hue', advSettings.oceanHue);
             setSliderValue('adv-ocean-bright', advSettings.oceanBright);
-            syncOceanPresetUI();
             updateAdvColors();
         });
         bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
@@ -5025,6 +5043,9 @@
         // ── Bind grid visibility toggle ──
         const gridVisCB = document.getElementById('adv-grid-visible');
         if (gridVisCB) gridVisCB.addEventListener('change', () => { advSettings.gridVisible = gridVisCB.checked; });
+
+        // ── Apply blue-hue-slider class if Light Blue mode is active ──
+        syncOceanPresetUI();
 
         // ── Bind slider labels as reset-to-default links ──
         bindLabelResets(panel);
@@ -5040,6 +5061,7 @@
             CFG.pulseSpeedInbound  = 0.0014;
             CFG.pulseSpeedOutbound = 0.0026;
             updateAdvColors();
+            syncOceanPresetUI();
             refreshAllAdvSliders();
             const gv = document.getElementById('adv-grid-visible');
             if (gv) gv.checked = ADV_DEFAULTS.gridVisible;
@@ -5208,13 +5230,28 @@
         if (advPanelEl) { advPanelEl.remove(); advPanelEl = null; }
     }
 
-    /** Show brief feedback text at bottom of the advanced panel */
-    /** Sync ocean preset chip active states with current advSettings */
+    /** Sync ocean preset chip active states + slider range with current advSettings */
     function syncOceanPresetUI() {
         const orig = document.getElementById('adv-ocean-original');
         const lb = document.getElementById('adv-ocean-lightblue');
         if (orig) orig.classList.toggle('active', !advSettings.oceanLightBlue);
         if (lb) lb.classList.toggle('active', !!advSettings.oceanLightBlue);
+
+        // Change hue slider range: Light Blue = 190-230 (blue only), Original = 0-360
+        const hueSlider = document.getElementById('adv-ocean-hue');
+        if (hueSlider) {
+            if (advSettings.oceanLightBlue) {
+                hueSlider.min = 190;
+                hueSlider.max = 230;
+                hueSlider.classList.remove('hue-slider');
+                hueSlider.classList.add('blue-hue-slider');
+            } else {
+                hueSlider.min = 0;
+                hueSlider.max = 360;
+                hueSlider.classList.remove('blue-hue-slider');
+                hueSlider.classList.add('hue-slider');
+            }
+        }
     }
 
     function showAdvFeedback(msg) {

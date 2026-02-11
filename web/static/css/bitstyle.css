@@ -1962,6 +1962,11 @@ html, body {
         hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
         hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
 }
+.adv-slider.blue-hue-slider {
+    background: linear-gradient(to right,
+        hsl(190,55%,62%), hsl(200,55%,62%), hsl(210,55%,62%),
+        hsl(220,55%,62%), hsl(230,55%,62%));
+}
 .adv-toggle-row {
     display: flex;
     align-items: center;
