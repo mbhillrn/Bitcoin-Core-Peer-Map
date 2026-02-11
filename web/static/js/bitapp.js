@@ -1892,7 +1892,8 @@
 
     /** Start or stop the hourly DB auto-update timer based on current setting. */
     function syncDbAutoUpdateTimer() {
-        const autoOn = lastNodeInfo && lastNodeInfo.geo_db_stats && lastNodeInfo.geo_db_stats.auto_update;
+        const stats = lastNodeInfo && lastNodeInfo.geo_db_stats;
+        const autoOn = stats && stats.auto_lookup && stats.auto_update;
         if (autoOn && !dbAutoUpdateTimer) {
             dbAutoUpdateTimer = setInterval(performDbAutoUpdate, DB_AUTO_UPDATE_INTERVAL);
         } else if (!autoOn && dbAutoUpdateTimer) {

@@ -2372,7 +2372,6 @@ def main():
     print(f"  {C_BLUE}{'─' * logo_w}{C_RESET}")
     print(f"  Created by mbhillrn")
     print(f"  MIT License – Free to use, modify, and distribute")
-    print(f"  {C_BOLD}{C_YELLOW}Support (btc):{C_RESET} {C_GREEN}bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5{C_RESET}")
     print(f"{C_BLUE}{'═' * line_w}{C_RESET}")
 
     # Detect if this process was launched from an SSH session.

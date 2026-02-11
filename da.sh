@@ -82,7 +82,6 @@ EOF
     echo -e "  ────────────────────────────────────────────────────"
     echo -e "  ${T_DIM}Created by mbhillrn${RST}"
     echo -e "  ${T_DIM}MIT License - Free to use, modify, and distribute${RST}"
-    echo -e "  ${T_DIM}Support (btc): bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5${RST}"
     echo ""
 }
 
