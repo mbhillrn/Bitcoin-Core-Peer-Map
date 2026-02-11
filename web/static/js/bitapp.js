@@ -1421,6 +1421,15 @@
         if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openDisplaySettingsPopup(el); });
     });
 
+    // Right overlay: DISPLAY SETTINGS link → open settings popup
+    const roDisplaySettingsLink = document.getElementById('ro-display-settings-link');
+    if (roDisplaySettingsLink) {
+        roDisplaySettingsLink.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDisplaySettingsPopup(roDisplaySettingsLink);
+        });
+    }
+
     // ═══════════════════════════════════════════════════════════
     // PRIVATE NETWORK POPUP (for peer list clicks)
     // ═══════════════════════════════════════════════════════════
@@ -2876,9 +2885,11 @@
             if (lastNodeInfo.blockchain && lastNodeInfo.blockchain.ibd) {
                 moStatus.textContent = 'Syncing (IBD)';
                 moStatus.style.color = 'var(--warn)';
+                moStatus.title = 'Initial Block Download in progress — node is still catching up to the network';
             } else {
                 moStatus.textContent = 'Synced';
                 moStatus.style.color = 'var(--ok)';
+                moStatus.title = 'IBD Completed — node is fully synced with the network';
             }
         }
 
