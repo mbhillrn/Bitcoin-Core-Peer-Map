@@ -1769,7 +1769,7 @@
     let _lastRestoredToastTime = 0;
 
     // ── Update checker — polls /api/update-check every 30 min ──
-    const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    const UPDATE_CHECK_INTERVAL = 60 * 1000; // 1 minute
     const updateBadge = document.getElementById('update-badge');
 
     async function checkForUpdate() {
