@@ -704,22 +704,19 @@
             if (stats.oldest_age_days != null) html += mrow('Oldest Entry', stats.oldest_age_days + ' days', 'Age of the oldest geolocation record', `${stats.oldest_age_days} days old`);
             if (stats.path) html += `<div class="modal-row"><span class="modal-label" title="File system path to the database">Path</span><span class="modal-val" style="font-size:9px;max-width:260px" title="${stats.path}">${stats.path}</span></div>`;
             const alVal = stats.auto_lookup ? 'On' : 'Off';
-            html += mrow('Auto-lookup', alVal, 'Automatically look up geolocation for new peer IPs', alVal, stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn');
+            html += mrow('Auto-resolve', alVal, 'Master switch — enables the GeoIP system that resolves peer IPs to locations on the map', alVal, stats.auto_lookup ? 'modal-val-ok' : 'modal-val-warn');
             const auVal = stats.auto_update ? 'On' : 'Off';
             html += mrow('Auto-update', auVal, 'Automatically refresh stale geolocation entries', auVal, stats.auto_update ? 'modal-val-ok' : 'modal-val-warn');
-            // Database-only mode toggle
+            // API Lookup toggle switch
             const dbOnly = stats.db_only_mode || false;
-            const dbOnlyVal = dbOnly ? 'On' : 'Off';
-            html += `<div class="modal-row"><span class="modal-label" title="When enabled, only use cached database entries — no API lookups">API Lookup</span><span class="modal-val ${dbOnly ? 'modal-val-warn' : 'modal-val-ok'}" title="${dbOnly ? 'API lookup is disabled — using database only' : 'API lookups are active'}">${dbOnly ? 'Off (DB Only)' : 'On'}</span><button class="geodb-toggle-btn" id="geodb-dbonly-toggle" style="margin-left:8px;font-size:9px;padding:2px 8px;border:1px solid rgba(255,255,255,0.1);border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-secondary);cursor:pointer">${dbOnly ? 'Enable API' : 'Disable API'}</button></div>`;
-            if (dbOnly) {
-                html += `<div style="color:var(--warn);font-size:9px;padding:0 12px 8px;opacity:0.8">API lookup is disabled. To re-enable, click "Enable API" above.</div>`;
-            }
+            const apiOn = !dbOnly;
+            html += `<div class="modal-row"><span class="modal-label" title="When ON, unknown IPs are looked up via ip-api.com. When OFF, only cached database entries are used.">API Lookup</span><span class="modal-val" style="display:flex;align-items:center;gap:6px"><span class="${apiOn ? 'modal-val-ok' : 'modal-val-warn'}" title="${apiOn ? 'Unknown IPs will be resolved via ip-api.com' : 'Only using cached database entries — no external API calls'}">${apiOn ? 'On' : 'Off'}</span><label class="geodb-toggle" title="${apiOn ? 'Click to disable API lookups' : 'Click to enable API lookups'}"><input type="checkbox" id="geodb-dbonly-toggle" ${apiOn ? 'checked' : ''}><span class="geodb-toggle-slider"></span></label></span></div>`;
             html += '<button class="geodb-update-btn" id="geodb-update-btn">Update Database</button>';
             html += '<div class="geodb-result" id="geodb-result"></div>';
             body.innerHTML = html;
 
             // DB-only toggle handler
-            document.getElementById('geodb-dbonly-toggle').addEventListener('click', async () => {
+            document.getElementById('geodb-dbonly-toggle').addEventListener('change', async () => {
                 try {
                     const resp = await fetch('/api/geodb/toggle-db-only', { method: 'POST' });
                     const data = await resp.json();

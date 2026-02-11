@@ -153,7 +153,7 @@ RETRY_INTERVALS = [86400, 259200, 604800, 604800]
 
 # Internet connectivity tracking
 internet_state = 'green'               # 'green', 'yellow', 'red'
-internet_state_lock = threading.Lock()
+internet_state_lock = threading.RLock()
 internet_consecutive_ok = 0            # Consecutive successful pings (need 4 for green)
 internet_failure_start = None          # Timestamp when failures began (for yellow→red)
 connectivity_thread = None             # Reference to checker thread
@@ -1775,7 +1775,7 @@ async def api_mempool(currency: str = "USD"):
 
     # Also fetch BTC price for total fees display (skip if offline)
     if internet_state == 'red':
-        if last_known_price:
+        if last_known_price and last_price_currency == currency:
             result['btc_price'] = float(last_known_price)
     else:
         try:
@@ -1790,11 +1790,11 @@ async def api_mempool(currency: str = "USD"):
             else:
                 globals()['last_price_error'] = f"Coinbase API returned HTTP {response.status_code}"
                 on_network_failure()
-                if last_known_price:
+                if last_known_price and last_price_currency == currency:
                     result['btc_price'] = float(last_known_price)
         except Exception:
             on_network_failure()
-            if last_known_price:
+            if last_known_price and last_price_currency == currency:
                 result['btc_price'] = float(last_known_price)
 
     return result
