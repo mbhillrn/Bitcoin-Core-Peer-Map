@@ -94,12 +94,14 @@
         // Ocean appearance
         oceanHue:       220,         // hue degrees (current near-black blue)
         oceanBright:     50,         // slider 0-100, 50 = original L=3.5%
-        // Grid lines & borders
+        // Grid lines
         gridVisible:    true,
         gridThickness:   50,         // slider 0-100, 50 = default 0.5 lineWidth
         gridHue:        212,         // hue degrees (accent blue)
         gridBright:      50,         // slider 0-100, 50 = default alpha 0.04
+        // Borders
         borderScale:     50,         // slider 0-100, 50 = current size; scales country+state borders
+        borderHue:      212,         // hue degrees (accent blue, matches grid default)
     };
 
     // Working copy of advanced settings (mutated by sliders, saved to localStorage)
@@ -116,6 +118,7 @@
         lakeStroke: '#1a2230',
         gridColor:  'rgba(88,166,255,0.04)',
         gridWidth:  0.5,
+        borderRGB:  '88,166,255',   // border colour as r,g,b for rgba()
     };
 
     // Polar polygon classification (populated when world geometry loads)
@@ -145,9 +148,20 @@
         advColors.gridColor = 'hsla(' + advSettings.gridHue + ', 100%, 67%, ' + ga.toFixed(4) + ')';
         advColors.gridWidth = 0.2 + (advSettings.gridThickness / 100) * 1.8;
 
+        // Borders — convert hue to r,g,b at S=100%, L=67% (same as accent blue default)
+        advColors.borderRGB = hslToRgbStr(advSettings.borderHue, 100, 67);
+
         // Ice (constant cool gray)
         advColors.iceFill   = 'hsl(210, 15%, 82%)';
         advColors.iceStroke = 'hsl(210, 12%, 65%)';
+    }
+
+    /** Convert HSL to "r,g,b" string for use in rgba() */
+    function hslToRgbStr(h, s, l) {
+        s /= 100; l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+        return Math.round(f(0) * 255) + ',' + Math.round(f(8) * 255) + ',' + Math.round(f(4) * 255);
     }
 
     /** Classify world polygons into polar vs non-polar for "Snow the Poles" */
@@ -1968,13 +1982,12 @@
         if (!bordersReady) return;
         const bScale = advSettings.borderScale / 50;   // 0→0, 50→1 (default), 100→2
         if (bScale < 0.01) return;                      // slider at 0 = hidden
-        // Visible alpha at all zoom levels; brighter when zoomed in
         const alpha = (0.25 + clamp((view.zoom - 1) / 3, 0, 1) * 0.15) * bScale;
-        // Stroke width scales with zoom so borders never become sub-pixel
         const strokeW = Math.max(0.5, 0.8 * view.zoom * bScale);
+        const rgb = advColors.borderRGB;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            drawLineSet(borderLines, `rgba(88,166,255,${alpha})`, strokeW, off);
+            drawLineSet(borderLines, `rgba(${rgb},${alpha})`, strokeW, off);
         }
     }
 
@@ -2020,13 +2033,12 @@
         if (!statesReady || view.zoom < ZOOM_SHOW_STATES) return;
         const bScale = advSettings.borderScale / 50;
         if (bScale < 0.01) return;
-        // Fade in from threshold, cap at solid visibility
         const alpha = clamp((view.zoom - ZOOM_SHOW_STATES) / 1.5, 0, 1) * 0.20 * bScale;
-        // Stroke width scales with zoom, minimum 0.5 screen pixel
         const strokeW = Math.max(0.5, 0.5 * view.zoom * bScale);
+        const rgb = advColors.borderRGB;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            drawLineSet(stateLines, `rgba(88,166,255,${alpha})`, strokeW, off);
+            drawLineSet(stateLines, `rgba(${rgb},${alpha})`, strokeW, off);
         }
     }
 
@@ -4497,30 +4509,36 @@
         h += advSliderHTML('adv-land-hue', 'Hue', advSettings.landHue, 0, 360, 1, true);
         h += advSliderHTML('adv-land-bright', 'Brightness', advSettings.landBright, 0, 100, 1);
         h += advSliderHTML('adv-snow-poles', 'Snow the Poles', advSettings.snowPoles, 0, 100, 1, false, true);
+        h += '<div class="adv-note">*Use Peer table <span style="font-size:11px">&#9881;</span> below to adjust its transparency</div>';
 
         // ── Ocean ──
         h += '<div class="adv-section">Ocean</div>';
         h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
         h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
 
-        // ── Grid & Borders ──
-        h += '<div class="adv-section">Grid &amp; Borders</div>';
+        // ── Lat/Lon Grid ──
+        h += '<div class="adv-section">Lat/Lon Grid</div>';
         h += '<div class="adv-toggle-row">';
-        h += '<span class="adv-toggle-label adv-reset-link" data-default-key="gridVisible" title="Click to reset">Grid Visible</span>';
+        h += '<span class="adv-toggle-label adv-reset-link" data-default-key="gridVisible" title="Click to reset">Visible</span>';
         h += '<label class="dsp-toggle"><input type="checkbox" id="adv-grid-visible" ' + (advSettings.gridVisible ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
         h += '</div>';
-        h += advSliderHTML('adv-grid-thick', 'Grid Thickness', advSettings.gridThickness, 0, 100, 1);
-        h += advSliderHTML('adv-grid-hue', 'Grid Hue', advSettings.gridHue, 0, 360, 1, true);
-        h += advSliderHTML('adv-grid-bright', 'Grid Brightness', advSettings.gridBright, 0, 100, 1);
-        h += advSliderHTML('adv-border-scale', 'Borders', advSettings.borderScale, 0, 100, 1);
+        h += advSliderHTML('adv-grid-thick', 'Thickness', advSettings.gridThickness, 0, 100, 1);
+        h += advSliderHTML('adv-grid-hue', 'Hue', advSettings.gridHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-grid-bright', 'Brightness', advSettings.gridBright, 0, 100, 1);
+
+        // ── Borders ──
+        h += '<div class="adv-section">Borders</div>';
+        h += advSliderHTML('adv-border-scale', 'Thickness', advSettings.borderScale, 0, 100, 1);
+        h += advSliderHTML('adv-border-hue', 'Hue', advSettings.borderHue, 0, 360, 1, true);
 
         h += '</div>'; // end adv-body
 
-        // Footer buttons
+        // Footer buttons + feedback area
         h += '<div class="adv-footer">';
         h += '<button class="adv-btn adv-btn-reset" id="adv-reset">Reset</button>';
         h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves across sessions. To save for this session only, just close the menu.">Permanent Save</button>';
         h += '</div>';
+        h += '<div class="adv-feedback" id="adv-feedback"></div>';
 
         panel.innerHTML = h;
         document.body.appendChild(panel);
@@ -4556,6 +4574,7 @@
         bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
         bindAdvSlider('adv-border-scale', v => { advSettings.borderScale = v; });
+        bindAdvSlider('adv-border-hue', v => { advSettings.borderHue = v; updateAdvColors(); });
 
         // ── Bind grid visibility toggle ──
         const gridVisCB = document.getElementById('adv-grid-visible');
@@ -4576,16 +4595,13 @@
             refreshAllAdvSliders();
             const gv = document.getElementById('adv-grid-visible');
             if (gv) gv.checked = ADV_DEFAULTS.gridVisible;
+            showAdvFeedback('All settings reset to defaults');
         });
 
         // ── Save button ──
         document.getElementById('adv-save').addEventListener('click', () => {
             saveAdvSettings();
-            const saveBtn = document.getElementById('adv-save');
-            if (saveBtn) {
-                saveBtn.textContent = 'Saved!';
-                setTimeout(() => { saveBtn.textContent = 'Permanent Save'; }, 1200);
-            }
+            showAdvFeedback('Settings saved permanently');
         });
     }
 
@@ -4639,6 +4655,7 @@
         setSliderValue('adv-grid-hue', advSettings.gridHue);
         setSliderValue('adv-grid-bright', advSettings.gridBright);
         setSliderValue('adv-border-scale', advSettings.borderScale);
+        setSliderValue('adv-border-hue', advSettings.borderHue);
     }
 
     /** Map slider IDs to their advSettings key and default value */
@@ -4657,6 +4674,7 @@
         'adv-grid-hue':    { key: 'gridHue',         recolor: true },
         'adv-grid-bright': { key: 'gridBright',      recolor: true },
         'adv-border-scale':{ key: 'borderScale' },
+        'adv-border-hue':  { key: 'borderHue',      recolor: true },
     };
 
     /** Bind every .adv-reset-link label to reset its slider/toggle to default on click */
@@ -4739,6 +4757,16 @@
 
     function closeAdvancedPanel() {
         if (advPanelEl) { advPanelEl.remove(); advPanelEl = null; }
+    }
+
+    /** Show brief feedback text at bottom of the advanced panel */
+    function showAdvFeedback(msg) {
+        const el = document.getElementById('adv-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2000);
     }
 
     // ═══════════════════════════════════════════════════════════

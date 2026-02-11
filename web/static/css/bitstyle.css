@@ -1769,6 +1769,25 @@ html, body {
     color: var(--ok-bright);
 }
 .adv-btn-save:hover { background: rgba(63, 185, 80, 0.18); border-color: var(--ok); }
+/* Feedback text below footer buttons */
+.adv-feedback {
+    text-align: center;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--ok-bright);
+    padding: 0 12px 6px;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    min-height: 16px;
+}
+/* Asterisk note below Snow the Poles */
+.adv-note {
+    font-size: 8px;
+    color: var(--text-muted);
+    padding: 1px 0 2px;
+    line-height: 1.3;
+}
+
 /* ==========================================================
    14c. SYSTEM INFO MODAL — Radio & Manual NET fields
    ========================================================== */
