@@ -1674,6 +1674,19 @@ html, body {
     min-width: 80px;
     flex-shrink: 0;
 }
+/* Clickable labels that reset the slider to its default */
+.adv-reset-link {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(88, 166, 255, 0.3);
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.adv-reset-link:hover {
+    color: var(--accent);
+    text-decoration-color: var(--accent);
+}
 .adv-slider {
     flex: 1;
     -webkit-appearance: none;
@@ -1712,29 +1725,6 @@ html, body {
     background: linear-gradient(to right,
         hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
         hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
-}
-.adv-preset-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 0;
-}
-.adv-preset-btn {
-    font-size: 9px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border: 1px solid rgba(88, 166, 255, 0.2);
-    border-radius: 3px;
-    background: rgba(88, 166, 255, 0.06);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.adv-preset-btn:hover { background: rgba(88, 166, 255, 0.15); }
-.adv-preset-btn.active {
-    background: rgba(88, 166, 255, 0.2);
-    border-color: var(--accent);
-    color: var(--accent);
 }
 .adv-toggle-row {
     display: flex;
@@ -1779,15 +1769,6 @@ html, body {
     color: var(--ok-bright);
 }
 .adv-btn-save:hover { background: rgba(63, 185, 80, 0.18); border-color: var(--ok); }
-/* Color swatch preview */
-.adv-swatch {
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    border: 1px solid rgba(255,255,255,0.15);
-    flex-shrink: 0;
-}
-
 /* ==========================================================
    14c. SYSTEM INFO MODAL — Radio & Manual NET fields
    ========================================================== */

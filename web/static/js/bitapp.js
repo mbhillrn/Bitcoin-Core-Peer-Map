@@ -90,12 +90,10 @@
         // Land appearance
         landHue:        215,         // hue degrees (current dark blue-gray)
         landBright:      50,         // slider 0-100, 50 = original L=12%
-        landPreset:     'current',   // 'current' or 'green'
-        snowPoles:      false,       // ice-colored polar regions
+        snowPoles:       0,          // slider 0-100, 0 = off, 100 = full ice
         // Ocean appearance
         oceanHue:       220,         // hue degrees (current near-black blue)
         oceanBright:     50,         // slider 0-100, 50 = original L=3.5%
-        oceanPreset:    'current',   // 'current' or 'blue'
         // Grid lines
         gridVisible:    true,
         gridThickness:   50,         // slider 0-100, 50 = default 0.5 lineWidth
@@ -141,8 +139,8 @@
         advColors.lakeFill   = advColors.oceanFill;
         advColors.lakeStroke = 'hsl(' + advSettings.oceanHue + ', 25%, ' + Math.min(40, ol + 10).toFixed(1) + '%)';
 
-        // Grid
-        const ga = 0.04 * Math.pow(2, (advSettings.gridBright - 50) / 25);
+        // Grid — alpha range: 0.005 (slider=0) to 0.04 (slider=50) to 0.35 (slider=100)
+        const ga = Math.min(0.5, 0.04 * Math.pow(2, (advSettings.gridBright - 50) / 18));
         advColors.gridColor = 'hsla(' + advSettings.gridHue + ', 100%, 67%, ' + ga.toFixed(4) + ')';
         advColors.gridWidth = 0.2 + (advSettings.gridThickness / 100) * 1.8;
 
@@ -170,13 +168,14 @@
     function loadAdvSettings() {
         try {
             const raw = localStorage.getItem('mbcore_adv_display');
-            if (!raw) return;
-            const saved = JSON.parse(raw);
-            for (const k of Object.keys(ADV_DEFAULTS)) {
-                if (saved[k] !== undefined) advSettings[k] = saved[k];
+            if (raw) {
+                const saved = JSON.parse(raw);
+                for (const k of Object.keys(ADV_DEFAULTS)) {
+                    if (saved[k] !== undefined) advSettings[k] = saved[k];
+                }
             }
         } catch (e) { /* ignore corrupt data */ }
-        // Apply loaded pulse settings to CFG
+        // Always sync CFG from advSettings (whether loaded or defaults)
         CFG.shimmerStrength    = advSettings.shimmerStrength;
         CFG.pulseDepthInbound  = advSettings.pulseDepthIn;
         CFG.pulseDepthOutbound = advSettings.pulseDepthOut;
@@ -1922,15 +1921,17 @@
     function drawLandmasses() {
         if (!worldReady) return;
         const offsets = getWrapOffsets();
-        if (advSettings.snowPoles && polarPolygons.length > 0) {
+        // Draw all land with land colour
+        for (const off of offsets) {
+            drawPolygonSet(worldPolygons, advColors.landFill, advColors.landStroke, off);
+        }
+        // Overdraw polar regions with ice at snowPoles opacity (0-100 slider → 0-1 alpha)
+        if (advSettings.snowPoles > 0 && polarPolygons.length > 0) {
+            ctx.globalAlpha = advSettings.snowPoles / 100;
             for (const off of offsets) {
-                drawPolygonSet(nonPolarPolygons, advColors.landFill, advColors.landStroke, off);
                 drawPolygonSet(polarPolygons, advColors.iceFill, advColors.iceStroke, off);
             }
-        } else {
-            for (const off of offsets) {
-                drawPolygonSet(worldPolygons, advColors.landFill, advColors.landStroke, off);
-            }
+            ctx.globalAlpha = 1;
         }
     }
 
@@ -4488,34 +4489,19 @@
 
         // ── Land ──
         h += '<div class="adv-section">Land</div>';
-        h += '<div class="adv-preset-row">';
-        h += '<span class="adv-slider-label">Preset</span>';
-        h += '<button class="adv-preset-btn' + (advSettings.landPreset === 'current' ? ' active' : '') + '" data-preset="land-current">Current</button>';
-        h += '<button class="adv-preset-btn' + (advSettings.landPreset === 'green' ? ' active' : '') + '" data-preset="land-green">Green</button>';
-        h += '<span class="adv-swatch" id="adv-land-swatch"></span>';
-        h += '</div>';
         h += advSliderHTML('adv-land-hue', 'Hue', advSettings.landHue, 0, 360, 1, true);
         h += advSliderHTML('adv-land-bright', 'Brightness', advSettings.landBright, 0, 100, 1);
-        h += '<div class="adv-toggle-row">';
-        h += '<span class="adv-toggle-label">Snow the Poles</span>';
-        h += '<label class="dsp-toggle"><input type="checkbox" id="adv-snow-poles" ' + (advSettings.snowPoles ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
-        h += '</div>';
+        h += advSliderHTML('adv-snow-poles', 'Snow the Poles', advSettings.snowPoles, 0, 100, 1);
 
         // ── Ocean ──
         h += '<div class="adv-section">Ocean</div>';
-        h += '<div class="adv-preset-row">';
-        h += '<span class="adv-slider-label">Preset</span>';
-        h += '<button class="adv-preset-btn' + (advSettings.oceanPreset === 'current' ? ' active' : '') + '" data-preset="ocean-current">Current</button>';
-        h += '<button class="adv-preset-btn' + (advSettings.oceanPreset === 'blue' ? ' active' : '') + '" data-preset="ocean-blue">Blue</button>';
-        h += '<span class="adv-swatch" id="adv-ocean-swatch"></span>';
-        h += '</div>';
         h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
         h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
 
         // ── Grid Lines ──
         h += '<div class="adv-section">Grid Lines</div>';
         h += '<div class="adv-toggle-row">';
-        h += '<span class="adv-toggle-label">Visible</span>';
+        h += '<span class="adv-toggle-label adv-reset-link" data-default-key="gridVisible" title="Click to reset">Visible</span>';
         h += '<label class="dsp-toggle"><input type="checkbox" id="adv-grid-visible" ' + (advSettings.gridVisible ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
         h += '</div>';
         h += advSliderHTML('adv-grid-thick', 'Thickness', advSettings.gridThickness, 0, 100, 1);
@@ -4527,7 +4513,7 @@
         // Footer buttons
         h += '<div class="adv-footer">';
         h += '<button class="adv-btn adv-btn-reset" id="adv-reset">Reset</button>';
-        h += '<button class="adv-btn adv-btn-save" id="adv-save">Save</button>';
+        h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves across sessions. To save for this session only, just close the menu.">Permanent Save</button>';
         h += '</div>';
 
         panel.innerHTML = h;
@@ -4536,9 +4522,6 @@
 
         // ── Position: top-right, offset from edge ──
         positionAdvPanel();
-
-        // Update swatches
-        updateAdvSwatches();
 
         // ── Bind close ──
         document.getElementById('adv-close').addEventListener('click', closeAdvancedPanel);
@@ -4558,46 +4541,21 @@
             advSettings.pulseSpeedOut = v;
             CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (v - 50) / 30);
         });
-        bindAdvSlider('adv-land-hue', v => { advSettings.landHue = v; advSettings.landPreset = ''; updateAdvColors(); updateAdvSwatches(); updatePresetBtns(); });
-        bindAdvSlider('adv-land-bright', v => { advSettings.landBright = v; updateAdvColors(); updateAdvSwatches(); });
-        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; advSettings.oceanPreset = ''; updateAdvColors(); updateAdvSwatches(); updatePresetBtns(); });
-        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; updateAdvColors(); updateAdvSwatches(); });
+        bindAdvSlider('adv-land-hue', v => { advSettings.landHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-land-bright', v => { advSettings.landBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-snow-poles', v => { advSettings.snowPoles = v; });
+        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
 
-        // ── Bind toggles ──
-        const snowCB = document.getElementById('adv-snow-poles');
-        if (snowCB) snowCB.addEventListener('change', () => { advSettings.snowPoles = snowCB.checked; });
+        // ── Bind grid visibility toggle ──
         const gridVisCB = document.getElementById('adv-grid-visible');
         if (gridVisCB) gridVisCB.addEventListener('change', () => { advSettings.gridVisible = gridVisCB.checked; });
 
-        // ── Bind presets ──
-        panel.querySelectorAll('.adv-preset-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const p = btn.dataset.preset;
-                if (p === 'land-current') {
-                    advSettings.landPreset = 'current';
-                    advSettings.landHue = ADV_DEFAULTS.landHue;
-                    setSliderValue('adv-land-hue', ADV_DEFAULTS.landHue);
-                } else if (p === 'land-green') {
-                    advSettings.landPreset = 'green';
-                    advSettings.landHue = 120;
-                    setSliderValue('adv-land-hue', 120);
-                } else if (p === 'ocean-current') {
-                    advSettings.oceanPreset = 'current';
-                    advSettings.oceanHue = ADV_DEFAULTS.oceanHue;
-                    setSliderValue('adv-ocean-hue', ADV_DEFAULTS.oceanHue);
-                } else if (p === 'ocean-blue') {
-                    advSettings.oceanPreset = 'blue';
-                    advSettings.oceanHue = 210;
-                    setSliderValue('adv-ocean-hue', 210);
-                }
-                updateAdvColors();
-                updateAdvSwatches();
-                updatePresetBtns();
-            });
-        });
+        // ── Bind slider labels as reset-to-default links ──
+        bindLabelResets(panel);
 
         // ── Reset button ──
         document.getElementById('adv-reset').addEventListener('click', () => {
@@ -4608,13 +4566,7 @@
             CFG.pulseSpeedInbound  = 0.0014;
             CFG.pulseSpeedOutbound = 0.0026;
             updateAdvColors();
-            // Refresh all slider positions
             refreshAllAdvSliders();
-            updateAdvSwatches();
-            updatePresetBtns();
-            // Update toggles
-            const sc = document.getElementById('adv-snow-poles');
-            if (sc) sc.checked = ADV_DEFAULTS.snowPoles;
             const gv = document.getElementById('adv-grid-visible');
             if (gv) gv.checked = ADV_DEFAULTS.gridVisible;
         });
@@ -4622,22 +4574,20 @@
         // ── Save button ──
         document.getElementById('adv-save').addEventListener('click', () => {
             saveAdvSettings();
-            // Brief visual feedback
             const saveBtn = document.getElementById('adv-save');
             if (saveBtn) {
-                const orig = saveBtn.textContent;
                 saveBtn.textContent = 'Saved!';
-                setTimeout(() => { saveBtn.textContent = orig; }, 1200);
+                setTimeout(() => { saveBtn.textContent = 'Permanent Save'; }, 1200);
             }
         });
     }
 
-    /** Generate HTML for a single slider row */
+    /** Generate HTML for a single slider row — label is a clickable reset link */
     function advSliderHTML(id, label, value, min, max, step, isHue) {
         const cls = isHue ? 'adv-slider hue-slider' : 'adv-slider';
         const display = (step < 1) ? parseFloat(value).toFixed(2) : Math.round(value);
         return '<div class="adv-slider-row">' +
-            '<span class="adv-slider-label">' + label + '</span>' +
+            '<span class="adv-slider-label adv-reset-link" data-slider="' + id + '" title="Click to reset to default">' + label + '</span>' +
             '<input type="range" class="' + cls + '" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '">' +
             '<span class="adv-slider-val" id="' + id + '-val">' + display + '</span>' +
             '</div>';
@@ -4674,6 +4624,7 @@
         setSliderValue('adv-pspeed-out', advSettings.pulseSpeedOut);
         setSliderValue('adv-land-hue', advSettings.landHue);
         setSliderValue('adv-land-bright', advSettings.landBright);
+        setSliderValue('adv-snow-poles', advSettings.snowPoles);
         setSliderValue('adv-ocean-hue', advSettings.oceanHue);
         setSliderValue('adv-ocean-bright', advSettings.oceanBright);
         setSliderValue('adv-grid-thick', advSettings.gridThickness);
@@ -4681,25 +4632,51 @@
         setSliderValue('adv-grid-bright', advSettings.gridBright);
     }
 
-    /** Update colour swatches next to preset buttons */
-    function updateAdvSwatches() {
-        const ls = document.getElementById('adv-land-swatch');
-        if (ls) ls.style.background = advColors.landFill;
-        const os = document.getElementById('adv-ocean-swatch');
-        if (os) os.style.background = advColors.oceanFill;
-    }
+    /** Map slider IDs to their advSettings key and default value */
+    const SLIDER_DEFAULTS = {
+        'adv-shimmer':     { key: 'shimmerStrength', cfg: 'shimmerStrength' },
+        'adv-pdepth-in':   { key: 'pulseDepthIn',   cfg: 'pulseDepthInbound' },
+        'adv-pdepth-out':  { key: 'pulseDepthOut',   cfg: 'pulseDepthOutbound' },
+        'adv-pspeed-in':   { key: 'pulseSpeedIn',    cfgFn: v => { CFG.pulseSpeedInbound = 0.0014 * Math.pow(2, (v - 50) / 30); } },
+        'adv-pspeed-out':  { key: 'pulseSpeedOut',   cfgFn: v => { CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (v - 50) / 30); } },
+        'adv-land-hue':    { key: 'landHue',         recolor: true },
+        'adv-land-bright': { key: 'landBright',      recolor: true },
+        'adv-snow-poles':  { key: 'snowPoles' },
+        'adv-ocean-hue':   { key: 'oceanHue',        recolor: true },
+        'adv-ocean-bright':{ key: 'oceanBright',     recolor: true },
+        'adv-grid-thick':  { key: 'gridThickness',   recolor: true },
+        'adv-grid-hue':    { key: 'gridHue',         recolor: true },
+        'adv-grid-bright': { key: 'gridBright',      recolor: true },
+    };
 
-    /** Update preset button active states */
-    function updatePresetBtns() {
-        if (!advPanelEl) return;
-        advPanelEl.querySelectorAll('.adv-preset-btn').forEach(btn => {
-            const p = btn.dataset.preset;
-            let active = false;
-            if (p === 'land-current') active = advSettings.landPreset === 'current';
-            else if (p === 'land-green') active = advSettings.landPreset === 'green';
-            else if (p === 'ocean-current') active = advSettings.oceanPreset === 'current';
-            else if (p === 'ocean-blue') active = advSettings.oceanPreset === 'blue';
-            btn.classList.toggle('active', active);
+    /** Bind every .adv-reset-link label to reset its slider/toggle to default on click */
+    function bindLabelResets(panel) {
+        panel.querySelectorAll('.adv-reset-link').forEach(label => {
+            // Slider reset
+            const sliderId = label.dataset.slider;
+            if (sliderId) {
+                label.addEventListener('click', () => {
+                    const info = SLIDER_DEFAULTS[sliderId];
+                    if (!info) return;
+                    const defVal = ADV_DEFAULTS[info.key];
+                    advSettings[info.key] = defVal;
+                    setSliderValue(sliderId, defVal);
+                    if (info.cfg) CFG[info.cfg] = defVal;
+                    if (info.cfgFn) info.cfgFn(defVal);
+                    if (info.recolor) updateAdvColors();
+                });
+                return;
+            }
+            // Toggle reset (e.g. grid visibility)
+            const defKey = label.dataset.defaultKey;
+            if (defKey && ADV_DEFAULTS[defKey] !== undefined) {
+                label.addEventListener('click', () => {
+                    advSettings[defKey] = ADV_DEFAULTS[defKey];
+                    // Sync the checkbox if there's a matching one
+                    const cb = panel.querySelector('#adv-grid-visible');
+                    if (defKey === 'gridVisible' && cb) cb.checked = ADV_DEFAULTS[defKey];
+                });
+            }
         });
     }
 
