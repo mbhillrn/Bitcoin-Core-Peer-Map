@@ -75,6 +75,124 @@
     };
 
     // ═══════════════════════════════════════════════════════════
+    // ADVANCED DISPLAY SETTINGS — tuneable from the floating panel
+    // Persisted to localStorage when user clicks "Save".
+    // Defaults restore the map to its original pre-shimmer appearance.
+    // ═══════════════════════════════════════════════════════════
+
+    const ADV_DEFAULTS = {
+        // Peer effects (defaults = original values before shimmer was added)
+        shimmerStrength: 0,          // 0 = off (original map had no shimmer)
+        pulseDepthIn:    0.32,       // inbound pulse amplitude
+        pulseDepthOut:   0.48,       // outbound pulse amplitude
+        pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
+        pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
+        // Land appearance
+        landHue:        215,         // hue degrees (current dark blue-gray)
+        landBright:      50,         // slider 0-100, 50 = original L=12%
+        landPreset:     'current',   // 'current' or 'green'
+        snowPoles:      false,       // ice-colored polar regions
+        // Ocean appearance
+        oceanHue:       220,         // hue degrees (current near-black blue)
+        oceanBright:     50,         // slider 0-100, 50 = original L=3.5%
+        oceanPreset:    'current',   // 'current' or 'blue'
+        // Grid lines
+        gridVisible:    true,
+        gridThickness:   50,         // slider 0-100, 50 = default 0.5 lineWidth
+        gridHue:        212,         // hue degrees (accent blue)
+        gridBright:      50,         // slider 0-100, 50 = default alpha 0.04
+    };
+
+    // Working copy of advanced settings (mutated by sliders, saved to localStorage)
+    const advSettings = Object.assign({}, ADV_DEFAULTS);
+
+    // Pre-computed colour strings, updated whenever a slider changes
+    const advColors = {
+        landFill:   '#151d28',
+        landStroke: '#253040',
+        iceFill:    'hsl(210, 15%, 82%)',
+        iceStroke:  'hsl(210, 12%, 65%)',
+        oceanFill:  '#06080c',
+        lakeFill:   '#06080c',
+        lakeStroke: '#1a2230',
+        gridColor:  'rgba(88,166,255,0.04)',
+        gridWidth:  0.5,
+    };
+
+    // Polar polygon classification (populated when world geometry loads)
+    let polarPolygons = [];
+    let nonPolarPolygons = [];
+
+    /** Map brightness slider (0-100, centered at 50) to HSL lightness */
+    function brightnessToL(slider, defaultL) {
+        return defaultL * Math.pow(2, (slider - 50) / 25);
+    }
+
+    /** Rebuild advColors from current advSettings */
+    function updateAdvColors() {
+        // Land
+        const ll = Math.max(0.5, Math.min(60, brightnessToL(advSettings.landBright, 12)));
+        advColors.landFill   = 'hsl(' + advSettings.landHue + ', 31%, ' + ll.toFixed(1) + '%)';
+        advColors.landStroke = 'hsl(' + advSettings.landHue + ', 25%, ' + Math.min(70, ll + 8).toFixed(1) + '%)';
+
+        // Ocean
+        const ol = Math.max(0.2, Math.min(30, brightnessToL(advSettings.oceanBright, 3.5)));
+        advColors.oceanFill  = 'hsl(' + advSettings.oceanHue + ', 33%, ' + ol.toFixed(1) + '%)';
+        advColors.lakeFill   = advColors.oceanFill;
+        advColors.lakeStroke = 'hsl(' + advSettings.oceanHue + ', 25%, ' + Math.min(40, ol + 10).toFixed(1) + '%)';
+
+        // Grid
+        const ga = 0.04 * Math.pow(2, (advSettings.gridBright - 50) / 25);
+        advColors.gridColor = 'hsla(' + advSettings.gridHue + ', 100%, 67%, ' + ga.toFixed(4) + ')';
+        advColors.gridWidth = 0.2 + (advSettings.gridThickness / 100) * 1.8;
+
+        // Ice (constant cool gray)
+        advColors.iceFill   = 'hsl(210, 15%, 82%)';
+        advColors.iceStroke = 'hsl(210, 12%, 65%)';
+    }
+
+    /** Classify world polygons into polar vs non-polar for "Snow the Poles" */
+    function classifyPolarPolygons() {
+        polarPolygons = [];
+        nonPolarPolygons = [];
+        for (let i = 0; i < worldPolygons.length; i++) {
+            const ring = worldPolygons[i][0];
+            if (!ring || ring.length === 0) { nonPolarPolygons.push(worldPolygons[i]); continue; }
+            let sumLat = 0;
+            for (let j = 0; j < ring.length; j++) sumLat += ring[j][1];
+            const avgLat = sumLat / ring.length;
+            if (avgLat < -60 || avgLat > 66) polarPolygons.push(worldPolygons[i]);
+            else nonPolarPolygons.push(worldPolygons[i]);
+        }
+    }
+
+    /** Load saved settings from localStorage */
+    function loadAdvSettings() {
+        try {
+            const raw = localStorage.getItem('mbcore_adv_display');
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            for (const k of Object.keys(ADV_DEFAULTS)) {
+                if (saved[k] !== undefined) advSettings[k] = saved[k];
+            }
+        } catch (e) { /* ignore corrupt data */ }
+        // Apply loaded pulse settings to CFG
+        CFG.shimmerStrength    = advSettings.shimmerStrength;
+        CFG.pulseDepthInbound  = advSettings.pulseDepthIn;
+        CFG.pulseDepthOutbound = advSettings.pulseDepthOut;
+        CFG.pulseSpeedInbound  = 0.0014 * Math.pow(2, (advSettings.pulseSpeedIn - 50) / 30);
+        CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (advSettings.pulseSpeedOut - 50) / 30);
+        updateAdvColors();
+    }
+
+    /** Save current settings to localStorage */
+    function saveAdvSettings() {
+        try {
+            localStorage.setItem('mbcore_adv_display', JSON.stringify(advSettings));
+        } catch (e) { /* quota exceeded, silently fail */ }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // NETWORK COLOURS (match bitstyle.css --net-* variables)
     // ═══════════════════════════════════════════════════════════
 
@@ -1017,7 +1135,8 @@
             // The first ring is the outer boundary, subsequent rings are holes (lakes etc)
             worldPolygons = polygons;
             worldReady = true;
-            console.log(`[vNext] Loaded ${polygons.length} land polygons`);
+            classifyPolarPolygons();
+            console.log(`[vNext] Loaded ${polygons.length} land polygons (${polarPolygons.length} polar)`);
         } catch (err) {
             console.error('[vNext] Failed to load world geometry, using fallback:', err);
             // Fallback: minimal hand-traced outlines so the map isn't blank
@@ -1030,6 +1149,7 @@
                 [[[115,-15],[120,-14],[130,-12],[135,-14],[140,-16],[148,-20],[152,-25],[153,-28],[150,-33],[145,-38],[137,-35],[130,-32],[122,-33],[116,-32],[114,-28],[114,-22],[118,-20],[120,-18],[115,-15]]],
             ];
             worldReady = true;
+            classifyPolarPolygons();
         }
     }
 
@@ -1743,8 +1863,9 @@
 
     /** Draw subtle lat/lon grid lines (with wrap) */
     function drawGrid() {
-        ctx.strokeStyle = 'rgba(88,166,255,0.04)';
-        ctx.lineWidth = 0.5;
+        if (!advSettings.gridVisible) return;
+        ctx.strokeStyle = advColors.gridColor;
+        ctx.lineWidth = advColors.gridWidth;
         const offsets = getWrapOffsets();
 
         for (const off of offsets) {
@@ -1801,8 +1922,15 @@
     function drawLandmasses() {
         if (!worldReady) return;
         const offsets = getWrapOffsets();
-        for (const off of offsets) {
-            drawPolygonSet(worldPolygons, '#151d28', '#253040', off);
+        if (advSettings.snowPoles && polarPolygons.length > 0) {
+            for (const off of offsets) {
+                drawPolygonSet(nonPolarPolygons, advColors.landFill, advColors.landStroke, off);
+                drawPolygonSet(polarPolygons, advColors.iceFill, advColors.iceStroke, off);
+            }
+        } else {
+            for (const off of offsets) {
+                drawPolygonSet(worldPolygons, advColors.landFill, advColors.landStroke, off);
+            }
         }
     }
 
@@ -1811,8 +1939,7 @@
         if (!lakesReady) return;
         const offsets = getWrapOffsets();
         for (const off of offsets) {
-            // Lakes filled with ocean colour, subtle darker stroke
-            drawPolygonSet(lakePolygons, '#06080c', '#1a2230', off);
+            drawPolygonSet(lakePolygons, advColors.lakeFill, advColors.lakeStroke, off);
         }
     }
 
@@ -3519,7 +3646,7 @@
         clampView();
 
         // Clear canvas with ocean colour
-        ctx.fillStyle = '#06080c';
+        ctx.fillStyle = advColors.oceanFill;
         ctx.fillRect(0, 0, W, H);
 
         // Compute wrap offsets once per frame
@@ -3873,9 +4000,20 @@
         rightItems.forEach(item => {
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
+        html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
         popup.innerHTML = html;
         document.body.appendChild(popup);
         displaySettingsEl = popup;
+
+        // Bind Advanced button
+        const advBtn = document.getElementById('dsp-advanced-btn');
+        if (advBtn) {
+            advBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeDisplaySettingsPopup();
+                openAdvancedPanel();
+            });
+        }
 
         // Position near anchor
         if (anchorEl) {
@@ -3928,6 +4066,8 @@
     }
 
     function closeDisplaySettingsOnOutside(e) {
+        const advPanel = document.getElementById('adv-panel');
+        if (advPanel && advPanel.contains(e.target)) return;
         if (displaySettingsEl && !displaySettingsEl.contains(e.target)) {
             closeDisplaySettingsPopup();
         }
@@ -4316,10 +4456,312 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // ADVANCED DISPLAY SETTINGS — Floating draggable panel
+    // ═══════════════════════════════════════════════════════════
+
+    let advPanelEl = null;
+
+    function openAdvancedPanel() {
+        if (advPanelEl) { advPanelEl.remove(); advPanelEl = null; }
+
+        const panel = document.createElement('div');
+        panel.className = 'adv-panel';
+        panel.id = 'adv-panel';
+
+        // ── Build HTML ──
+        let h = '';
+        // Titlebar
+        h += '<div class="adv-titlebar" id="adv-titlebar">';
+        h += '<span class="adv-titlebar-text">Advanced Display</span>';
+        h += '<button class="adv-close" id="adv-close" title="Close">&times;</button>';
+        h += '</div>';
+
+        h += '<div class="adv-body">';
+
+        // ── Peer Effects ──
+        h += '<div class="adv-section">Peer Effects</div>';
+        h += advSliderHTML('adv-shimmer', 'Shimmer', advSettings.shimmerStrength, 0, 1, 0.01);
+        h += advSliderHTML('adv-pdepth-in', 'Pulse Depth In', advSettings.pulseDepthIn, 0, 1, 0.01);
+        h += advSliderHTML('adv-pdepth-out', 'Pulse Depth Out', advSettings.pulseDepthOut, 0, 1, 0.01);
+        h += advSliderHTML('adv-pspeed-in', 'Pulse Speed In', advSettings.pulseSpeedIn, 0, 100, 1);
+        h += advSliderHTML('adv-pspeed-out', 'Pulse Speed Out', advSettings.pulseSpeedOut, 0, 100, 1);
+
+        // ── Land ──
+        h += '<div class="adv-section">Land</div>';
+        h += '<div class="adv-preset-row">';
+        h += '<span class="adv-slider-label">Preset</span>';
+        h += '<button class="adv-preset-btn' + (advSettings.landPreset === 'current' ? ' active' : '') + '" data-preset="land-current">Current</button>';
+        h += '<button class="adv-preset-btn' + (advSettings.landPreset === 'green' ? ' active' : '') + '" data-preset="land-green">Green</button>';
+        h += '<span class="adv-swatch" id="adv-land-swatch"></span>';
+        h += '</div>';
+        h += advSliderHTML('adv-land-hue', 'Hue', advSettings.landHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-land-bright', 'Brightness', advSettings.landBright, 0, 100, 1);
+        h += '<div class="adv-toggle-row">';
+        h += '<span class="adv-toggle-label">Snow the Poles</span>';
+        h += '<label class="dsp-toggle"><input type="checkbox" id="adv-snow-poles" ' + (advSettings.snowPoles ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
+        h += '</div>';
+
+        // ── Ocean ──
+        h += '<div class="adv-section">Ocean</div>';
+        h += '<div class="adv-preset-row">';
+        h += '<span class="adv-slider-label">Preset</span>';
+        h += '<button class="adv-preset-btn' + (advSettings.oceanPreset === 'current' ? ' active' : '') + '" data-preset="ocean-current">Current</button>';
+        h += '<button class="adv-preset-btn' + (advSettings.oceanPreset === 'blue' ? ' active' : '') + '" data-preset="ocean-blue">Blue</button>';
+        h += '<span class="adv-swatch" id="adv-ocean-swatch"></span>';
+        h += '</div>';
+        h += advSliderHTML('adv-ocean-hue', 'Hue', advSettings.oceanHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-ocean-bright', 'Brightness', advSettings.oceanBright, 0, 100, 1);
+
+        // ── Grid Lines ──
+        h += '<div class="adv-section">Grid Lines</div>';
+        h += '<div class="adv-toggle-row">';
+        h += '<span class="adv-toggle-label">Visible</span>';
+        h += '<label class="dsp-toggle"><input type="checkbox" id="adv-grid-visible" ' + (advSettings.gridVisible ? 'checked' : '') + '><span class="dsp-toggle-slider"></span></label>';
+        h += '</div>';
+        h += advSliderHTML('adv-grid-thick', 'Thickness', advSettings.gridThickness, 0, 100, 1);
+        h += advSliderHTML('adv-grid-hue', 'Hue', advSettings.gridHue, 0, 360, 1, true);
+        h += advSliderHTML('adv-grid-bright', 'Brightness', advSettings.gridBright, 0, 100, 1);
+
+        h += '</div>'; // end adv-body
+
+        // Footer buttons
+        h += '<div class="adv-footer">';
+        h += '<button class="adv-btn adv-btn-reset" id="adv-reset">Reset</button>';
+        h += '<button class="adv-btn adv-btn-save" id="adv-save">Save</button>';
+        h += '</div>';
+
+        panel.innerHTML = h;
+        document.body.appendChild(panel);
+        advPanelEl = panel;
+
+        // ── Position: top-right, offset from edge ──
+        positionAdvPanel();
+
+        // Update swatches
+        updateAdvSwatches();
+
+        // ── Bind close ──
+        document.getElementById('adv-close').addEventListener('click', closeAdvancedPanel);
+
+        // ── Bind drag ──
+        initAdvDrag();
+
+        // ── Bind all sliders ──
+        bindAdvSlider('adv-shimmer', v => { advSettings.shimmerStrength = v; CFG.shimmerStrength = v; });
+        bindAdvSlider('adv-pdepth-in', v => { advSettings.pulseDepthIn = v; CFG.pulseDepthInbound = v; });
+        bindAdvSlider('adv-pdepth-out', v => { advSettings.pulseDepthOut = v; CFG.pulseDepthOutbound = v; });
+        bindAdvSlider('adv-pspeed-in', v => {
+            advSettings.pulseSpeedIn = v;
+            CFG.pulseSpeedInbound = 0.0014 * Math.pow(2, (v - 50) / 30);
+        });
+        bindAdvSlider('adv-pspeed-out', v => {
+            advSettings.pulseSpeedOut = v;
+            CFG.pulseSpeedOutbound = 0.0026 * Math.pow(2, (v - 50) / 30);
+        });
+        bindAdvSlider('adv-land-hue', v => { advSettings.landHue = v; advSettings.landPreset = ''; updateAdvColors(); updateAdvSwatches(); updatePresetBtns(); });
+        bindAdvSlider('adv-land-bright', v => { advSettings.landBright = v; updateAdvColors(); updateAdvSwatches(); });
+        bindAdvSlider('adv-ocean-hue', v => { advSettings.oceanHue = v; advSettings.oceanPreset = ''; updateAdvColors(); updateAdvSwatches(); updatePresetBtns(); });
+        bindAdvSlider('adv-ocean-bright', v => { advSettings.oceanBright = v; updateAdvColors(); updateAdvSwatches(); });
+        bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
+        bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
+        bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
+
+        // ── Bind toggles ──
+        const snowCB = document.getElementById('adv-snow-poles');
+        if (snowCB) snowCB.addEventListener('change', () => { advSettings.snowPoles = snowCB.checked; });
+        const gridVisCB = document.getElementById('adv-grid-visible');
+        if (gridVisCB) gridVisCB.addEventListener('change', () => { advSettings.gridVisible = gridVisCB.checked; });
+
+        // ── Bind presets ──
+        panel.querySelectorAll('.adv-preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const p = btn.dataset.preset;
+                if (p === 'land-current') {
+                    advSettings.landPreset = 'current';
+                    advSettings.landHue = ADV_DEFAULTS.landHue;
+                    setSliderValue('adv-land-hue', ADV_DEFAULTS.landHue);
+                } else if (p === 'land-green') {
+                    advSettings.landPreset = 'green';
+                    advSettings.landHue = 120;
+                    setSliderValue('adv-land-hue', 120);
+                } else if (p === 'ocean-current') {
+                    advSettings.oceanPreset = 'current';
+                    advSettings.oceanHue = ADV_DEFAULTS.oceanHue;
+                    setSliderValue('adv-ocean-hue', ADV_DEFAULTS.oceanHue);
+                } else if (p === 'ocean-blue') {
+                    advSettings.oceanPreset = 'blue';
+                    advSettings.oceanHue = 210;
+                    setSliderValue('adv-ocean-hue', 210);
+                }
+                updateAdvColors();
+                updateAdvSwatches();
+                updatePresetBtns();
+            });
+        });
+
+        // ── Reset button ──
+        document.getElementById('adv-reset').addEventListener('click', () => {
+            Object.assign(advSettings, ADV_DEFAULTS);
+            CFG.shimmerStrength    = ADV_DEFAULTS.shimmerStrength;
+            CFG.pulseDepthInbound  = ADV_DEFAULTS.pulseDepthIn;
+            CFG.pulseDepthOutbound = ADV_DEFAULTS.pulseDepthOut;
+            CFG.pulseSpeedInbound  = 0.0014;
+            CFG.pulseSpeedOutbound = 0.0026;
+            updateAdvColors();
+            // Refresh all slider positions
+            refreshAllAdvSliders();
+            updateAdvSwatches();
+            updatePresetBtns();
+            // Update toggles
+            const sc = document.getElementById('adv-snow-poles');
+            if (sc) sc.checked = ADV_DEFAULTS.snowPoles;
+            const gv = document.getElementById('adv-grid-visible');
+            if (gv) gv.checked = ADV_DEFAULTS.gridVisible;
+        });
+
+        // ── Save button ──
+        document.getElementById('adv-save').addEventListener('click', () => {
+            saveAdvSettings();
+            // Brief visual feedback
+            const saveBtn = document.getElementById('adv-save');
+            if (saveBtn) {
+                const orig = saveBtn.textContent;
+                saveBtn.textContent = 'Saved!';
+                setTimeout(() => { saveBtn.textContent = orig; }, 1200);
+            }
+        });
+    }
+
+    /** Generate HTML for a single slider row */
+    function advSliderHTML(id, label, value, min, max, step, isHue) {
+        const cls = isHue ? 'adv-slider hue-slider' : 'adv-slider';
+        const display = (step < 1) ? parseFloat(value).toFixed(2) : Math.round(value);
+        return '<div class="adv-slider-row">' +
+            '<span class="adv-slider-label">' + label + '</span>' +
+            '<input type="range" class="' + cls + '" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '">' +
+            '<span class="adv-slider-val" id="' + id + '-val">' + display + '</span>' +
+            '</div>';
+    }
+
+    /** Bind a slider to a callback, fires on every input event (live) */
+    function bindAdvSlider(id, callback) {
+        const slider = document.getElementById(id);
+        const valEl  = document.getElementById(id + '-val');
+        if (!slider) return;
+        slider.addEventListener('input', () => {
+            const v = parseFloat(slider.value);
+            if (valEl) valEl.textContent = (parseFloat(slider.step) < 1) ? v.toFixed(2) : Math.round(v);
+            callback(v);
+        });
+    }
+
+    /** Set a slider value programmatically and update its display */
+    function setSliderValue(id, val) {
+        const slider = document.getElementById(id);
+        const valEl  = document.getElementById(id + '-val');
+        if (slider) {
+            slider.value = val;
+            if (valEl) valEl.textContent = (parseFloat(slider.step) < 1) ? parseFloat(val).toFixed(2) : Math.round(val);
+        }
+    }
+
+    /** Refresh all slider positions from current advSettings */
+    function refreshAllAdvSliders() {
+        setSliderValue('adv-shimmer', advSettings.shimmerStrength);
+        setSliderValue('adv-pdepth-in', advSettings.pulseDepthIn);
+        setSliderValue('adv-pdepth-out', advSettings.pulseDepthOut);
+        setSliderValue('adv-pspeed-in', advSettings.pulseSpeedIn);
+        setSliderValue('adv-pspeed-out', advSettings.pulseSpeedOut);
+        setSliderValue('adv-land-hue', advSettings.landHue);
+        setSliderValue('adv-land-bright', advSettings.landBright);
+        setSliderValue('adv-ocean-hue', advSettings.oceanHue);
+        setSliderValue('adv-ocean-bright', advSettings.oceanBright);
+        setSliderValue('adv-grid-thick', advSettings.gridThickness);
+        setSliderValue('adv-grid-hue', advSettings.gridHue);
+        setSliderValue('adv-grid-bright', advSettings.gridBright);
+    }
+
+    /** Update colour swatches next to preset buttons */
+    function updateAdvSwatches() {
+        const ls = document.getElementById('adv-land-swatch');
+        if (ls) ls.style.background = advColors.landFill;
+        const os = document.getElementById('adv-ocean-swatch');
+        if (os) os.style.background = advColors.oceanFill;
+    }
+
+    /** Update preset button active states */
+    function updatePresetBtns() {
+        if (!advPanelEl) return;
+        advPanelEl.querySelectorAll('.adv-preset-btn').forEach(btn => {
+            const p = btn.dataset.preset;
+            let active = false;
+            if (p === 'land-current') active = advSettings.landPreset === 'current';
+            else if (p === 'land-green') active = advSettings.landPreset === 'green';
+            else if (p === 'ocean-current') active = advSettings.oceanPreset === 'current';
+            else if (p === 'ocean-blue') active = advSettings.oceanPreset === 'blue';
+            btn.classList.toggle('active', active);
+        });
+    }
+
+    /** Position advanced panel in viewport, anchored top-right */
+    function positionAdvPanel() {
+        if (!advPanelEl) return;
+        const pad = 12;
+        const panelW = 310;
+        // Default: top-right area, below topbar
+        let left = window.innerWidth - panelW - pad;
+        let top = 56;
+        // Ensure it stays on screen
+        left = Math.max(pad, Math.min(left, window.innerWidth - panelW - pad));
+        top = Math.max(pad, top);
+        advPanelEl.style.left = left + 'px';
+        advPanelEl.style.top = top + 'px';
+    }
+
+    /** Make the panel draggable by its titlebar */
+    function initAdvDrag() {
+        const titlebar = document.getElementById('adv-titlebar');
+        if (!titlebar) return;
+        let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+        titlebar.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('adv-close')) return;
+            dragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = parseInt(advPanelEl.style.left) || 0;
+            startTop  = parseInt(advPanelEl.style.top) || 0;
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            let nx = startLeft + (e.clientX - startX);
+            let ny = startTop  + (e.clientY - startY);
+            // Clamp within viewport
+            const pw = advPanelEl.offsetWidth;
+            const ph = advPanelEl.offsetHeight;
+            nx = Math.max(0, Math.min(nx, window.innerWidth - pw));
+            ny = Math.max(0, Math.min(ny, window.innerHeight - ph));
+            advPanelEl.style.left = nx + 'px';
+            advPanelEl.style.top  = ny + 'px';
+        });
+
+        window.addEventListener('mouseup', () => { dragging = false; });
+    }
+
+    function closeAdvancedPanel() {
+        if (advPanelEl) { advPanelEl.remove(); advPanelEl = null; }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
 
     function init() {
+        // Load any saved advanced display settings from localStorage
+        loadAdvSettings();
+
         // Setup canvas size and DPI scaling
         resize();
         window.addEventListener('resize', resize);

@@ -1568,6 +1568,226 @@ html, body {
     background: var(--accent);
 }
 
+/* --- Advanced button in Display Settings popup --- */
+.dsp-advanced-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 5px 0;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    text-align: center;
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: 4px;
+    background: rgba(88, 166, 255, 0.08);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.dsp-advanced-btn:hover {
+    background: rgba(88, 166, 255, 0.18);
+    border-color: var(--accent);
+}
+
+/* ==========================================================
+   14b-adv. ADVANCED DISPLAY SETTINGS PANEL
+   ========================================================== */
+.adv-panel {
+    position: fixed;
+    z-index: 260;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 8px;
+    width: 310px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+}
+.adv-panel::-webkit-scrollbar { width: 4px; }
+.adv-panel::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.2); border-radius: 2px; }
+.adv-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: grab;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.adv-titlebar:active { cursor: grabbing; }
+.adv-titlebar-text {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #e8c547;
+}
+.adv-close {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+    line-height: 1;
+}
+.adv-close:hover { color: var(--err); background: rgba(248, 81, 73, 0.15); }
+.adv-body {
+    padding: 8px 12px 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+.adv-section {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #b0b8c4;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(88, 166, 255, 0.06);
+}
+.adv-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.adv-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+}
+.adv-slider-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+.adv-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: rgba(88, 166, 255, 0.15);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+.adv-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+.adv-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+}
+.adv-slider-val {
+    font-size: 10px;
+    font-family: var(--font-data);
+    color: var(--text-primary);
+    min-width: 28px;
+    text-align: right;
+}
+/* Hue slider: rainbow gradient track */
+.adv-slider.hue-slider {
+    background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
+}
+.adv-preset-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+}
+.adv-preset-btn {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 3px;
+    background: rgba(88, 166, 255, 0.06);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.adv-preset-btn:hover { background: rgba(88, 166, 255, 0.15); }
+.adv-preset-btn.active {
+    background: rgba(88, 166, 255, 0.2);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.adv-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+}
+.adv-toggle-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+/* Reuse dsp-toggle styling for the toggle switch */
+.adv-footer {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.adv-btn {
+    flex: 1;
+    padding: 5px 0;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.adv-btn-reset {
+    background: rgba(248, 81, 73, 0.08);
+    border-color: rgba(248, 81, 73, 0.25);
+    color: var(--err-bright);
+}
+.adv-btn-reset:hover { background: rgba(248, 81, 73, 0.18); border-color: var(--err); }
+.adv-btn-save {
+    background: rgba(63, 185, 80, 0.08);
+    border-color: rgba(63, 185, 80, 0.25);
+    color: var(--ok-bright);
+}
+.adv-btn-save:hover { background: rgba(63, 185, 80, 0.18); border-color: var(--ok); }
+/* Color swatch preview */
+.adv-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+}
+
 /* ==========================================================
    14c. SYSTEM INFO MODAL — Radio & Manual NET fields
    ========================================================== */
