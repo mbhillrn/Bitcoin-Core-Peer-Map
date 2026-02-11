@@ -61,6 +61,15 @@
         nervousnessMax: 0.003,     // extra pulse speed added to young peers
         nervousnessRampSec: 1800,  // seconds for nervousness to decay to zero (30 min)
 
+        // ── Ambient shimmer (residual twinkle for veteran peers) ──
+        // Three sine waves at incommensurate frequencies; when they align
+        // positively a peer gets a brief bright "twinkle."  Each node's
+        // unique phase keeps the sparkles scattered across the map.
+        shimmerStrength: 0.36,     // how bright the twinkle spikes get (0 = off)
+        shimmerFreq1: 0.00293,    // primary wave   (period ≈ 2.1 s)
+        shimmerFreq2: 0.00517,    // secondary wave  (period ≈ 1.2 s)
+        shimmerFreq3: 0.00711,    // tertiary wave   (period ≈ 0.88 s)
+
         // ── Fade-out ──
         fadeOutEase: 2.0,          // exponent for ease-out curve
     };
@@ -2071,6 +2080,20 @@
     }
 
     /**
+     * Ambient shimmer — residual twinkle for long-lived peers.
+     * Three sine waves at incommensurate frequencies are multiplied
+     * together; positive products create brief bright spikes.
+     * Returns a value in [0, 1], concentrated near 0 (mostly quiet,
+     * occasional sparkles).
+     */
+    function getAmbientShimmer(phase, ageMs) {
+        const w1 = Math.sin(phase * 3.71  + ageMs * CFG.shimmerFreq1);
+        const w2 = Math.sin(phase * 7.13  + ageMs * CFG.shimmerFreq2);
+        const w3 = Math.sin(phase * 11.07 + ageMs * CFG.shimmerFreq3);
+        return Math.max(0, w1 * w2 * w3);
+    }
+
+    /**
      * Draw a single node on the canvas at all visible wrap positions.
      * Lifecycle phases:
      *   1. Arrival bloom (first ~5s) — expanding ring + energetic glow
@@ -2111,10 +2134,13 @@
         // ── Pulse (direction-aware + nervousness for young peers) ──
         let pulse;
         if (inArrival) {
-            // During arrival: fast energetic pulse
+            // During arrival: fast energetic pulse (unchanged)
             pulse = 0.55 + 0.45 * Math.abs(Math.sin(node.phase + ageMs * CFG.arrivalPulseSpeed));
         } else {
             pulse = getDirectionPulse(node, ageMs, connAgeSec);
+            // Ambient shimmer: occasional bright twinkle spikes for all peers
+            const shimmer = getAmbientShimmer(node.phase, ageMs);
+            pulse = Math.min(pulse + CFG.shimmerStrength * shimmer, 1);
         }
 
         // Spawn "pop" scale effect (first 600ms)
