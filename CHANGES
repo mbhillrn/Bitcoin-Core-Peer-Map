@@ -1,2 +1,2 @@
-Fix DB auto-update timer firing when GeoDB is disabled.
-Removed BTC address from terminal banners.
+Organized docs images, expanded README documentation.
+Added column, service flag, connection type, and auto-update docs.
