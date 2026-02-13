@@ -1,4 +1,4 @@
-# MBCore Dashboard — Quick Start Guide
+# MBCore Dashboard - Quick Start Guide
 
 ## Install and Run
 
@@ -18,7 +18,7 @@ You'll land at the main menu. Press **1** to launch the dashboard:
 
 The terminal shows your access URLs:
 
-![Dashboard Launch](docs/images/6.banner.png)
+![Dashboard Launch](docs/images/6.local-instructions.png)
 
 Open the URL in your browser:
 
@@ -30,7 +30,7 @@ Open the URL in your browser:
 
 ### Same Machine (has a browser)
 
-Run `./da.sh`, press **1** — the URL is `http://127.0.0.1:58333`.
+Run `./da.sh`, press **1** - the URL is `http://127.0.0.1:58333`.
 
 ### Another Device on Your Network
 
@@ -65,10 +65,10 @@ Then run `./da.sh` in that SSH session and browse to `http://127.0.0.1:58333` on
 | Area | What's There |
 |------|-------------|
 | **Top bar** | Network chips (IPv4/IPv6/Tor/I2P/CJDNS) with inbound/outbound counts |
-| **Below top bar** | Live Bitcoin price (green = up, red = down) — click to change currency |
-| **Upper left** | Peers, CPU, RAM, NET ↓/↑ — click for detailed system info |
+| **Below top bar** | Live Bitcoin price (green = up, red = down) - click to change currency |
+| **Upper left** | Peers, CPU, RAM, NET ↓/↑ - click for detailed system info |
 | **Upper right** | Update countdown, geo status, Node Info link, MBCore DB link |
-| **Map** | Full-screen canvas map with geolocated peer dots — click any dot for details |
+| **Map** | Full-screen canvas map with geolocated peer dots - click any dot for details |
 | **Bottom panel** | Peer table with filters, sorting, resizing, connect/disconnect buttons |
 | **Antarctica** | Private network peers (Tor, I2P, CJDNS) displayed at research stations |
 

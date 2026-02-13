@@ -66,11 +66,25 @@ For detailed access scenarios (headless servers, SSH tunnels, firewall setup), s
 
 ## Dashboard Overview
 
-### Network Bar
+### Network Bar (Flight Deck)
 
 ![Network Bar and Bitcoin Price](docs/images/15.topmenunetwork.bitcoinprice.png)
 
-The top bar shows each configured Bitcoin Core network (**IPv4**, **IPv6**, **Tor**, **I2P**, **CJDNS**) with real-time inbound/outbound peer counts. A colored dot indicates whether each network is enabled in your node's configuration. Hover over any network chip for additional details.
+The top bar shows all five Bitcoin Core network types as individual chips: **IPv4**, **IPv6**, **Tor**, **I2P**, and **CJDNS**. Each chip displays a colored status dot, the protocol name, and live inbound/outbound peer counts.
+
+- **Green dot** - the network is enabled and has active peers (working properly)
+- **Red/gray dot** - the network is disabled, not configured, or has no connected peers
+
+Each chip shows real-time counts like `3 in / 5 out`. When a peer connects or disconnects, an animated delta indicator (e.g. `+1`, `-2`) briefly appears next to the affected count so you can see connection changes as they happen.
+
+![Network Info Popup](docs/images/20.network-info-popup.png)
+
+**Hover** over any network chip to see a detailed popup with:
+- The full network name and enabled/disabled status
+- Inbound peer count
+- Outbound peer count
+- **Local Bitcoin Core Network Score** (for IPv4 and IPv6 only - overlay networks like Tor, I2P, and CJDNS do not have a reliable local score)
+- Configuration status message (whether the network appears properly configured or needs attention)
 
 ### Bitcoin Price
 
@@ -116,7 +130,7 @@ Click CPU, RAM, or NET for a detailed **System Info** modal with full breakdowns
 
 The Node Info modal has three sections: **Node** (version, peers, disk size, pruning, sync status), **Mempool** (pending TXs, data size, memory usage, total fees, min accepted/relay fees, Full RBF status), and **Blockchain** (chain, block height, sync progress, best block hash, difficulty, median time, softforks).
 
-- **MBCORE DB** click for GeoIP database stats: entry count, database size, newest/oldest entry age, file path, auto-resolve status, and an **Update Database** button to pull new geolocations without leaving the dashboard. Toggle **Auto-update** (green/red slider) to enable automatic database updates at startup and once per hour while the map is open — this setting persists across restarts and syncs with the terminal menu. Toggle **API Lookup** (green/red slider) to control whether unknown IPs are resolved via ip-api.com or only cached database entries are used
+- **MBCORE DB** click for GeoIP database stats: entry count, database size, newest/oldest entry age, file path, auto-resolve status, and an **Update Database** button to pull new geolocations without leaving the dashboard. Toggle **Auto-update** (green/red slider) to enable automatic database updates at startup and once per hour while the map is open - this setting persists across restarts and syncs with the terminal menu. Toggle **API Lookup** (green/red slider) to control whether unknown IPs are resolved via ip-api.com or only cached database entries are used
 
 ![GeoIP Database Modal](docs/images/16.geodb-modal.png)
 
@@ -126,17 +140,86 @@ The Node Info modal has three sections: **Node** (version, peers, disk size, pru
 
 The bottom panel shows all connected peers in a sortable, filterable table. The header displays network filter badges with live peer counts.
 
-**Default columns:** ID, Net, Duration, Type, IP:Port, Software, Services, City, Region, Country, Continent, ISP, Ping, Sent, Received, Addrman
-
 **Features:**
-- **Network filters** filter by All, IPv4, IPv6, Tor, I2P, or CJDNS
-- **Sortable** click any column header (cycles: unsorted → ascending → descending)
-- **Resizable** drag column edges
-- **Auto-fit** automatically sizes columns to fit content; turns off when you manually resize
-- **Hide/Show Table** minimize the peer table for a full map view
-- **Click to fly** click any row to zoom to that peer on the map
+- **Network filters** - filter by All, IPv4, IPv6, Tor, I2P, or CJDNS
+- **Sortable** - click any column header (cycles: unsorted, ascending, descending)
+- **Resizable** - drag column edges
+- **Auto-fit** - automatically sizes columns to fit content; turns off when you manually resize
+- **Hide/Show Table** - minimize the peer table for a full map view
+- **Click to fly** - click any row to zoom to that peer on the map
 
-16 columns visible by default, with 17+ additional columns available (country code, lat/lon, AS number, AS name, district, mobile, org, timezone, currency, hosting, proxy, ZIP, and more).
+#### Default Columns (16 visible)
+
+| Column | Label | Description |
+|--------|-------|-------------|
+| ID | ID | Peer identifier assigned by Bitcoin Core |
+| Net | Net | Network type: IPv4, IPv6, Tor, I2P, or CJDNS |
+| Duration | Duration | How long the peer has been connected (formatted as hours/minutes/seconds) |
+| Type | Type | Connection type and direction (see connection types below) |
+| IP:Port | IP:Port | Peer's network address and port |
+| Software | Software | The peer's Bitcoin Core version string (subver) |
+| Services | Services | Service flags advertised by the peer (see service flags below) |
+| City | City | Geolocated city |
+| Region | Region | State or province |
+| Country | Country | Country name |
+| Continent | Cont. | Continent abbreviation |
+| ISP | ISP | Internet Service Provider |
+| Ping | Ping | Round-trip latency in milliseconds |
+| Sent | Sent | Total bytes sent to this peer |
+| Received | Recv | Total bytes received from this peer |
+| Addrman | Addrman | Whether this peer's address is in Bitcoin Core's address manager (Yes/No) |
+
+#### Advanced Columns (17 additional, hidden by default)
+
+Enable these from the Table Settings gear menu. These provide deeper geolocation and network metadata.
+
+| Column | Label | Description |
+|--------|-------|-------------|
+| Direction | Dir | IN or OUT (raw direction without connection type) |
+| Country Code | CC | Two-letter country code (e.g. US, DE, JP) |
+| Continent Code | CntC | Continent code (e.g. NA, EU, AS) |
+| Latitude | Lat | Geographic latitude (2 decimal places) |
+| Longitude | Lon | Geographic longitude (2 decimal places) |
+| Region Code | Rgn | State/province abbreviation code |
+| AS Number | AS | Autonomous System number (e.g. AS13335) |
+| AS Name | AS Name | Organization that owns the AS (e.g. Cloudflare, Hetzner) |
+| District | District | Sub-city regional subdivision (where available) |
+| Mobile | Mob | Whether the peer is on a mobile/cellular network (Y/N) |
+| Organization | Org | Organization name associated with the IP |
+| Timezone | TZ | Peer's timezone (e.g. America/New_York) |
+| Currency | Curr | Local currency for the peer's country |
+| Hosting | Host | Whether the IP belongs to a hosting/datacenter provider (Y/N) |
+| UTC Offset | UTC | UTC offset in seconds |
+| Proxy | Proxy | Whether the IP is a known proxy (Y/N) |
+| ZIP | ZIP | Postal/ZIP code |
+
+#### Connection Types
+
+The **Type** column shows how each peer is connected. Outbound peers include the subtype after a slash (e.g. `OUT/OFR`). Hover any type for the full description.
+
+| Abbreviation | Full Name | Description |
+|-------------|-----------|-------------|
+| IN | Inbound | A peer that connected to your node |
+| OFR | Outbound Full Relay | Your node connected for full block and transaction relay |
+| BRO | Block Relay Only | Your node connected for blocks only (no transaction relay, for privacy) |
+| MAN | Manual | A peer you manually connected to via `addnode` |
+| AF | Address Fetch | A short-lived connection to learn about other peers' addresses |
+| FLR | Feeler | A short-lived connection to test if an address in the address manager is reachable |
+
+#### Service Flags
+
+The **Services** column shows abbreviated service flags that each peer advertises. These indicate what capabilities the peer supports. Hover over the services cell to see full descriptions.
+
+| Flag | Name | Bitcoin Core Constant | What It Means |
+|------|------|----------------------|---------------|
+| **N** | Network | NODE_NETWORK | The peer stores and serves the **complete blockchain history**. It can provide any historical block on request. Most full nodes advertise this flag. |
+| **W** | Witness | NODE_WITNESS | The peer supports **Segregated Witness** (SegWit). It can relay and validate witness data for transactions. Nearly all modern nodes have this. |
+| **NL** | Network Limited | NODE_NETWORK_LIMITED | The peer stores only the **last 288 blocks** (roughly 2 days of history). This is typical of pruned nodes that keep a minimal chain tail. NL peers can still relay new blocks and transactions normally. |
+| **P** | P2P V2 | P2P_V2 | The peer supports **BIP324 encrypted transport**. All traffic between your node and this peer is encrypted, preventing passive eavesdropping on the connection. |
+| **CF** | Compact Filters | NODE_COMPACT_FILTERS | The peer serves **BIP157/158 compact block filters**, which allow lightweight clients to privately determine whether a block contains relevant transactions without downloading the full block. |
+| **B** | Bloom | NODE_BLOOM | The peer supports **BIP37 Bloom filters**, an older lightweight client protocol. Bloom filters allow SPV wallets to request only transactions matching a filter pattern, though they leak some privacy to the serving node. |
+
+A typical modern full node will show `N W P` (full chain, SegWit, encrypted transport). A pruned node will show `NL W P` instead of `N W P`.
 
 ### Display Settings
 
@@ -149,7 +232,7 @@ Click the **Update in** or **Map Status** rows in the right overlay to open Disp
 
 ### Advanced Display Settings
 
-![Advanced Display Settings](docs/images/new.advanced.display.options.png)
+![Advanced Display Settings](docs/images/19.advanced-display-options.png)
 
 Click **Advanced** at the bottom of the Display Settings popup to open a floating, draggable panel with full control over the map's visual appearance. All changes are live and you see the effect immediately as you drag each slider.
 
@@ -195,6 +278,12 @@ Choose from four built-in themes that set all sliders to curated presets:
 - To keep changes for the current session only, just close the panel. Your settings stay active until you reload.
 - Every slider label is a clickable link that resets just that one slider to its default.
 
+![Advanced Display Panel](docs/images/17.advanced-display.png)
+
+Here is an example of a customized map using the Advanced Display Settings:
+
+![Customized Map Example](docs/images/18.advanced-display-example.png)
+
 ### Table Settings
 
 The gear (⚙) button opens Table Settings where you can:
@@ -236,7 +325,7 @@ Click the **Disconnect** button on any peer row in the table to open the disconn
 
 ![Geo/IP Database Settings](docs/images/3.geomenu.png)
 
-Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries. The auto-update setting syncs with the web dashboard — toggling it from either location updates the same config.
+Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries. The auto-update setting syncs with the web dashboard - toggling it in one place updates the other.
 
 ### Port Settings
 
@@ -247,6 +336,29 @@ Change the dashboard port if 58333 conflicts with another service. The setting p
 ### Firewall Helper
 
 If another device on your network can't reach the dashboard, the built-in Firewall Helper (option **3**) detects your IP, subnet, and firewall status, then offers to add the rule for you. It also provides the command to reverse the change later.
+
+### Automatic Updates
+
+MBCore Dashboard has two independent auto-update systems: one for the application itself and one for the GeoIP database.
+
+**System Update Check (Application)**
+
+The dashboard automatically checks GitHub for new versions of MBCore Dashboard:
+- Checks on dashboard startup, then every 55 minutes while the dashboard is open
+- The backend fetches the remote `VERSION` file from the GitHub repository and compares it to the locally installed version
+- Results are cached for 30 minutes to avoid excessive network requests
+- When a new version is available, a banner appears in the top-right corner of the dashboard: **"Update Available! v6.2.2 -> v6.3.0"** (for example)
+- Hover the banner to see the changelog (pulled from the `CHANGES` file) and instructions for how to update
+- From the terminal menu, use **u) Update** to pull the latest version via `git pull` and auto-restart
+
+**GeoIP Database Auto-Update**
+
+The GeoIP database that stores peer locations can also update itself:
+- When enabled, the database syncs from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset) at startup and once per hour while the dashboard is running
+- Toggle auto-update on/off from the dashboard's **MBCORE DB** modal (green/red slider) or from the terminal's **g) Geo/IP Database** menu
+- The setting syncs between the dashboard and terminal - toggling it in one place updates the other
+- A brief status message appears in the top bar during updates: countdown, checking, and result ("DB already up to date" or "DB successfully updated")
+- When auto-update is disabled, the database still works with whatever data it already has cached
 
 ---
 
