@@ -3819,7 +3819,7 @@
                 antNoteDismissed = false;
                 antNote.classList.remove('hidden');
                 // Reset visible rows to default
-                maxPeerRows = 15;
+                maxPeerRows = 10;
                 applyMaxPeerRows();
                 // Reset auto-fit
                 autoFitColumns = true;
@@ -4676,7 +4676,7 @@
     // ═══════════════════════════════════════════════════════════
 
     let displaySettingsEl = null;
-    let maxPeerRows = 15;  // Default visible rows in peer table (resize panel to fit)
+    let maxPeerRows = 10;  // Default visible rows in peer table (resize panel to fit)
 
     function openDisplaySettingsPopup(anchorEl) {
         closeDisplaySettingsPopup();
