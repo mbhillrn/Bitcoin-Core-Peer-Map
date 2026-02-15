@@ -3563,8 +3563,9 @@
                 const col = COLUMNS.find(c => c.key === key);
                 if (!col) continue;
                 const val = col.get(peer);
-                const hoverVal = col.full ? col.full(peer) : val;
-                html += `<td title="${String(hoverVal).replace(/"/g, '&quot;')}">${val}</td>`;
+                const hoverVal = col.full ? col.full(peer) : null;
+                const hoverAttr = hoverVal ? ` data-hover="${String(hoverVal).replace(/"/g, '&quot;')}"` : '';
+                html += `<td${hoverAttr}>${val}</td>`;
             }
             // Action buttons — single Disconnect button opens confirmation dialog
             html += '<td>';
@@ -4158,6 +4159,38 @@
     tbodyEl.addEventListener('mouseover', handleTbodyHover);
     tbodyEl.addEventListener('mouseleave', handleTbodyLeave);
 
+    // ── Styled cell tooltip (replaces native title attribute) ──
+    let cellTipEl = null;
+    function ensureCellTip() {
+        if (!cellTipEl) {
+            cellTipEl = document.createElement('div');
+            cellTipEl.className = 'cell-tooltip hidden';
+            document.body.appendChild(cellTipEl);
+        }
+        return cellTipEl;
+    }
+    tbodyEl.addEventListener('mouseover', (e) => {
+        const td = e.target.closest('td[data-hover]');
+        if (!td) { ensureCellTip().classList.add('hidden'); return; }
+        const tip = ensureCellTip();
+        const text = td.dataset.hover;
+        // Format newline-separated lines into styled rows
+        tip.innerHTML = text.split('\n').map(line => `<div class="cell-tip-line">${line}</div>`).join('');
+        tip.classList.remove('hidden');
+        const rect = td.getBoundingClientRect();
+        const tipRect = tip.getBoundingClientRect();
+        let x = rect.left + rect.width / 2 - tipRect.width / 2;
+        let y = rect.top - tipRect.height - 6;
+        if (x < 4) x = 4;
+        if (x + tipRect.width > window.innerWidth - 4) x = window.innerWidth - tipRect.width - 4;
+        if (y < 4) y = rect.bottom + 6; // flip below if no room above
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+    });
+    tbodyEl.addEventListener('mouseleave', () => {
+        ensureCellTip().classList.add('hidden');
+    });
+
     /** Show a confirmation dialog for disconnect with optional ban */
     function showDisconnectDialog(peerId, net) {
         const canBan = (net === 'ipv4' || net === 'ipv6');
@@ -4496,9 +4529,13 @@
                     hideTooltip();
                     highlightTableRow(null);
                 }
-                // [AS-DIVERSITY] Deselect any selected AS when clicking empty map
-                if (window.ASDiversity && window.ASDiversity.getSelectedAs()) {
-                    window.ASDiversity.deselect();
+                // [AS-DIVERSITY] Clear sub-filter first, or deselect AS if no sub-filter
+                if (window.ASDiversity) {
+                    if (window.ASDiversity.hasSubFilter()) {
+                        window.ASDiversity.clearSubFilter();
+                    } else if (window.ASDiversity.getSelectedAs()) {
+                        window.ASDiversity.deselect();
+                    }
                 }
             }
         }

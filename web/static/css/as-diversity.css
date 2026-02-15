@@ -202,7 +202,7 @@
 .as-legend {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 2px;
     pointer-events: auto;
     width: 260px;
@@ -230,8 +230,8 @@
     border-radius: 4px;
     transition: background var(--transition);
     white-space: nowrap;
-    width: auto;
-    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
 }
 .as-legend-item:hover {
     background: rgba(88, 166, 255, 0.1);
@@ -613,4 +613,128 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-legend::-webkit-scrollbar-thumb {
     background: rgba(88, 166, 255, 0.12);
     border-radius: 2px;
+}
+
+/* ==========================================================
+   10. INTERACTIVE SUB-ROWS — Hover/click on detail panel items
+   ========================================================== */
+.as-interactive-row {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease, border-left 0.15s ease;
+    border-left: 2px solid transparent;
+}
+.as-interactive-row:hover {
+    background: rgba(88, 166, 255, 0.1);
+    border-left-color: var(--accent);
+}
+.as-interactive-row.sub-filter-active {
+    background: rgba(88, 166, 255, 0.16);
+    border-left-color: var(--accent);
+}
+.as-interactive-row.sub-filter-active .as-detail-sub-label,
+.as-interactive-row.sub-filter-active .as-detail-sub-val {
+    color: var(--text-primary);
+}
+
+/* ==========================================================
+   11. SUB-ROW HOVER TOOLTIP — Peer summary on detail panel items
+   ========================================================== */
+.as-sub-tooltip {
+    position: fixed;
+    z-index: 320;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    max-width: 260px;
+    min-width: 160px;
+}
+.as-sub-tooltip.hidden { display: none; }
+
+.as-sub-tt-section {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+}
+.as-sub-tt-flag {
+    font-family: var(--font-data);
+    font-size: 9px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+.as-sub-tt-peer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 1px 0;
+    font-family: var(--font-data);
+    font-size: 10px;
+}
+.as-sub-tt-id {
+    color: var(--accent);
+    font-weight: 700;
+    min-width: 32px;
+}
+.as-sub-tt-type {
+    color: var(--text-primary);
+    font-weight: 600;
+    min-width: 42px;
+}
+.as-sub-tt-loc {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.as-sub-tt-more {
+    font-family: var(--font-data);
+    font-size: 9px;
+    color: var(--text-muted);
+    padding-top: 2px;
+}
+.as-sub-tt-hint {
+    font-family: var(--font-data);
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    padding-top: 3px;
+    border-top: 1px solid rgba(88, 166, 255, 0.08);
+}
+
+/* ==========================================================
+   12. STYLED CELL TOOLTIP — Replaces native title on peer table cells
+   ========================================================== */
+.cell-tooltip {
+    position: fixed;
+    z-index: 400;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 5px;
+    padding: 6px 10px;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    max-width: 320px;
+}
+.cell-tooltip.hidden { display: none; }
+.cell-tip-line {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+/* Light theme */
+body.theme-light .as-sub-tooltip,
+body.theme-light .cell-tooltip {
+    border-color: rgba(88, 166, 255, 0.25);
 }
