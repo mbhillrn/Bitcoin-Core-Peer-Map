@@ -15,9 +15,9 @@ window.ASDiversity = (function () {
     // ═══════════════════════════════════════════════════════════
 
     const MAX_SEGMENTS = 8;      // Top N ASes in the donut, rest = "Others"
-    const DONUT_SIZE = 220;      // SVG viewBox size
-    const DONUT_RADIUS = 98;     // Outer radius of the donut ring
-    const DONUT_WIDTH = 24;      // Width of the donut ring
+    const DONUT_SIZE = 260;      // SVG viewBox size
+    const DONUT_RADIUS = 116;    // Outer radius of the donut ring
+    const DONUT_WIDTH = 28;      // Width of the donut ring
     const INNER_RADIUS = DONUT_RADIUS - DONUT_WIDTH;
 
     // Curated colour palette — 9 colours (8 AS + Others), distinct and accessible
@@ -37,7 +37,7 @@ window.ASDiversity = (function () {
     // STATE
     // ═══════════════════════════════════════════════════════════
 
-    let isActive = false;          // Is the AS Diversity view currently shown?
+    let isActive = true;           // Always active now (no toggle)
     let asGroups = [];             // Aggregated AS data (sorted by count desc)
     let donutSegments = [];        // Top N + Others for donut rendering
     let hoveredAs = null;          // AS number string currently hovered
@@ -70,14 +70,14 @@ window.ASDiversity = (function () {
     /** Extract AS number from the "AS12345 Org Name" string */
     function parseAsNumber(asField) {
         if (!asField) return null;
-        const m = asField.match(/^(AS\d+)/);
+        var m = asField.match(/^(AS\d+)/);
         return m ? m[1] : null;
     }
 
     /** Extract org name from the "AS12345 Org Name" string */
     function parseAsOrg(asField) {
         if (!asField) return '';
-        const m = asField.match(/^AS\d+\s+(.+)/);
+        var m = asField.match(/^AS\d+\s+(.+)/);
         return m ? m[1].trim() : asField;
     }
 
@@ -93,9 +93,9 @@ window.ASDiversity = (function () {
     /** Format seconds to human-readable duration */
     function fmtDuration(secs) {
         if (!secs || secs <= 0) return '\u2014';
-        const d = Math.floor(secs / 86400);
-        const h = Math.floor((secs % 86400) / 3600);
-        const m = Math.floor((secs % 3600) / 60);
+        var d = Math.floor(secs / 86400);
+        var h = Math.floor((secs % 86400) / 3600);
+        var m = Math.floor((secs % 3600) / 60);
         if (d > 0) return d + 'd ' + h + 'h';
         if (h > 0) return h + 'h ' + m + 'm';
         return m + 'm';
@@ -103,8 +103,8 @@ window.ASDiversity = (function () {
 
     /** Get hosting label from peer flags */
     function getHostingLabel(peers) {
-        const hostingCount = peers.filter(p => p.hosting).length;
-        const ratio = hostingCount / peers.length;
+        var hostingCount = peers.filter(function (p) { return p.hosting; }).length;
+        var ratio = hostingCount / peers.length;
         if (ratio >= 0.7) return 'Cloud/Hosting';
         if (ratio <= 0.3) return 'Residential';
         return 'Mixed';
@@ -120,11 +120,12 @@ window.ASDiversity = (function () {
 
     /** Aggregate peer data into per-AS groups */
     function aggregatePeers(peers) {
-        const map = {};
-        let locatablePeers = 0;
+        var map = {};
+        var locatablePeers = 0;
 
-        for (const p of peers) {
-            const asNum = parseAsNumber(p.as);
+        for (var pi = 0; pi < peers.length; pi++) {
+            var p = peers[pi];
+            var asNum = parseAsNumber(p.as);
             if (!asNum) continue;
             locatablePeers++;
 
@@ -142,66 +143,95 @@ window.ASDiversity = (function () {
         totalPeers = locatablePeers;
 
         // Build full group objects
-        const groups = Object.values(map).map(g => {
-            const peers = g.peers;
-            const count = peers.length;
-            const pct = totalPeers > 0 ? (count / totalPeers) * 100 : 0;
+        var keys = Object.keys(map);
+        var groups = [];
+        for (var ki = 0; ki < keys.length; ki++) {
+            var g = map[keys[ki]];
+            var gPeers = g.peers;
+            var count = gPeers.length;
+            var pct = totalPeers > 0 ? (count / totalPeers) * 100 : 0;
 
             // Inbound / outbound
-            const inbound = peers.filter(p => p.direction === 'IN').length;
-            const outbound = count - inbound;
+            var inbound = 0;
+            for (var ii = 0; ii < gPeers.length; ii++) {
+                if (gPeers[ii].direction === 'IN') inbound++;
+            }
+            var outbound = count - inbound;
 
             // Connection types
-            const connTypes = {};
-            for (const p of peers) {
-                const t = p.connection_type || 'unknown';
+            var connTypes = {};
+            for (var ci = 0; ci < gPeers.length; ci++) {
+                var t = gPeers[ci].connection_type || 'unknown';
                 connTypes[t] = (connTypes[t] || 0) + 1;
             }
 
             // Performance
-            const pings = peers.map(p => p.ping_ms).filter(v => v > 0);
-            const avgPing = pings.length > 0 ? pings.reduce((a, b) => a + b, 0) / pings.length : 0;
+            var pings = [];
+            for (var pii = 0; pii < gPeers.length; pii++) {
+                if (gPeers[pii].ping_ms > 0) pings.push(gPeers[pii].ping_ms);
+            }
+            var avgPing = pings.length > 0 ? pings.reduce(function (a, b) { return a + b; }, 0) / pings.length : 0;
 
-            const nowSec = Math.floor(Date.now() / 1000);
-            const durations = peers.map(p => p.conntime > 0 ? nowSec - p.conntime : 0).filter(v => v > 0);
-            const avgDuration = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+            var nowSec = Math.floor(Date.now() / 1000);
+            var durations = [];
+            for (var di = 0; di < gPeers.length; di++) {
+                if (gPeers[di].conntime > 0) {
+                    var dur = nowSec - gPeers[di].conntime;
+                    if (dur > 0) durations.push(dur);
+                }
+            }
+            var avgDuration = durations.length > 0 ? durations.reduce(function (a, b) { return a + b; }, 0) / durations.length : 0;
 
-            const totalSent = peers.reduce((s, p) => s + (p.bytessent || 0), 0);
-            const totalRecv = peers.reduce((s, p) => s + (p.bytesrecv || 0), 0);
+            var totalSent = 0, totalRecv = 0;
+            for (var bi = 0; bi < gPeers.length; bi++) {
+                totalSent += (gPeers[bi].bytessent || 0);
+                totalRecv += (gPeers[bi].bytesrecv || 0);
+            }
 
             // Software versions
-            const verMap = {};
-            for (const p of peers) {
-                const v = p.subver || 'Unknown';
+            var verMap = {};
+            for (var vi = 0; vi < gPeers.length; vi++) {
+                var v = gPeers[vi].subver || 'Unknown';
                 verMap[v] = (verMap[v] || 0) + 1;
             }
-            const versions = Object.entries(verMap)
-                .map(([subver, cnt]) => ({ subver, count: cnt }))
-                .sort((a, b) => b.count - a.count);
+            var versions = [];
+            var verKeys = Object.keys(verMap);
+            for (var vk = 0; vk < verKeys.length; vk++) {
+                versions.push({ subver: verKeys[vk], count: verMap[verKeys[vk]] });
+            }
+            versions.sort(function (a, b) { return b.count - a.count; });
 
             // Countries
-            const countryMap = {};
-            for (const p of peers) {
-                if (!p.countryCode || p.countryCode === '') continue;
-                const key = p.countryCode;
-                if (!countryMap[key]) countryMap[key] = { code: key, name: p.country || key, count: 0 };
-                countryMap[key].count++;
+            var countryMap = {};
+            for (var coi = 0; coi < gPeers.length; coi++) {
+                if (!gPeers[coi].countryCode || gPeers[coi].countryCode === '') continue;
+                var ckey = gPeers[coi].countryCode;
+                if (!countryMap[ckey]) countryMap[ckey] = { code: ckey, name: gPeers[coi].country || ckey, count: 0 };
+                countryMap[ckey].count++;
             }
-            const countries = Object.values(countryMap).sort((a, b) => b.count - a.count);
+            var countries = [];
+            var coKeys = Object.keys(countryMap);
+            for (var ck = 0; ck < coKeys.length; ck++) {
+                countries.push(countryMap[coKeys[ck]]);
+            }
+            countries.sort(function (a, b) { return b.count - a.count; });
 
             // Service flag combos
-            const svcMap = {};
-            for (const p of peers) {
-                const s = p.services_abbrev || '\u2014';
+            var svcMap = {};
+            for (var si = 0; si < gPeers.length; si++) {
+                var s = gPeers[si].services_abbrev || '\u2014';
                 svcMap[s] = (svcMap[s] || 0) + 1;
             }
-            const servicesCombos = Object.entries(svcMap)
-                .map(([abbrev, cnt]) => ({ abbrev, count: cnt }))
-                .sort((a, b) => b.count - a.count);
+            var servicesCombos = [];
+            var sKeys = Object.keys(svcMap);
+            for (var sk = 0; sk < sKeys.length; sk++) {
+                servicesCombos.push({ abbrev: sKeys[sk], count: svcMap[sKeys[sk]] });
+            }
+            servicesCombos.sort(function (a, b) { return b.count - a.count; });
 
-            const risk = getRisk(pct);
+            var risk = getRisk(pct);
 
-            return {
+            groups.push({
                 asNumber: g.asNumber,
                 asName: g.asName,
                 asShort: g.asShort,
@@ -209,7 +239,7 @@ window.ASDiversity = (function () {
                 percentage: pct,
                 inboundCount: inbound,
                 outboundCount: outbound,
-                connTypes,
+                connTypes: connTypes,
                 avgPingMs: avgPing,
                 avgDurationSecs: avgDuration,
                 avgDurationFmt: fmtDuration(avgDuration),
@@ -217,28 +247,28 @@ window.ASDiversity = (function () {
                 totalBytesRecv: totalRecv,
                 totalBytesSentFmt: fmtBytes(totalSent),
                 totalBytesRecvFmt: fmtBytes(totalRecv),
-                versions,
-                countries,
-                servicesCombos,
-                hostingLabel: getHostingLabel(peers),
+                versions: versions,
+                countries: countries,
+                servicesCombos: servicesCombos,
+                hostingLabel: getHostingLabel(gPeers),
                 riskLevel: risk.level,
                 riskLabel: risk.label,
-                peerIds: peers.map(p => p.id),
+                peerIds: gPeers.map(function (p) { return p.id; }),
                 color: '#6e7681',  // assigned later from palette
-            };
-        });
+            });
+        }
 
         // Sort by peer count descending
-        groups.sort((a, b) => b.peerCount - a.peerCount);
+        groups.sort(function (a, b) { return b.peerCount - a.peerCount; });
         return groups;
     }
 
     /** Calculate Herfindahl-Hirschman diversity score (0-10) */
     function calcDiversityScore(groups) {
         if (totalPeers === 0) return 0;
-        let hhi = 0;
-        for (const g of groups) {
-            const share = g.peerCount / totalPeers;
+        var hhi = 0;
+        for (var i = 0; i < groups.length; i++) {
+            var share = groups[i].peerCount / totalPeers;
             hhi += share * share;
         }
         return Math.round((1 - hhi) * 100) / 10; // 0.0 to 10.0
@@ -246,19 +276,26 @@ window.ASDiversity = (function () {
 
     /** Build donut segments: top N + Others bucket */
     function buildDonutSegments(groups) {
-        const top = groups.slice(0, MAX_SEGMENTS);
-        const rest = groups.slice(MAX_SEGMENTS);
+        var top = groups.slice(0, MAX_SEGMENTS);
+        var rest = groups.slice(MAX_SEGMENTS);
 
         // Assign colors
-        for (let i = 0; i < top.length; i++) {
+        for (var i = 0; i < top.length; i++) {
             top[i].color = PALETTE[i % PALETTE.length];
         }
 
-        const segments = [...top];
+        var segments = top.slice();
 
         if (rest.length > 0) {
-            const othersCount = rest.reduce((s, g) => s + g.peerCount, 0);
-            const othersPct = totalPeers > 0 ? (othersCount / totalPeers) * 100 : 0;
+            var othersCount = 0;
+            var othersPeerIds = [];
+            for (var ri = 0; ri < rest.length; ri++) {
+                othersCount += rest[ri].peerCount;
+                for (var rpi = 0; rpi < rest[ri].peerIds.length; rpi++) {
+                    othersPeerIds.push(rest[ri].peerIds[rpi]);
+                }
+            }
+            var othersPct = totalPeers > 0 ? (othersCount / totalPeers) * 100 : 0;
             segments.push({
                 asNumber: 'Others',
                 asName: rest.length + ' other providers',
@@ -268,9 +305,8 @@ window.ASDiversity = (function () {
                 riskLevel: 'low',
                 riskLabel: '',
                 color: PALETTE[PALETTE.length - 1],
-                peerIds: rest.flatMap(g => g.peerIds),
+                peerIds: othersPeerIds,
                 isOthers: true,
-                // Store the individual groups for the detail panel
                 _othersGroups: rest,
             });
         }
@@ -284,18 +320,18 @@ window.ASDiversity = (function () {
 
     /** Create an SVG arc path for a donut segment */
     function describeArc(cx, cy, outerR, innerR, startAngle, endAngle) {
-        const sweep = endAngle - startAngle;
-        const actualEnd = sweep >= 2 * Math.PI ? startAngle + 2 * Math.PI - 0.001 : endAngle;
-        const largeArc = sweep > Math.PI ? 1 : 0;
+        var sweep = endAngle - startAngle;
+        var actualEnd = sweep >= 2 * Math.PI ? startAngle + 2 * Math.PI - 0.001 : endAngle;
+        var largeArc = sweep > Math.PI ? 1 : 0;
 
-        const ox1 = cx + outerR * Math.cos(startAngle);
-        const oy1 = cy + outerR * Math.sin(startAngle);
-        const ox2 = cx + outerR * Math.cos(actualEnd);
-        const oy2 = cy + outerR * Math.sin(actualEnd);
-        const ix1 = cx + innerR * Math.cos(actualEnd);
-        const iy1 = cy + innerR * Math.sin(actualEnd);
-        const ix2 = cx + innerR * Math.cos(startAngle);
-        const iy2 = cy + innerR * Math.sin(startAngle);
+        var ox1 = cx + outerR * Math.cos(startAngle);
+        var oy1 = cy + outerR * Math.sin(startAngle);
+        var ox2 = cx + outerR * Math.cos(actualEnd);
+        var oy2 = cy + outerR * Math.sin(actualEnd);
+        var ix1 = cx + innerR * Math.cos(actualEnd);
+        var iy1 = cy + innerR * Math.sin(actualEnd);
+        var ix2 = cx + innerR * Math.cos(startAngle);
+        var iy2 = cy + innerR * Math.sin(startAngle);
 
         return [
             'M ' + ox1 + ' ' + oy1,
@@ -310,54 +346,63 @@ window.ASDiversity = (function () {
     function renderDonut() {
         if (!donutSvg) return;
 
-        const cx = DONUT_SIZE / 2;
-        const cy = DONUT_SIZE / 2;
-        const gap = 0.03; // gap between segments in radians
-        let html = '';
+        var cx = DONUT_SIZE / 2;
+        var cy = DONUT_SIZE / 2;
+        var gap = 0.03; // gap between segments in radians
+        var html = '';
 
-        // SVG defs for drop shadow and gradients
+        // SVG defs for 3D-style effects
         html += '<defs>';
+        // Drop shadow for depth
         html += '<filter id="donut-shadow" x="-20%" y="-20%" width="140%" height="140%">';
-        html += '<feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/>';
+        html += '<feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.55"/>';
         html += '</filter>';
-        // Subtle inner glow
-        html += '<filter id="donut-glow" x="-10%" y="-10%" width="120%" height="120%">';
-        html += '<feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>';
-        html += '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>';
+        // Inner shadow for 3D ring illusion
+        html += '<filter id="donut-inner-shadow" x="-10%" y="-10%" width="120%" height="120%">';
+        html += '<feGaussianBlur in="SourceAlpha" stdDeviation="3" result="shadow"/>';
+        html += '<feOffset dx="0" dy="2" result="shadow-offset"/>';
+        html += '<feComposite in="SourceGraphic" in2="shadow-offset" operator="over"/>';
         html += '</filter>';
+        // Highlight gradient for 3D ring top-light
+        html += '<linearGradient id="donut-highlight" x1="0" y1="0" x2="0" y2="1">';
+        html += '<stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>';
+        html += '<stop offset="50%" stop-color="rgba(255,255,255,0)"/>';
+        html += '<stop offset="100%" stop-color="rgba(0,0,0,0.12)"/>';
+        html += '</linearGradient>';
         html += '</defs>';
 
         // Background track ring (subtle)
         html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="rgba(88,166,255,0.04)" stroke-width="' + DONUT_WIDTH + '" />';
 
         // Outer decorative ring
-        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS + 2) + '" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="1" />';
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS + 3) + '" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="1" />';
 
         // Inner decorative ring
-        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (INNER_RADIUS - 2) + '" fill="none" stroke="rgba(88,166,255,0.06)" stroke-width="0.5" />';
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (INNER_RADIUS - 3) + '" fill="none" stroke="rgba(88,166,255,0.06)" stroke-width="0.5" />';
 
         if (donutSegments.length === 0) {
             // Empty state — pulsing gray ring
             html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="#2d333b" stroke-width="' + DONUT_WIDTH + '" opacity="0.5" />';
         } else if (donutSegments.length === 1) {
-            const seg = donutSegments[0];
+            var seg = donutSegments[0];
             html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="' + seg.color + '" stroke-width="' + DONUT_WIDTH + '" class="as-donut-segment" data-as="' + seg.asNumber + '" filter="url(#donut-shadow)" />';
         } else {
-            const totalGap = gap * donutSegments.length;
-            const available = 2 * Math.PI - totalGap;
-            let angle = -Math.PI / 2; // start at top
+            var totalGap = gap * donutSegments.length;
+            var available = 2 * Math.PI - totalGap;
+            var angle = -Math.PI / 2; // start at top
 
             // Group for shadow on all segments
             html += '<g filter="url(#donut-shadow)">';
-            for (const seg of donutSegments) {
-                const sweep = (seg.peerCount / totalPeers) * available;
+            for (var si = 0; si < donutSegments.length; si++) {
+                var seg = donutSegments[si];
+                var sweep = (seg.peerCount / totalPeers) * available;
                 if (sweep <= 0) continue;
 
-                const startA = angle + gap / 2;
-                const endA = angle + sweep + gap / 2;
-                const d = describeArc(cx, cy, DONUT_RADIUS, INNER_RADIUS, startA, endA);
+                var startA = angle + gap / 2;
+                var endA = angle + sweep + gap / 2;
+                var d = describeArc(cx, cy, DONUT_RADIUS, INNER_RADIUS, startA, endA);
 
-                const cls = ['as-donut-segment'];
+                var cls = ['as-donut-segment'];
                 if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
                 if (selectedAs === seg.asNumber) cls.push('selected');
 
@@ -365,6 +410,9 @@ window.ASDiversity = (function () {
                 angle += sweep + gap;
             }
             html += '</g>';
+
+            // 3D highlight overlay — a semi-transparent ring on top for depth illusion
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="url(#donut-highlight)" stroke-width="' + DONUT_WIDTH + '" pointer-events="none" />';
         }
 
         donutSvg.innerHTML = html;
@@ -376,11 +424,12 @@ window.ASDiversity = (function () {
         }
 
         // Attach segment event listeners
-        donutSvg.querySelectorAll('.as-donut-segment').forEach(function (el) {
-            el.addEventListener('mouseenter', onSegmentHover);
-            el.addEventListener('mouseleave', onSegmentLeave);
-            el.addEventListener('click', onSegmentClick);
-        });
+        var segEls = donutSvg.querySelectorAll('.as-donut-segment');
+        for (var i = 0; i < segEls.length; i++) {
+            segEls[i].addEventListener('mouseenter', onSegmentHover);
+            segEls[i].addEventListener('mouseleave', onSegmentLeave);
+            segEls[i].addEventListener('click', onSegmentClick);
+        }
     }
 
     /** Update the donut center label */
@@ -422,7 +471,7 @@ window.ASDiversity = (function () {
             if (selectedAs === seg.asNumber) cls.push('selected');
 
             var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
-            var shortName = displayName.length > 20 ? displayName.substring(0, 19) + '\u2026' : displayName;
+            var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
 
             html += '<div class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '">';
             html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
@@ -434,11 +483,12 @@ window.ASDiversity = (function () {
         legendEl.innerHTML = html;
 
         // Attach legend event listeners
-        legendEl.querySelectorAll('.as-legend-item').forEach(function (el) {
-            el.addEventListener('mouseenter', onSegmentHover);
-            el.addEventListener('mouseleave', onSegmentLeave);
-            el.addEventListener('click', onSegmentClick);
-        });
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var li = 0; li < items.length; li++) {
+            items[li].addEventListener('mouseenter', onSegmentHover);
+            items[li].addEventListener('mouseleave', onSegmentLeave);
+            items[li].addEventListener('click', onSegmentClick);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -490,7 +540,7 @@ window.ASDiversity = (function () {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // DETAIL PANEL — Right slide-in
+    // DETAIL PANEL — Right slide-in (pushes content)
     // ═══════════════════════════════════════════════════════════
 
     function openPanel(asNum) {
@@ -498,8 +548,6 @@ window.ASDiversity = (function () {
         var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         if (!seg) return;
 
-        // For "Others" bucket, show the full list of individual ASes
-        // For real ASes, get the full aggregated group
         var fullGroup = seg.isOthers ? seg : asGroups.find(function (g) { return g.asNumber === asNum; });
         if (!fullGroup) return;
 
@@ -548,13 +596,11 @@ window.ASDiversity = (function () {
         var html = '';
 
         if (seg.isOthers) {
-            // Full list of all individual ASes in the Others bucket
             html += '<div class="modal-section-title">Summary</div>';
             html += row('Total Peers', seg.peerCount);
             html += row('Providers', seg._othersGroups ? seg._othersGroups.length : '?');
             html += row('Share', seg.percentage.toFixed(1) + '%');
 
-            // List each individual AS
             if (seg._othersGroups && seg._othersGroups.length > 0) {
                 html += '<div class="modal-section-title">All Providers</div>';
                 for (var i = 0; i < seg._othersGroups.length; i++) {
@@ -565,12 +611,10 @@ window.ASDiversity = (function () {
                 }
             }
         } else {
-            // Full detail for a specific AS
             html += '<div class="modal-section-title">Peers</div>';
             html += row('Total', fullGroup.peerCount);
             html += row('Inbound', fullGroup.inboundCount);
             html += row('Outbound', fullGroup.outboundCount);
-            // Connection type breakdown
             if (fullGroup.connTypes) {
                 var typeLabels = {
                     'outbound-full-relay': 'Full Relay',
@@ -593,7 +637,6 @@ window.ASDiversity = (function () {
             html += row('Data Sent', fullGroup.totalBytesSentFmt);
             html += row('Data Recv', fullGroup.totalBytesRecvFmt);
 
-            // Software versions
             if (fullGroup.versions && fullGroup.versions.length > 0) {
                 html += '<div class="modal-section-title">Software</div>';
                 for (var vi = 0; vi < fullGroup.versions.length; vi++) {
@@ -601,7 +644,6 @@ window.ASDiversity = (function () {
                 }
             }
 
-            // Countries
             if (fullGroup.countries && fullGroup.countries.length > 0) {
                 html += '<div class="modal-section-title">Countries</div>';
                 for (var ci = 0; ci < fullGroup.countries.length; ci++) {
@@ -609,7 +651,6 @@ window.ASDiversity = (function () {
                 }
             }
 
-            // Services
             if (fullGroup.servicesCombos && fullGroup.servicesCombos.length > 0) {
                 html += '<div class="modal-section-title">Services</div>';
                 for (var si = 0; si < fullGroup.servicesCombos.length; si++) {
@@ -620,20 +661,22 @@ window.ASDiversity = (function () {
 
         bodyEl.innerHTML = html;
 
-        // Show panel with animation
+        // Show panel with animation + push content
         panelEl.classList.remove('hidden');
         void panelEl.offsetWidth;
         panelEl.classList.add('visible');
+        document.body.classList.add('as-panel-open');
     }
 
     function closePanel() {
         if (!panelEl) return;
         panelEl.classList.remove('visible');
+        document.body.classList.remove('as-panel-open');
         setTimeout(function () {
             if (!panelEl.classList.contains('visible')) {
                 panelEl.classList.add('hidden');
             }
-        }, 260);
+        }, 310);
     }
 
     function row(label, value) {
@@ -654,7 +697,7 @@ window.ASDiversity = (function () {
         hoveredAs = asNum;
         showTooltip(asNum, e);
 
-        // Only draw hover lines if nothing is selected, or if hovering a different AS than selected
+        // Only draw hover lines if nothing is selected
         if (!selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg && _drawLinesForAs) {
@@ -706,7 +749,7 @@ window.ASDiversity = (function () {
     }
 
     function onKeyDown(e) {
-        if (e.key === 'Escape' && selectedAs && isActive) {
+        if (e.key === 'Escape' && selectedAs) {
             deselect();
         }
     }
@@ -718,7 +761,7 @@ window.ASDiversity = (function () {
     /** Initialize — cache DOM refs and attach events. Call once on page load. */
     function init() {
         containerEl = document.getElementById('as-diversity-container');
-        donutWrapEl = containerEl ? containerEl.querySelector('.as-donut-wrap') : null;
+        donutWrapEl = document.getElementById('as-donut-wrap');
         donutSvg = document.getElementById('as-donut');
         donutCenter = document.getElementById('as-donut-center');
         legendEl = document.getElementById('as-legend');
@@ -734,6 +777,9 @@ window.ASDiversity = (function () {
 
         // Escape key
         document.addEventListener('keydown', onKeyDown);
+
+        // Always active — show immediately
+        isActive = true;
     }
 
     /** Register integration callbacks from bitapp.js */
@@ -771,20 +817,14 @@ window.ASDiversity = (function () {
         }
     }
 
-    /** Activate the AS Diversity view */
+    /** Activate the AS Diversity view (always active now, kept for API compat) */
     function activate() {
         isActive = true;
-        if (containerEl) containerEl.classList.remove('hidden');
-        // Show loading indicator if we haven't rendered yet
-        if (!hasRenderedOnce && loadingEl) {
-            loadingEl.style.display = '';
-        }
     }
 
     /** Deactivate the AS Diversity view */
     function deactivate() {
         isActive = false;
-        if (containerEl) containerEl.classList.add('hidden');
         deselect();
         hideTooltip();
     }

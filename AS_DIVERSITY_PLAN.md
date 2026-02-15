@@ -42,11 +42,18 @@ at a glance.
 
 **How it works (user perspective):**
 
-1. Toggle `Peer Map | AS Diversity` in the top bar
-2. Flight deck hides, replaced by a donut chart (top 8 ASes + Others)
-3. Hover any AS segment → compact 3-line tooltip + animated lines on map
-4. Click any AS segment → detail panel slides in from right + peer list filters
-5. Click again / X / Escape → deselects, everything reverts
+1. Donut chart is **always visible** in the upper-right corner of the map (no toggle needed)
+2. Hover any AS segment → compact 3-line tooltip + animated lines from donut to peer nodes
+3. Click any AS segment → detail panel slides in from right, **pushes** the map/donut/peer list over, filters peer table, dims non-matching peers
+4. Click again / X / Escape → deselects, everything reverts
+
+**UI Restructuring (v2 layout):**
+- **Topbar:** Logo+Version (left) | Flight deck network chips (center) | Update countdown, status msg, status dots, sync status, time, gear (right)
+- **Map area:** BTC price centered at top (larger), map controls centered below it, left overlay stays, AS donut in upper-right
+- **Peer panel handle:** PEER LIST + filters (left) | Connect, Banned, NODE-INFO, MBCORE-DB, FIT, arrow, gear (right)
+- **Right overlay removed** — all items moved to topbar or peer panel
+- **Status dots (Internet/Running):** Just dots side-by-side, hover for info text
+- **Map Settings:** Gear icon in topbar right, opens the existing advanced display panel
 
 ---
 
@@ -63,16 +70,27 @@ and make reverting trivial.
 ### Modified files (minimal, clearly marked changes):
 - `web/templates/bitindex.html` — Adds:
   - Two `<script>` / `<link>` tags for the new files
-  - The view toggle HTML in the topbar
-  - The AS diversity container div (empty shell)
-  - The AS detail panel div (empty shell)
+  - Flight deck moved to topbar center section
+  - Status items (update countdown, status msg, dots, sync, gear) in topbar right
+  - AS diversity container in map upper-right (always visible, no toggle)
+  - AS detail panel div (slide-in, pushes content)
+  - Peer panel buttons: NODE-INFO, MBCORE-DB, FIT (renamed), arrow toggle
+  - Removed: right overlay, view toggle, "Hide Table" text
 - `web/static/js/bitapp.js` — Adds:
-  - A thin integration layer (~30-50 lines) that:
-    - Exposes `lastPeers` and `nodes` to the AS module
-    - Calls `ASDiversity.update()` from `fetchPeers()`
-    - Handles view toggle state
-    - Provides map line drawing hook
+  - A thin integration layer (~50-80 lines) that:
+    - Calls `ASDiversity.update()` from `fetchPeers()` (always, no toggle check)
+    - Provides map line drawing hooks (drawAsLines from donut position)
+    - Wires topbar gear → advanced display panel
+    - Wires peer panel NODE-INFO/MBCORE-DB buttons
+    - Removes right overlay positioning logic
   - All integration points are marked with `// [AS-DIVERSITY]` comments
+- `web/static/css/bitstyle.css` — Adds:
+  - Topbar center section for flight deck
+  - New topbar-right elements (countdown group, status msg, dots group, sync status, gear)
+  - Repositioned BTC price bar (larger font, top: 52px)
+  - Map controls repositioned (centered below BTC price)
+  - Right overlay hidden (display: none)
+  - Flight deck inline styles (no longer fixed positioned)
 
 ### To fully revert:
 ```bash
@@ -92,38 +110,53 @@ git checkout main -- web/static/js/bitapp.js
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `web/static/js/as-diversity.js` | **NEW** | All AS diversity logic (aggregation, donut, tooltips, panel) |
-| `web/static/css/as-diversity.css` | **NEW** | All AS diversity styling |
-| `web/templates/bitindex.html` | **EDIT** | Shell HTML elements + script/css includes |
-| `web/static/js/bitapp.js` | **EDIT** | Thin integration hooks (~30-50 lines, marked `[AS-DIVERSITY]`) |
+| `web/static/js/as-diversity.js` | **NEW** | All AS diversity logic (aggregation, donut, tooltips, panel) ~885 lines |
+| `web/static/css/as-diversity.css` | **NEW** | All AS diversity styling + detail panel push effect ~519 lines |
+| `web/templates/bitindex.html` | **EDIT** | Restructured topbar (flight deck center, status right), donut container, peer panel buttons |
+| `web/static/js/bitapp.js` | **EDIT** | Integration hooks + new button wiring + gear icon (~80 lines, marked `[AS-DIVERSITY]`) |
+| `web/static/css/bitstyle.css` | **EDIT** | Topbar center, new right elements, repositioned BTC price + map controls, right overlay removed |
 | `AS_DIVERSITY_PLAN.md` | **NEW** | This document |
 
 ---
 
 ## 4. Todo List
 
-### Phase 1 — Core Feature
+### Phase 1 — Core Feature (COMPLETE)
 - [x] Codebase exploration & data inventory
 - [x] Write this plan document
-- [ ] Create `as-diversity.js` with AS aggregation logic
-- [ ] Create `as-diversity.css` with all styling
-- [ ] Add shell HTML to `bitindex.html` (containers, script/css tags)
-- [ ] Build SVG donut chart component
-- [ ] Build diversity score calculation
-- [ ] Build compact hover tooltip (3 lines max)
-- [ ] Build AS detail slide-in panel (right side)
-- [ ] Build view toggle in topbar (`Peer Map | AS Diversity`)
-- [ ] Add integration hooks in `bitapp.js` (marked with `[AS-DIVERSITY]`)
-- [ ] Wire click: filter peer list + highlight map + open panel
-- [ ] Wire hover: draw lines to AS peers on canvas
-- [ ] Wire Escape / X / re-click to deselect
-- [ ] Test with live data
-- [ ] Commit and push
+- [x] Create `as-diversity.js` with AS aggregation logic
+- [x] Create `as-diversity.css` with all styling
+- [x] Add shell HTML to `bitindex.html` (containers, script/css tags)
+- [x] Build SVG donut chart component (260px, 3D effect, drop shadows)
+- [x] Build diversity score calculation (HHI-based, 0-10)
+- [x] Build compact hover tooltip (3 lines max)
+- [x] Build AS detail slide-in panel (right side, pushes content)
+- [x] Add integration hooks in `bitapp.js` (marked with `[AS-DIVERSITY]`)
+- [x] Wire click: filter peer list + highlight map + open panel
+- [x] Wire hover: draw lines from donut to AS peers on canvas
+- [x] Wire Escape / X / re-click to deselect
+- [x] Selection persistence (lines stay on mouse leave when clicked)
+- [x] Others panel lists all individual ASes
+
+### Phase 1b — UI Restructuring (COMPLETE)
+- [x] Move flight deck to topbar center
+- [x] Move status items to topbar right (countdown, status msg, dots, sync, time, gear)
+- [x] Remove right overlay (everything moved to topbar/peer panel)
+- [x] Remove view toggle (donut always visible in upper-right of map)
+- [x] Move map controls below BTC price (centered)
+- [x] Enlarge BTC price font
+- [x] Add NODE-INFO, MBCORE-DB buttons to peer panel handle
+- [x] Rename Auto-fit → FIT, Hide Table → arrow only
+- [x] Detail panel pushes content instead of overlaying
+- [x] Donut: 260px, 3D look, opacity effect (0.88 → 1 on hover)
+- [x] Internet/Running dots: just dots, hover for info
+- [x] Gear icon in topbar → opens advanced display settings
 
 ### Phase 2 — Polish (if time permits)
 - [ ] Dropdown in donut center for searching all ASes
 - [ ] Smooth segment transitions when peer data updates
 - [ ] Keyboard navigation (arrow keys through segments)
+- [ ] Analysis settings section in map settings (ring pulse, etc.)
 - [ ] Mobile-friendly adjustments (if ever needed)
 
 ---

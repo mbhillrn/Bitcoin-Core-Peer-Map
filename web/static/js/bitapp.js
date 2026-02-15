@@ -911,17 +911,6 @@
     // ═══════════════════════════════════════════════════════════
 
     const minimizeBtn = document.getElementById('btn-minimize');
-    const mapControlsEl = document.getElementById('map-controls');
-
-    /** Reposition map controls below the right overlay */
-    function repositionMapControls() {
-        if (!mapControlsEl) return;
-        const rightOverlay = document.getElementById('right-overlay');
-        if (rightOverlay) {
-            const rect = rightOverlay.getBoundingClientRect();
-            mapControlsEl.style.top = (rect.bottom + 8) + 'px';
-        }
-    }
 
     if (minimizeBtn) {
         minimizeBtn.addEventListener('click', (e) => {
@@ -930,16 +919,11 @@
             if (panel) {
                 panel.classList.toggle('collapsed');
                 const isCollapsed = panel.classList.contains('collapsed');
-                minimizeBtn.innerHTML = isCollapsed ? 'Show Table &#9650;' : 'Hide Table &#9660;';
-                // Reposition map controls after transition completes
-                setTimeout(repositionMapControls, 350);
+                minimizeBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
+                minimizeBtn.title = isCollapsed ? 'Show peer list table' : 'Hide peer list table';
             }
         });
     }
-
-    // Initial positioning of map controls + reposition on resize
-    setTimeout(repositionMapControls, 200);
-    window.addEventListener('resize', repositionMapControls);
 
     // ═══════════════════════════════════════════════════════════
     // BTC PRICE STATE
@@ -1805,8 +1789,8 @@
             // Update flight deck network counts
             updateFlightDeck(nodes);
 
-            // [AS-DIVERSITY] Update AS Diversity view with latest peer data
-            if (window.ASDiversity && window.ASDiversity.isViewActive()) {
+            // [AS-DIVERSITY] Update AS Diversity donut with latest peer data (always active)
+            if (window.ASDiversity) {
                 window.ASDiversity.update(lastPeers);
             }
 
@@ -2193,17 +2177,13 @@
 
     function updateConnectionStatus(connected) {
         const dot = document.getElementById('status-dot');
-        const txt = document.getElementById('status-text');
+        if (!dot) return;
         if (connected) {
             dot.classList.add('online');
             dot.title = 'MBCore dashboard is running and connected';
-            txt.title = 'MBCore dashboard is running and connected';
-            txt.textContent = 'Running';
         } else {
             dot.classList.remove('online');
             dot.title = 'MBCore dashboard service is not responding';
-            txt.title = 'MBCore dashboard service is not responding';
-            txt.textContent = 'Stopped';
         }
     }
 
@@ -3290,7 +3270,6 @@
     // Panel toggle (clicking the title bar)
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
         panelEl.classList.toggle('collapsed');
-        setTimeout(repositionMapControls, 350);
     });
 
     /** Get sorted copy of lastPeers based on current sort state.
@@ -5498,7 +5477,7 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // [AS-DIVERSITY] — View toggle + module initialization
+    // [AS-DIVERSITY] — Module initialization (always-on, no toggle)
     // ═══════════════════════════════════════════════════════════
 
     function initAsDiversity() {
@@ -5527,38 +5506,56 @@
             getWorldToScreen: worldToScreen,
         });
 
-        // View toggle buttons
-        const toggle = document.getElementById('as-view-toggle');
-        if (!toggle) return;
-        const btns = toggle.querySelectorAll('.as-vt-btn');
-        const flightDeck = document.getElementById('flight-deck');
-        const btcBar = document.getElementById('btc-price-bar');
+        // Donut is always active — feed it initial data if available
+        if (lastPeers.length > 0) {
+            ASD.update(lastPeers);
+        }
+    }
 
-        btns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
+    // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] Peer panel + topbar button wiring
+    // ═══════════════════════════════════════════════════════════
+
+    function initNewButtons() {
+        // NODE-INFO button in peer panel handle
+        const nodeInfoPeerBtn = document.getElementById('btn-node-info-peer');
+        if (nodeInfoPeerBtn) {
+            nodeInfoPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+        }
+
+        // MBCORE-DB button in peer panel handle
+        const mbcoreDbPeerBtn = document.getElementById('btn-mbcore-db-peer');
+        if (mbcoreDbPeerBtn) {
+            mbcoreDbPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(); });
+        }
+
+        // Topbar gear icon → open map settings (advanced display panel)
+        const topbarGear = document.getElementById('topbar-gear');
+        if (topbarGear) {
+            topbarGear.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const targetMode = btn.dataset.view;
-                btns.forEach(b => b.classList.toggle('active', b === btn));
-
-                if (targetMode === 'as') {
-                    // Switch to AS Diversity
-                    if (flightDeck) flightDeck.style.display = 'none';
-                    if (btcBar) btcBar.style.display = 'none';
-                    ASD.activate();
-                    ASD.update(lastPeers);
-                } else {
-                    // Switch to Peer Map
-                    if (flightDeck) flightDeck.style.display = '';
-                    if (btcBar) btcBar.style.display = '';
-                    ASD.deactivate();
-                    // Clear any AS filters
-                    asFilterPeerIds = null;
-                    asLinePeerIds = null;
-                    asLineColor = null;
-                    renderPeerTable();
-                }
+                openAdvancedPanel();
             });
-        });
+        }
+
+        // Topbar countdown → open display settings
+        const topbarCountdown = document.getElementById('topbar-countdown');
+        if (topbarCountdown) {
+            topbarCountdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDisplaySettingsPopup(topbarCountdown);
+            });
+        }
+
+        // Topbar status message → open display settings
+        const topbarStatusMsg = document.getElementById('mo-status-msg');
+        if (topbarStatusMsg) {
+            topbarStatusMsg.style.cursor = 'pointer';
+            topbarStatusMsg.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDisplaySettingsPopup(topbarStatusMsg);
+            });
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -5625,8 +5622,11 @@
         // landmasses + lakes appear once JSON assets finish loading)
         requestAnimationFrame(frame);
 
-        // [AS-DIVERSITY] Initialize AS Diversity module and view toggle
+        // [AS-DIVERSITY] Initialize AS Diversity module (always-on donut)
         initAsDiversity();
+
+        // [AS-DIVERSITY] Wire up new peer panel buttons and topbar gear
+        initNewButtons();
     }
 
     init();

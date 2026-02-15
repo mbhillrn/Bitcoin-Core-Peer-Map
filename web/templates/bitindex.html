@@ -14,76 +14,73 @@
         <div class="topbar-left">
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="logo" title="Peer info, map, and tools for Bitcoin Core — View on GitHub"><span class="logo-m">M</span><span class="logo-b">&#x20bf;</span><span class="logo-core">Core</span> <span class="logo-dash">Dashboard</span></a>
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="version" title="View on GitHub">v{{ version }}</a>
-            <!-- [AS-DIVERSITY] View toggle -->
-            <div class="as-view-toggle" id="as-view-toggle">
-                <button class="as-vt-btn active" data-view="map" title="Live world map showing all connected peers with real-time data">Peer Map</button>
-                <button class="as-vt-btn" data-view="as" title="Provider diversity analysis — see how your peers are distributed across internet providers, hosting networks, and autonomous systems (ASes). High diversity means better network resilience.">Diversity</button>
+        </div>
+        <!-- [AS-DIVERSITY] Flight deck moved to topbar center -->
+        <div class="topbar-center" id="topbar-center">
+            <div id="flight-deck" class="flight-deck-inline">
+                <div class="fd-content" id="fd-content">
+                    <div class="fd-net-chip" data-net="ipv4">
+                        <span class="fd-net-dot disabled" id="fd-ipv4-dot"></span>
+                        <span class="fd-net-name" style="color:var(--net-ipv4)">IPv4</span>
+                        <span class="fd-net-counts"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
+                    </div>
+                    <div class="fd-net-chip" data-net="ipv6">
+                        <span class="fd-net-dot disabled" id="fd-ipv6-dot"></span>
+                        <span class="fd-net-name" style="color:var(--net-ipv6)">IPv6</span>
+                        <span class="fd-net-counts"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
+                    </div>
+                    <div class="fd-net-chip" data-net="onion">
+                        <span class="fd-net-dot disabled" id="fd-tor-dot"></span>
+                        <span class="fd-net-name" style="color:var(--net-tor)">Tor</span>
+                        <span class="fd-net-counts"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
+                    </div>
+                    <div class="fd-net-chip" data-net="i2p">
+                        <span class="fd-net-dot disabled" id="fd-i2p-dot"></span>
+                        <span class="fd-net-name" style="color:var(--net-i2p)">I2P</span>
+                        <span class="fd-net-counts"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
+                    </div>
+                    <div class="fd-net-chip" data-net="cjdns">
+                        <span class="fd-net-dot disabled" id="fd-cjdns-dot"></span>
+                        <span class="fd-net-name" style="color:var(--net-cjdns)">CJDNS</span>
+                        <span class="fd-net-counts"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="topbar-right">
             <span id="db-update-status" class="db-update-status" style="display:none"></span>
             <span id="update-badge" class="update-badge" style="display:none" title="Click for details"></span>
+            <span class="topbar-status-group" id="topbar-countdown" title="Time until next peer data refresh">
+                <span class="tb-label">Update in</span>
+                <span class="tb-value" id="mo-countdown">&mdash;</span>
+            </span>
+            <span class="topbar-status-msg" id="mo-status-msg" title="Peer geolocation progress">Loading...</span>
+            <span class="topbar-dots" title="Internet &amp; service status">
+                <span class="internet-dot green" id="internet-dot" title="Internet connection status"></span>
+                <span class="status-dot" id="status-dot" title="MBCore dashboard service status"></span>
+            </span>
+            <span class="topbar-sync-status" id="mo-status" title="Node sync status">&mdash;</span>
             <span id="clock" class="topbar-clock" title="Current local time"></span>
-            <span class="internet-dot green" id="internet-dot" title="Internet connection status"></span>
-            <span class="internet-text" id="internet-text" title="Internet connection status">Internet</span>
-            <span class="status-dot" id="status-dot" title="MBCore dashboard service status"></span>
-            <span class="status-text" id="status-text" title="MBCore dashboard service status">Stopped</span>
+            <button class="topbar-gear" id="topbar-gear" title="Map Settings">&#9881;</button>
         </div>
     </header>
 
-    <!-- Network stats overlay — transparent panel centered at top of map -->
-    <div id="flight-deck" class="flight-deck">
-        <div class="fd-content" id="fd-content">
-            <div class="fd-net-chip" data-net="ipv4">
-                <span class="fd-net-dot disabled" id="fd-ipv4-dot"></span>
-                <span class="fd-net-name" style="color:var(--net-ipv4)">IPv4</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv4-in">0</span>&#8595; <span class="fd-out" id="fd-ipv4-out">0</span>&#8593;</span>
-            </div>
-            <div class="fd-net-chip" data-net="ipv6">
-                <span class="fd-net-dot disabled" id="fd-ipv6-dot"></span>
-                <span class="fd-net-name" style="color:var(--net-ipv6)">IPv6</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-ipv6-in">0</span>&#8595; <span class="fd-out" id="fd-ipv6-out">0</span>&#8593;</span>
-            </div>
-            <div class="fd-net-chip" data-net="onion">
-                <span class="fd-net-dot disabled" id="fd-tor-dot"></span>
-                <span class="fd-net-name" style="color:var(--net-tor)">Tor</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-tor-in">0</span>&#8595; <span class="fd-out" id="fd-tor-out">0</span>&#8593;</span>
-            </div>
-            <div class="fd-net-chip" data-net="i2p">
-                <span class="fd-net-dot disabled" id="fd-i2p-dot"></span>
-                <span class="fd-net-name" style="color:var(--net-i2p)">I2P</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-i2p-in">0</span>&#8595; <span class="fd-out" id="fd-i2p-out">0</span>&#8593;</span>
-            </div>
-            <div class="fd-net-chip" data-net="cjdns">
-                <span class="fd-net-dot disabled" id="fd-cjdns-dot"></span>
-                <span class="fd-net-name" style="color:var(--net-cjdns)">CJDNS</span>
-                <span class="fd-net-counts"><span class="fd-in" id="fd-cjdns-in">0</span>&#8595; <span class="fd-out" id="fd-cjdns-out">0</span>&#8593;</span>
-            </div>
-        </div>
-    </div>
+    <!-- Flight deck hover tooltip -->
+    <div id="fd-tooltip" class="fd-tooltip hidden"></div>
 
-    <!-- [AS-DIVERSITY] AS Diversity container — replaces flight deck when active -->
-    <div id="as-diversity-container" class="as-diversity-container hidden">
-        <div class="as-donut-wrap">
-            <svg id="as-donut" class="as-donut" viewBox="0 0 220 220"></svg>
-            <div id="as-donut-center" class="as-donut-center">
-                <div class="as-score-value">&mdash;</div>
-                <div class="as-score-label">DIVERSITY</div>
-            </div>
-            <div class="as-loading">Scanning providers&hellip;</div>
-        </div>
-        <div id="as-legend" class="as-legend"></div>
-    </div>
-
-    <!-- [AS-DIVERSITY] Hover tooltip -->
-    <div id="as-tooltip" class="as-tooltip hidden"></div>
-
-    <!-- BTC price — centered below flight deck -->
+    <!-- BTC price — centered at top of map -->
     <div id="btc-price-bar" class="btc-price-bar" title="Bitcoin price/currency options">
         <span class="mo-btc-symbol" id="mo-btc-symbol">&#x20bf;</span>
         <span class="mo-btc-price" id="mo-btc-price">&mdash;</span>
         <span class="mo-btc-arrow" id="mo-btc-arrow"></span>
         <span class="mo-btc-currency" id="mo-btc-currency">USD</span>
+    </div>
+
+    <!-- Map controls — centered below BTC price -->
+    <div id="map-controls" class="map-controls">
+        <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
+        <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
+        <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
     </div>
 
     <!-- Left map overlay — peers + system stats -->
@@ -103,27 +100,24 @@
         </div>
     </div>
 
-    <!-- Right map overlay — update status + node info + db -->
-    <div id="right-overlay" class="right-overlay">
-        <div class="ro-row" id="ro-row-countdown" title="Time until next peer data refresh"><span class="ro-label">Update in</span> <span class="ro-value" id="mo-countdown">&mdash;</span></div>
-        <div class="ro-row" id="ro-row-statusmsg" title="Peer geolocation progress"><span class="ro-status-msg" id="mo-status-msg">Loading...</span></div>
-        <div class="ro-row" id="ro-row-nodestatus"><span class="ro-link-blue" id="ro-node-info" title="Click to view detailed node information">NODE INFO</span> <span class="ro-value" id="mo-status">&mdash;</span></div>
-        <div class="ro-row" id="ro-row-geodb"><span class="ro-link-blue" id="ro-geodb-link" title="Click for MBCore DB info and update">MBCORE DB</span> <span class="ro-value" id="ro-geodb-count">&mdash;</span></div>
-        <div class="ro-row" id="ro-row-display-settings"><span class="ro-label" id="ro-display-settings-link" title="Open map settings">MAP SETTINGS</span></div>
+    <!-- [AS-DIVERSITY] Donut — fixed upper-right corner of map, always visible -->
+    <div id="as-diversity-container" class="as-diversity-container">
+        <div class="as-donut-wrap" id="as-donut-wrap">
+            <svg id="as-donut" class="as-donut" viewBox="0 0 260 260"></svg>
+            <div id="as-donut-center" class="as-donut-center">
+                <div class="as-score-value">&mdash;</div>
+                <div class="as-score-label">DIVERSITY</div>
+            </div>
+            <div class="as-loading">Scanning providers&hellip;</div>
+        </div>
+        <div id="as-legend" class="as-legend"></div>
     </div>
 
-    <!-- Map controls — bottom-right, above peer panel -->
-    <div id="map-controls" class="map-controls">
-        <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
-        <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
-        <button id="zoom-reset" class="zoom-btn" title="Reset view">&#8634;</button>
-    </div>
+    <!-- [AS-DIVERSITY] Hover tooltip -->
+    <div id="as-tooltip" class="as-tooltip hidden"></div>
 
     <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
-
-    <!-- Flight deck hover tooltip -->
-    <div id="fd-tooltip" class="fd-tooltip hidden"></div>
 
     <!-- Antarctica annotation -->
     <div id="antarctica-note" class="antarctica-note hidden">
@@ -155,8 +149,10 @@
                 <div class="handle-spacer"></div>
                 <button class="handle-btn handle-btn-green" id="btn-connect-peer" title="Connect to a peer">Connect Peer</button>
                 <button class="handle-btn handle-btn-warn" id="btn-bans" title="View and manage banned peers">Banned Peers</button>
-                <button class="handle-btn handle-btn-dim" id="btn-autofit" title="Toggle auto-fit columns">Auto-fit</button>
-                <button class="handle-btn handle-btn-dim" id="btn-minimize" title="Toggle peer list table">Hide Table &#9660;</button>
+                <button class="handle-btn handle-btn-accent" id="btn-node-info-peer" title="View detailed node information">NODE-INFO</button>
+                <button class="handle-btn handle-btn-accent" id="btn-mbcore-db-peer" title="MBCore geolocation database info and updates">MBCORE-DB</button>
+                <button class="handle-btn handle-btn-dim" id="btn-autofit" title="Automatic column size to fit">FIT</button>
+                <button class="handle-btn handle-btn-dim" id="btn-minimize" title="Toggle peer list table">&#9660;</button>
                 <button class="handle-btn handle-btn-dim" id="btn-table-settings" title="Table settings: columns, transparency">&#9881;</button>
             </div>
         </div>
@@ -170,7 +166,7 @@
         </div>
     </div>
 
-    <!-- [AS-DIVERSITY] Detail panel — slides in from right -->
+    <!-- [AS-DIVERSITY] Detail panel — slides in from right, pushes content -->
     <div id="as-detail-panel" class="as-detail-panel hidden">
         <div class="as-detail-header">
             <div class="as-detail-header-info">
