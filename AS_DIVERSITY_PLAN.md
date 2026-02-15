@@ -116,6 +116,8 @@ git checkout main -- web/static/js/bitapp.js
 | `web/static/js/bitapp.js` | **EDIT** | Integration hooks + new button wiring + gear icon (~80 lines, marked `[AS-DIVERSITY]`) |
 | `web/static/css/bitstyle.css` | **EDIT** | Topbar center, new right elements, repositioned BTC price + map controls, right overlay removed |
 | `AS_DIVERSITY_PLAN.md` | **NEW** | This document |
+| `README.md` | **EDIT** | Complete rewrite with new screenshots and diversity feature documentation |
+| `docs/images/N-*.png` | **NEW** | 6 new screenshots (Hero1/2, AS-Screen1/2, Peer-List, Top-Bar) |
 
 ---
 
@@ -194,6 +196,19 @@ git checkout main -- web/static/js/bitapp.js
 - [x] Both sliders saved/restored with Permanent Save, reset with Reset
 - [x] Footer: added Session Save button (blue, closes panel after feedback) alongside Reset + Permanent Save
 - [x] Light theme confirmed still looks good
+
+### Phase 2d — Bug Fixes, Content & Documentation (COMPLETE)
+- [x] Fix peer list sort bug: Sent/Recv columns sort numerically (raw `bytessent`/`bytesrecv`) instead of string-sorting formatted values
+- [x] Fix peer list sort bug: Duration column sorts numerically (raw `conntime`) instead of string-sorting formatted values
+- [x] Move "Visible Rows" setting from Map Settings to peer table gear (Table Settings popup)
+- [x] Visible rows default changed from unlimited to 15, slider range 3-40, no "All" option
+- [x] `applyMaxPeerRows()` dynamically sets peer panel max-height based on row count
+- [x] Donut center label changed from "PEERS" to "(PUBLIC) PEERS" to clarify private/Tor peers excluded
+- [x] Logo hover tooltip updated: "Peer map, service provider diversity analysis, and tools for Bitcoin Core"
+- [x] Legend max-height bumped from 180px to 260px to fit all 9 items without scrolling
+- [x] Complete README rewrite with new screenshots and feature descriptions
+- [x] New photos added to `docs/images/`: N-Hero1.png, N-Hero2.png, N-AS-Screen1.png, N-AS-Screen2.png, N-Peer-List.png, N-Top-Bar.png
+- [x] README sections: hero images, "What is this?", Features (Peer Map, Service Provider Diversity, Peer Management, System Monitoring, Customization), Screenshots, Quick Start, How It Works, Requirements, Tech Stack
 
 ### Phase 3 — Polish (if time permits)
 - [ ] Dropdown in donut center for searching all ASes

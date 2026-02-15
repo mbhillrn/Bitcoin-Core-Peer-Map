@@ -3369,6 +3369,24 @@
                 vb = parseInt(vb) || 0;
                 return sortAsc ? va - vb : vb - va;
             }
+            // Sort Sent/Recv by raw byte count, not formatted string
+            if (sortKey === 'bytessent_fmt') {
+                va = a.bytessent || 0;
+                vb = b.bytessent || 0;
+                return sortAsc ? va - vb : vb - va;
+            }
+            if (sortKey === 'bytesrecv_fmt') {
+                va = a.bytesrecv || 0;
+                vb = b.bytesrecv || 0;
+                return sortAsc ? va - vb : vb - va;
+            }
+            // Sort Duration by raw conntime (unix timestamp — lower = connected longer)
+            if (sortKey === 'conntime_fmt') {
+                va = a.conntime || 0;
+                vb = b.conntime || 0;
+                // Lower conntime = connected longer = "more" duration
+                return sortAsc ? vb - va : va - vb;
+            }
             va = String(va);
             vb = String(vb);
             return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -3704,6 +3722,10 @@
         html += '<div class="tsp-section">Transparency</div>';
         html += `<div class="tsp-slider-row"><input type="range" class="tsp-slider" id="tsp-opacity" min="0" max="100" value="${panelOpacity}"><span class="tsp-slider-val" id="tsp-opacity-val">${panelOpacity}%</span></div>`;
 
+        // ── Visible rows ──
+        html += '<div class="tsp-section">Visible Rows</div>';
+        html += `<div class="tsp-slider-row"><input type="range" class="tsp-slider" id="tsp-rows" min="3" max="40" value="${maxPeerRows}"><span class="tsp-slider-val" id="tsp-rows-val">${maxPeerRows}</span></div>`;
+
         // ── Column toggles ──
         html += '<div class="tsp-section">Columns</div>';
         html += '<div class="tsp-col-grid">';
@@ -3736,6 +3758,17 @@
                 panelOpacity = parseInt(opacitySlider.value);
                 opacityVal.textContent = panelOpacity + '%';
                 applyPanelOpacity();
+            });
+        }
+
+        // Bind visible rows slider
+        const rowsSlider = document.getElementById('tsp-rows');
+        const rowsVal = document.getElementById('tsp-rows-val');
+        if (rowsSlider) {
+            rowsSlider.addEventListener('input', () => {
+                maxPeerRows = parseInt(rowsSlider.value);
+                if (rowsVal) rowsVal.textContent = maxPeerRows;
+                applyMaxPeerRows();
             });
         }
 
@@ -3785,6 +3818,9 @@
                 showAntarcticaPeers = true;
                 antNoteDismissed = false;
                 antNote.classList.remove('hidden');
+                // Reset visible rows to default
+                maxPeerRows = 15;
+                applyMaxPeerRows();
                 // Reset auto-fit
                 autoFitColumns = true;
                 userColumnWidths = {};
@@ -4640,7 +4676,7 @@
     // ═══════════════════════════════════════════════════════════
 
     let displaySettingsEl = null;
-    let maxPeerRows = 0;  // 0 = unlimited (default)
+    let maxPeerRows = 15;  // Default visible rows in peer table (resize panel to fit)
 
     function openDisplaySettingsPopup(anchorEl) {
         closeDisplaySettingsPopup();
@@ -4667,8 +4703,6 @@
         html += '<div class="dsp-section">Update Frequency</div>';
         html += `<div class="dsp-row"><span class="dsp-label" title="How often peer list is fetched from Bitcoin Core">Peer list</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
         html += `<div class="dsp-row"><span class="dsp-label" title="How often node info and BTC price are refreshed">Node info &amp; price</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
-        html += '<div class="dsp-section">Peer List</div>';
-        html += `<div class="dsp-row"><span class="dsp-label" title="Maximum peer rows shown before scrolling (0 = unlimited)">Visible rows</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-max-rows" value="${maxPeerRows || ''}" min="0" max="80" placeholder="All"><span class="dsp-unit">rows</span></div></div>`;
         html += '<div class="dsp-section">Show / Hide</div>';
         visItems.forEach(item => {
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
@@ -4724,17 +4758,6 @@
             });
         }
 
-        // Bind max rows input
-        const rowsInput = document.getElementById('dsp-max-rows');
-        if (rowsInput) {
-            rowsInput.addEventListener('change', () => {
-                const v = parseInt(rowsInput.value) || 0;
-                maxPeerRows = clamp(v, 0, 80);
-                rowsInput.value = maxPeerRows || '';
-                applyMaxPeerRows();
-            });
-        }
-
         // Bind show/hide visibility toggles
         popup.querySelectorAll('.dsp-toggle input[data-vis-target]').forEach(cb => {
             cb.addEventListener('change', () => {
@@ -4758,15 +4781,17 @@
         }, 0);
     }
 
-    /** Apply max peer rows setting to the peer table wrap height */
+    /** Apply max peer rows setting — resizes the peer panel to show N rows.
+     *  The handle is ~48px, thead ~22px, each body row ~22px. */
     function applyMaxPeerRows() {
-        const tableWrap = document.querySelector('.peer-table-wrap');
-        if (!tableWrap) return;
+        const panel = document.querySelector('.peer-panel');
+        if (!panel) return;
         if (maxPeerRows > 0) {
-            // Each row is ~24px (11px font + padding + border)
-            tableWrap.style.maxHeight = (maxPeerRows * 24) + 'px';
+            // handle(48) + thead(22) + rows * 22 + a tiny bit of padding
+            const h = 48 + 22 + (maxPeerRows * 22) + 4;
+            panel.style.maxHeight = h + 'px';
         } else {
-            tableWrap.style.maxHeight = '';
+            panel.style.maxHeight = '';
         }
     }
 
@@ -5778,6 +5803,9 @@
 
         // [AS-DIVERSITY] Wire up new peer panel buttons and topbar gear
         initNewButtons();
+
+        // Apply default visible row count to peer panel
+        applyMaxPeerRows();
     }
 
     init();

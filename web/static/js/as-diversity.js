@@ -532,7 +532,7 @@ window.ASDiversity = (function () {
             qualityEl.className = 'as-score-quality ' + q.cls;
         }
 
-        scoreLbl.textContent = totalPeers + ' PEERS';
+        scoreLbl.textContent = totalPeers + ' (PUBLIC) PEERS';
     }
 
     /** Render the legend */
