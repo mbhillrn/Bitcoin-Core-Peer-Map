@@ -87,6 +87,9 @@
         pulseDepthOut:   0.48,       // outbound pulse amplitude
         pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
         pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
+        // AS Diversity line settings
+        asLineWidth:     50,         // slider 0-100, 50 = 1.2px (default)
+        asLineFan:       50,         // slider 0-100, 50 = 35% spread (default)
         // Land appearance
         landHue:        215,         // hue degrees (current dark blue-gray)
         landBright:      50,         // slider 0-100, 50 = original L=12%
@@ -2907,8 +2910,16 @@
             }
         }
 
+        // Line width from advSettings: slider 0→0.3px, 50→1.2px, 100→4px
+        const lwSlider = advSettings.asLineWidth;
+        const lineW = 0.3 + (lwSlider / 100) * 3.7;
+        // Fan spread from advSettings: slider 0→0%, 50→35%, 100→70% of line length
+        const fanSlider = advSettings.asLineFan;
+        const fanPct = (fanSlider / 100) * 0.7;
+        const fanMax = 40 + (fanSlider / 100) * 120;  // 40px at 0, 160px at 100
+
         ctx.save();
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = lineW;
         ctx.strokeStyle = asLineColor;
 
         for (const g of groups) {
@@ -2934,8 +2945,8 @@
                     const len = Math.sqrt(dx * dx + dy * dy) || 1;
                     const perpX = -dy / len;
                     const perpY = dx / len;
-                    // Spread increases with count — each line gets a distinct bulge
-                    const spread = Math.min(len * 0.35, 100);
+                    // Spread controlled by fan slider
+                    const spread = Math.min(len * fanPct, fanMax);
                     const bulge = (i - (count - 1) / 2) * (spread / Math.max(1, count - 1));
                     ctx.quadraticCurveTo(midX + perpX * bulge, midY + perpY * bulge, destX, destY);
                 } else {
@@ -5200,6 +5211,11 @@
         h += '</div>'; // end theme-wrap
         h += '</div>'; // end theme-section
 
+        // ── Service Provider Diversity ──
+        h += '<div class="adv-section">Service Provider Diversity</div>';
+        h += advSliderHTML('adv-as-linewidth', 'Line Thickness', advSettings.asLineWidth, 0, 100, 1);
+        h += advSliderHTML('adv-as-fan', 'Line Fanning', advSettings.asLineFan, 0, 100, 1);
+
         // ── Peer Effects ──
         h += '<div class="adv-section">Peer Effects</div>';
         h += advSliderHTML('adv-shimmer', 'Shimmer', advSettings.shimmerStrength, 0, 1, 0.01);
@@ -5260,7 +5276,8 @@
         // Footer buttons + feedback area
         h += '<div class="adv-footer">';
         h += '<button class="adv-btn adv-btn-reset" id="adv-reset">Reset</button>';
-        h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves across sessions. To save for this session only, just close the menu.">Permanent Save</button>';
+        h += '<button class="adv-btn adv-btn-session" id="adv-session-save" title="Keeps settings for this session only — closes menu">Session Save</button>';
+        h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves settings permanently across sessions">Permanent Save</button>';
         h += '</div>';
         h += '<div class="adv-feedback" id="adv-feedback"></div>';
 
@@ -5362,6 +5379,8 @@
         bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-as-linewidth', v => { advSettings.asLineWidth = v; });
+        bindAdvSlider('adv-as-fan', v => { advSettings.asLineFan = v; });
         bindAdvSlider('adv-border-scale', v => { advSettings.borderScale = v; });
         bindAdvSlider('adv-border-hue', v => { advSettings.borderHue = v; updateAdvColors(); });
 
@@ -5400,7 +5419,13 @@
             showAdvFeedback('All settings reset to defaults');
         });
 
-        // ── Save button ──
+        // ── Session Save button — just close the panel (settings persist in memory) ──
+        document.getElementById('adv-session-save').addEventListener('click', () => {
+            showAdvFeedback('Session settings applied');
+            setTimeout(closeAdvancedPanel, 400);
+        });
+
+        // ── Permanent Save button ──
         document.getElementById('adv-save').addEventListener('click', () => {
             saveAdvSettings();
             saveTheme();
@@ -5444,6 +5469,8 @@
 
     /** Refresh all slider positions from current advSettings */
     function refreshAllAdvSliders() {
+        setSliderValue('adv-as-linewidth', advSettings.asLineWidth);
+        setSliderValue('adv-as-fan', advSettings.asLineFan);
         setSliderValue('adv-shimmer', advSettings.shimmerStrength);
         setSliderValue('adv-pdepth-in', advSettings.pulseDepthIn);
         setSliderValue('adv-pdepth-out', advSettings.pulseDepthOut);
@@ -5463,6 +5490,8 @@
 
     /** Map slider IDs to their advSettings key and default value */
     const SLIDER_DEFAULTS = {
+        'adv-as-linewidth':{ key: 'asLineWidth' },
+        'adv-as-fan':      { key: 'asLineFan' },
         'adv-shimmer':     { key: 'shimmerStrength', cfg: 'shimmerStrength' },
         'adv-pdepth-in':   { key: 'pulseDepthIn',   cfg: 'pulseDepthInbound' },
         'adv-pdepth-out':  { key: 'pulseDepthOut',   cfg: 'pulseDepthOutbound' },
