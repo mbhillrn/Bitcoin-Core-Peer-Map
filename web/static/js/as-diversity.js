@@ -741,12 +741,16 @@ window.ASDiversity = (function () {
         void panelEl.offsetWidth;
         panelEl.classList.add('visible');
         document.body.classList.add('as-panel-open');
+        // Bring AS panel to front
+        document.body.classList.add('panel-focus-as');
+        document.body.classList.remove('panel-focus-peers');
     }
 
     function closePanel() {
         if (!panelEl) return;
         panelEl.classList.remove('visible');
         document.body.classList.remove('as-panel-open');
+        document.body.classList.remove('panel-focus-as');
         setTimeout(function () {
             if (!panelEl.classList.contains('visible')) {
                 panelEl.classList.add('hidden');
@@ -808,6 +812,8 @@ window.ASDiversity = (function () {
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
                 if (_drawLinesForAs) _drawLinesForAs(asNum, seg.peerIds, seg.color);
             }
+            // Keep legend visible while selected
+            if (containerEl) containerEl.classList.add('as-legend-visible');
             renderDonut();
             renderCenter();
             renderLegend();
@@ -817,6 +823,7 @@ window.ASDiversity = (function () {
     function deselect() {
         selectedAs = null;
         closePanel();
+        if (containerEl) containerEl.classList.remove('as-legend-visible');
         if (_filterPeerTable) _filterPeerTable(null);
         if (_dimMapPeers) _dimMapPeers(null);
         if (_clearAsLines) _clearAsLines();
@@ -850,6 +857,14 @@ window.ASDiversity = (function () {
         var closeBtn = panelEl ? panelEl.querySelector('.as-detail-close') : null;
         if (closeBtn) {
             closeBtn.addEventListener('click', deselect);
+        }
+
+        // Clicking the AS detail panel brings it to front
+        if (panelEl) {
+            panelEl.addEventListener('click', function () {
+                document.body.classList.add('panel-focus-as');
+                document.body.classList.remove('panel-focus-peers');
+            });
         }
 
         // Escape key
@@ -942,6 +957,25 @@ window.ASDiversity = (function () {
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }
 
+    /** Get the screen position of a legend dot for a specific AS number.
+     *  Returns {x, y} in page coords, or null if not found / legend not visible. */
+    function getLegendDotPosition(asNum) {
+        if (!legendEl) return null;
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].dataset.as === asNum) {
+                var dot = items[i].querySelector('.as-legend-dot');
+                if (dot) {
+                    var rect = dot.getBoundingClientRect();
+                    // Check if actually visible (legend might be hidden)
+                    if (rect.width === 0 && rect.height === 0) return null;
+                    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                }
+            }
+        }
+        return null;
+    }
+
     /** Get the currently selected AS number */
     function getSelectedAs() {
         return selectedAs;
@@ -978,6 +1012,7 @@ window.ASDiversity = (function () {
         deselect: deselect,
         isViewActive: isViewActive,
         getDonutCenter: getDonutCenter,
+        getLegendDotPosition: getLegendDotPosition,
         getHoveredAs: getHoveredAs,
         getSelectedAs: getSelectedAs,
         getPeerIdsForAs: getPeerIdsForAs,

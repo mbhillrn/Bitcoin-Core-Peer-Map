@@ -20,7 +20,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
     pointer-events: none;
     user-select: none;
     opacity: 0.88;
@@ -31,7 +31,7 @@
 }
 
 /* ==========================================================
-   2b. DONUT TITLE — "PROVIDER DIVERSITY" above the donut
+   2b. DONUT TITLE — "PEER PROVIDER" / "Diversity" above donut
    ========================================================== */
 .as-donut-title {
     font-family: var(--font-display);
@@ -43,13 +43,16 @@
     pointer-events: auto;
     cursor: default;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    margin-bottom: 0;
+    margin-bottom: -4px;
+    line-height: 1.15;
 }
 .as-title-provider {
     color: var(--logo-primary);
 }
 .as-title-diversity {
     color: var(--logo-accent);
+    font-size: 14px;
+    letter-spacing: 2px;
 }
 
 /* ==========================================================
@@ -205,6 +208,18 @@
     width: 260px;
     max-height: 180px;
     overflow-y: auto;
+    /* Hidden by default, revealed on hover or selection */
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+/* Show legend when hovering the donut area */
+.as-diversity-container:hover .as-legend,
+.as-diversity-container.as-legend-visible .as-legend {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
 }
 .as-legend-item {
     display: flex;
@@ -215,7 +230,8 @@
     border-radius: 4px;
     transition: background var(--transition);
     white-space: nowrap;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
 }
 .as-legend-item:hover {
     background: rgba(88, 166, 255, 0.1);
@@ -346,6 +362,11 @@
 .as-detail-panel.hidden {
     display: none;
 }
+
+/* --- Z-index stacking: whichever panel was last clicked goes on top --- */
+body.panel-focus-peers .peer-panel { z-index: 270; }
+body.panel-focus-as .as-detail-panel { z-index: 270; }
+body.panel-focus-as .peer-panel { z-index: 80; }
 
 /* --- Push effect: when detail panel is open, shift the donut and map elements --- */
 body.as-panel-open .as-diversity-container {

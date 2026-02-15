@@ -657,6 +657,7 @@
     let asFilterPeerIds = null;    // Set of peer IDs to show when AS is selected (null = no filter)
     let asLinePeerIds = null;      // Array of peer IDs to draw lines to (hover/selection)
     let asLineColor = null;        // Color string for AS lines
+    let asLineAsNum = null;        // AS number for legend dot lookup
 
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
     const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
@@ -2849,9 +2850,16 @@
         const ASD = window.ASDiversity;
         if (!ASD) return;
 
-        // Get the donut's screen position as the line origin
-        const donutCenter = ASD.getDonutCenter();
-        if (!donutCenter) return;
+        // Try legend dot position first (when legend is visible), fall back to donut center
+        let lineOrigin = null;
+        if (asLineAsNum) {
+            lineOrigin = ASD.getLegendDotPosition(asLineAsNum);
+        }
+        if (!lineOrigin) {
+            lineOrigin = ASD.getDonutCenter();
+        }
+        if (!lineOrigin) return;
+        const donutCenter = lineOrigin;
 
         const peerIdSet = new Set(asLinePeerIds);
         const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
@@ -2927,7 +2935,7 @@
                     const perpX = -dy / len;
                     const perpY = dx / len;
                     // Spread increases with count — each line gets a distinct bulge
-                    const spread = Math.min(len * 0.25, 60);
+                    const spread = Math.min(len * 0.35, 100);
                     const bulge = (i - (count - 1) / 2) * (spread / Math.max(1, count - 1));
                     ctx.quadraticCurveTo(midX + perpX * bulge, midY + perpY * bulge, destX, destY);
                 } else {
@@ -3315,11 +3323,21 @@
     // Panel toggle (clicking the title bar)
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
         panelEl.classList.toggle('collapsed');
-        // [AS-DIVERSITY] Close AS detail panel when opening peer list
-        if (!panelEl.classList.contains('collapsed') && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
-            window.ASDiversity.deselect();
+        // [AS-DIVERSITY] When expanding peer list, bring it on top of AS panel
+        if (!panelEl.classList.contains('collapsed')) {
+            document.body.classList.add('panel-focus-peers');
+            document.body.classList.remove('panel-focus-as');
         }
     });
+
+    // [AS-DIVERSITY] Clicking anywhere in peer panel body → bring peers to front
+    const peerPanelBody = document.querySelector('.peer-panel-body');
+    if (peerPanelBody) {
+        peerPanelBody.addEventListener('click', () => {
+            document.body.classList.add('panel-focus-peers');
+            document.body.classList.remove('panel-focus-as');
+        });
+    }
 
     /** Get sorted copy of lastPeers based on current sort state.
      *  sortKey=null means unsorted (original peer order). */
@@ -5592,10 +5610,12 @@
             drawLinesForAs: function (asNum, peerIds, color) {
                 asLinePeerIds = peerIds;
                 asLineColor = color;
+                asLineAsNum = asNum;
             },
             clearAsLines: function () {
                 asLinePeerIds = null;
                 asLineColor = null;
+                asLineAsNum = null;
             },
             filterPeerTable: function (peerIds) {
                 asFilterPeerIds = peerIds ? new Set(peerIds) : null;

@@ -167,17 +167,23 @@ git checkout main -- web/static/js/bitapp.js
 - [x] Visibility toggles moved to gear settings (Diversity/Price/Stats)
 
 ### Phase 2b — Visual & Settings Polish (COMPLETE)
-- [x] Donut title redesign: "PROVIDER" (logo-primary) + "DIVERSITY" (logo-accent), 16px font
+- [x] Donut title redesign: "PEER PROVIDER" (logo-primary, line 1) + "Diversity" (logo-accent, line 2)
 - [x] Score layout: SCORE: heading → big number (42px) → quality word → peer count
 - [x] Selected AS center: peer count heading → AS name (18px) → pct → AS number
 - [x] Bump all font sizes: legend 11px, quality 11px, labels 10px
 - [x] Remove endpoint dot jitter from fanning, lines converge on same dot
-- [x] Line fan spread proportional to distance (up to 25% of line length, max 60px)
+- [x] Line fan spread proportional to distance (up to 35% of line length, max 100px)
 - [x] Loading state: "Locating N peers..." when >10% peers still geolocating
 - [x] Close AS detail panel when clicking peer list handle
 - [x] Peer list visible rows setting in Map Settings popup
 - [x] Defunct Show/Hide items replaced with Diversity Score, Bitcoin Price, System Stats
 - [x] Display Settings popup title → "Map Settings"
+- [x] Title moved closer to donut (container gap 2px, negative margin)
+- [x] Legend hidden by default, revealed on hover over donut area, stays on AS selection
+- [x] Legend items centered under donut (auto width instead of 100%)
+- [x] Line origins from legend dots (when visible) instead of donut center
+- [x] Panel z-index stacking: peer panel / AS panel — last-clicked goes on top
+- [x] Peer panel click (expand or body) → peers on top; AS panel click → AS on top
 
 ### Phase 3 — Polish (if time permits)
 - [ ] Dropdown in donut center for searching all ASes
@@ -186,6 +192,13 @@ git checkout main -- web/static/js/bitapp.js
 - [ ] Analysis settings section in map settings (ring pulse, etc.)
 - [ ] Mobile-friendly adjustments (if ever needed)
 - [ ] Multi-peer dot click: show list of all peers at that location
+
+### TODO — Repo & Documentation
+- [ ] **Repo topics:** Add AS-related topics (e.g., `autonomous-system`, `as-diversity`, `network-security`, `peer-analysis`). Consider removing some to stay under limit — candidates to drop: `cjdns` (niche), `geoip` (redundant with `geolocation`), `fastapi` (implementation detail). Suggested final set: `python linux real-time canvas dashboard bitcoin geolocation tor cryptocurrency network-visualization i2p world-map bitcoin-core bitcoin-node bitcoin-cli node-monitoring bitcoin-peers autonomous-system peer-analysis as-diversity`
+- [ ] **Repo About description:** Rewrite to include AS diversity, e.g.: "Real-time Bitcoin Core dashboard with a live geolocated peer map, AS provider diversity analysis, system auto-detection, mempool statistics, and peer management tools. Visualizes autonomous system concentration, connects/disconnects/bans peers directly. Peer locations derived from a maintained database and free IP geolocation APIs. Runs locally with zero configuration."
+- [ ] **README rewrite:** The entire README needs to be redone — the map looks completely different now. New hero images/screenshots needed showing: dark theme donut + map, light theme donut + map, AS detail panel open with lines, selected AS with filtered peer list. All feature descriptions need updating.
+- [ ] **Light theme audit:** Test how the AS donut, lines, legend, detail panel, and title look with the light dashboard theme. May need color/shadow/opacity adjustments for readability on light backgrounds.
+- [ ] **New hero images:** Screenshot dark theme, light theme, AS selected state, line fanning, detail panel — for README and repo social preview
 
 ---
 
