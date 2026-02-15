@@ -14,6 +14,12 @@
         <div class="topbar-left">
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="logo" title="Peer info, map, and tools for Bitcoin Core — View on GitHub"><span class="logo-m">M</span><span class="logo-b">&#x20bf;</span><span class="logo-core">Core</span> <span class="logo-dash">Dashboard</span></a>
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="version" title="View on GitHub">v{{ version }}</a>
+            <!-- [AS-DIVERSITY] Visibility toggles for map sections -->
+            <div class="vis-toggles" id="vis-toggles">
+                <button class="vis-btn active" id="vis-diversity" data-target="as-diversity-container" title="Toggle Provider Diversity donut">Diversity</button>
+                <button class="vis-btn active" id="vis-price" data-target="btc-price-bar" title="Toggle Bitcoin price display">Price</button>
+                <button class="vis-btn active" id="vis-stats" data-target="map-overlay" title="Toggle system stats overlay">Stats</button>
+            </div>
         </div>
         <!-- [AS-DIVERSITY] Flight deck moved to topbar center -->
         <div class="topbar-center" id="topbar-center">
@@ -102,11 +108,13 @@
 
     <!-- [AS-DIVERSITY] Donut — fixed upper-right corner of map, always visible -->
     <div id="as-diversity-container" class="as-diversity-container">
+        <div class="as-donut-title" id="as-donut-title" title="Autonomous System Provider Diversity Analysis">Provider Diversity</div>
         <div class="as-donut-wrap" id="as-donut-wrap">
             <svg id="as-donut" class="as-donut" viewBox="0 0 260 260"></svg>
             <div id="as-donut-center" class="as-donut-center">
-                <div class="as-score-value">&mdash;</div>
-                <div class="as-score-label">DIVERSITY</div>
+                <div class="as-score-quality" id="as-score-quality"></div>
+                <div class="as-score-value" id="as-score-value" title="">&mdash;</div>
+                <div class="as-score-label" id="as-score-label">DIVERSITY</div>
             </div>
             <div class="as-loading">Scanning providers&hellip;</div>
         </div>

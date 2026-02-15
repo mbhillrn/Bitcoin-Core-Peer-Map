@@ -2862,12 +2862,9 @@
         const originX = (donutCenter.x - canvasRect.left) * (W / canvasRect.width);
         const originY = (donutCenter.y - canvasRect.top) * (H / canvasRect.height);
 
-        ctx.save();
-        ctx.lineWidth = 1.2;
-        ctx.strokeStyle = asLineColor;
-
+        // Resolve screen positions for each matching node
+        const resolved = [];
         for (const node of matchingNodes) {
-            // Find the closest visible wrap copy of this node
             let bestS = null;
             let bestDist = Infinity;
             for (const off of wrapOffsets) {
@@ -2881,15 +2878,87 @@
                     bestS = s;
                 }
             }
-            if (!bestS) continue;
+            if (bestS) resolved.push({ node: node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
+        }
+        if (resolved.length === 0) return;
 
-            const dist = Math.sqrt(bestDist);
-            const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
-            ctx.globalAlpha = alpha;
-            ctx.beginPath();
-            ctx.moveTo(originX, originY);
-            ctx.lineTo(bestS.x, bestS.y);
-            ctx.stroke();
+        // Group by approximate screen position (within 8px = same dot)
+        const SNAP = 8;
+        const groups = [];
+        for (const r of resolved) {
+            let found = false;
+            for (const g of groups) {
+                if (Math.abs(g.cx - r.sx) < SNAP && Math.abs(g.cy - r.sy) < SNAP) {
+                    g.items.push(r);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                groups.push({ cx: r.sx, cy: r.sy, items: [r] });
+            }
+        }
+
+        ctx.save();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = asLineColor;
+
+        // Fan offset in pixels for co-located peers
+        const FAN_SPREAD = 18;
+
+        for (const g of groups) {
+            const count = g.items.length;
+            for (let i = 0; i < count; i++) {
+                const r = g.items[i];
+
+                // Calculate fan offset if multiple peers at same location
+                let destX = r.sx;
+                let destY = r.sy;
+                if (count > 1) {
+                    // Fan perpendicular to the line from origin
+                    const dx = r.sx - originX;
+                    const dy = r.sy - originY;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    // Perpendicular unit vector
+                    const perpX = -dy / len;
+                    const perpY = dx / len;
+                    // Spread factor: center the fan
+                    const t = (i - (count - 1) / 2) * (FAN_SPREAD / Math.max(1, count - 1));
+                    destX += perpX * t;
+                    destY += perpY * t;
+                }
+
+                const dist = r.dist;
+                const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.moveTo(originX, originY);
+
+                // Draw a slight curve for fanned lines (looks better than straight)
+                if (count > 1) {
+                    const midX = (originX + destX) / 2;
+                    const midY = (originY + destY) / 2;
+                    const dx = destX - originX;
+                    const dy = destY - originY;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const perpX = -dy / len;
+                    const perpY = dx / len;
+                    const bulge = (i - (count - 1) / 2) * 6;
+                    ctx.quadraticCurveTo(midX + perpX * bulge, midY + perpY * bulge, destX, destY);
+                } else {
+                    ctx.lineTo(destX, destY);
+                }
+                ctx.stroke();
+
+                // Draw a small endpoint dot for fanned lines to show each peer
+                if (count > 1) {
+                    ctx.globalAlpha = Math.min(0.7, alpha + 0.2);
+                    ctx.beginPath();
+                    ctx.arc(destX, destY, 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = asLineColor;
+                    ctx.fill();
+                }
+            }
         }
 
         ctx.restore();
@@ -4333,10 +4402,16 @@
                 if (!panelEl.classList.contains('collapsed')) {
                     highlightTableRow(node.peerId, true);
                 }
-            } else if (pinnedNode) {
-                // Clicked empty space — unpin
-                hideTooltip();
-                highlightTableRow(null);
+            } else {
+                // Clicked empty space — unpin tooltip
+                if (pinnedNode) {
+                    hideTooltip();
+                    highlightTableRow(null);
+                }
+                // [AS-DIVERSITY] Deselect any selected AS when clicking empty map
+                if (window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+                    window.ASDiversity.deselect();
+                }
             }
         }
         dragging = false;
@@ -4431,8 +4506,10 @@
         // and session dismissal — no longer tied to filter toggles
     }
 
-    // Click to toggle network badges (multi-select)
-    // stopPropagation prevents the peer-panel-handle click from toggling the panel
+    // Click to toggle network badges (radio-then-additive model)
+    // First click from "All" = radio (show only that network)
+    // Subsequent clicks = additive toggle
+    // Clicking "All" = reset to all
     netBadges.forEach(badge => {
         badge.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -4440,16 +4517,25 @@
             if (net === 'all') {
                 // "All" → select everything
                 enabledNets = new Set(ALL_NETS);
+            } else if (isAllNetsEnabled()) {
+                // Currently showing All → radio: show only the clicked network
+                enabledNets = new Set([net]);
             } else {
-                // Toggle this network
+                // Specific filter(s) active → additive toggle
                 if (enabledNets.has(net)) {
                     enabledNets.delete(net);
-                    // Don't allow empty selection — re-enable if it would be empty
+                    // Don't allow empty selection — revert to All
                     if (enabledNets.size === 0) {
                         enabledNets = new Set(ALL_NETS);
                     }
                 } else {
                     enabledNets.add(net);
+                    // If all nets are now enabled, switch back to "All" state
+                    if (enabledNets.size === ALL_NETS.size) {
+                        var allMatch = true;
+                        for (var n of ALL_NETS) { if (!enabledNets.has(n)) { allMatch = false; break; } }
+                        // Already a full set, state is naturally "all"
+                    }
                 }
             }
             updateBadgeStates();
@@ -5529,12 +5615,12 @@
             mbcoreDbPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(); });
         }
 
-        // Topbar gear icon → open map settings (advanced display panel)
+        // Topbar gear icon → open primary Map Settings popup
         const topbarGear = document.getElementById('topbar-gear');
         if (topbarGear) {
             topbarGear.addEventListener('click', (e) => {
                 e.stopPropagation();
-                openAdvancedPanel();
+                openDisplaySettingsPopup(topbarGear);
             });
         }
 
@@ -5556,6 +5642,32 @@
                 openDisplaySettingsPopup(topbarStatusMsg);
             });
         }
+
+        // [AS-DIVERSITY] Visibility toggle buttons near logo
+        const visBtns = document.querySelectorAll('.vis-btn');
+        visBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const targetId = btn.dataset.target;
+                const targetEl = document.getElementById(targetId);
+                if (!targetEl) return;
+
+                btn.classList.toggle('active');
+                const isActive = btn.classList.contains('active');
+
+                if (isActive) {
+                    targetEl.style.display = '';
+                    targetEl.style.opacity = '';
+                    targetEl.style.pointerEvents = '';
+                } else {
+                    targetEl.style.display = 'none';
+                    // If hiding the diversity donut, also deselect any active AS
+                    if (targetId === 'as-diversity-container' && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+                        window.ASDiversity.deselect();
+                    }
+                }
+            });
+        });
     }
 
     // ═══════════════════════════════════════════════════════════

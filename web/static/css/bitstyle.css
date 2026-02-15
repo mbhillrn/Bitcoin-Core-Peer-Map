@@ -171,6 +171,41 @@ html, body {
 }
 .version:hover { color: var(--accent); border-color: rgba(88,166,255,0.2); }
 
+/* --- Visibility toggle buttons near logo --- */
+.vis-toggles {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    margin-bottom: 2px;
+}
+.vis-btn {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(88,166,255,0.15);
+    background: rgba(88,166,255,0.06);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+    line-height: 1.2;
+}
+.vis-btn:hover {
+    border-color: rgba(88,166,255,0.3);
+    color: var(--text-secondary);
+    background: rgba(88,166,255,0.1);
+}
+.vis-btn.active {
+    color: var(--accent);
+    border-color: rgba(88,166,255,0.35);
+    background: rgba(88,166,255,0.12);
+}
+
 /* --- Top bar right section --- */
 .topbar-right {
     display: flex;

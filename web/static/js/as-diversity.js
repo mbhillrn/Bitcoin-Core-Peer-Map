@@ -432,25 +432,82 @@ window.ASDiversity = (function () {
         }
     }
 
+    /** Get quality rating for a diversity score */
+    function getQuality(score) {
+        if (score >= 8) return { word: 'Excellent', cls: 'q-excellent' };
+        if (score >= 6) return { word: 'Good', cls: 'q-good' };
+        if (score >= 4) return { word: 'Moderate', cls: 'q-moderate' };
+        if (score >= 2) return { word: 'Poor', cls: 'q-poor' };
+        return { word: 'Critical', cls: 'q-critical' };
+    }
+
+    /** Build score tooltip text */
+    function buildScoreTooltip(score) {
+        var q = getQuality(score);
+        return 'Diversity Score: ' + score.toFixed(1) + '/10 (' + q.word + ')\n'
+             + 'Based on Herfindahl\u2013Hirschman Index (HHI)\n'
+             + 'Higher = more evenly distributed peers across providers';
+    }
+
     /** Update the donut center label */
     function renderCenter() {
         if (!donutCenter) return;
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreVal = donutCenter.querySelector('.as-score-value');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
         if (!scoreVal || !scoreLbl) return;
 
+        // If an AS is selected, show AS info instead of score
+        if (selectedAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (seg) {
+                var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
+                if (displayName.length > 16) displayName = displayName.substring(0, 15) + '\u2026';
+
+                if (qualityEl) {
+                    qualityEl.textContent = seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '');
+                    qualityEl.className = 'as-score-quality';
+                    qualityEl.style.color = seg.color;
+                }
+                scoreVal.textContent = displayName;
+                scoreVal.className = 'as-score-value as-selected-mode';
+                scoreVal.style.color = seg.color;
+                scoreVal.title = seg.asNumber + ' \u00b7 ' + (seg.asName || '') + '\n'
+                    + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
+                scoreLbl.textContent = seg.percentage.toFixed(1) + '%';
+                return;
+            }
+        }
+
+        // Reset any selected-mode styling
+        scoreVal.className = 'as-score-value';
+        scoreVal.style.color = '';
+
+        // Edge case: no locatable peers (all private/tor/i2p/cjdns)
         if (totalPeers === 0) {
+            if (qualityEl) {
+                qualityEl.textContent = '';
+                qualityEl.className = 'as-score-quality q-nodata';
+            }
             scoreVal.textContent = '\u2014';
+            scoreVal.title = 'No AS data available \u2014 all peers are on private or anonymous networks';
             scoreLbl.textContent = 'NO DATA';
-            scoreVal.className = 'as-score-value';
             return;
         }
 
+        // Normal: show diversity score
+        var q = getQuality(diversityScore);
+
+        if (qualityEl) {
+            qualityEl.textContent = q.word;
+            qualityEl.className = 'as-score-quality ' + q.cls;
+        }
+
         scoreVal.textContent = diversityScore.toFixed(1);
+        scoreVal.title = buildScoreTooltip(diversityScore);
 
-        // Remove old score classes
+        // Remove old score classes and add new
         scoreVal.classList.remove('as-score-excellent', 'as-score-good', 'as-score-moderate', 'as-score-poor', 'as-score-critical');
-
         if (diversityScore >= 8) scoreVal.classList.add('as-score-excellent');
         else if (diversityScore >= 6) scoreVal.classList.add('as-score-good');
         else if (diversityScore >= 4) scoreVal.classList.add('as-score-moderate');
@@ -734,6 +791,7 @@ window.ASDiversity = (function () {
                 if (_drawLinesForAs) _drawLinesForAs(asNum, seg.peerIds, seg.color);
             }
             renderDonut();
+            renderCenter();
             renderLegend();
         }
     }
@@ -745,6 +803,7 @@ window.ASDiversity = (function () {
         if (_dimMapPeers) _dimMapPeers(null);
         if (_clearAsLines) _clearAsLines();
         renderDonut();
+        renderCenter();
         renderLegend();
     }
 
@@ -798,6 +857,12 @@ window.ASDiversity = (function () {
         asGroups = aggregatePeers(peers);
         diversityScore = calcDiversityScore(asGroups);
         donutSegments = buildDonutSegments(asGroups);
+
+        // Toggle no-data state on the container
+        if (containerEl) {
+            if (totalPeers === 0) containerEl.classList.add('no-data');
+            else containerEl.classList.remove('no-data');
+        }
 
         renderDonut();
         renderCenter();
@@ -874,6 +939,7 @@ window.ASDiversity = (function () {
         update: update,
         activate: activate,
         deactivate: deactivate,
+        deselect: deselect,
         isViewActive: isViewActive,
         getDonutCenter: getDonutCenter,
         getHoveredAs: getHoveredAs,

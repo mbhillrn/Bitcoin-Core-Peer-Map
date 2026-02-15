@@ -152,12 +152,27 @@ git checkout main -- web/static/js/bitapp.js
 - [x] Internet/Running dots: just dots, hover for info
 - [x] Gear icon in topbar → opens advanced display settings
 
-### Phase 2 — Polish (if time permits)
+### Phase 2 — UX Refinements (IN PROGRESS)
+- [x] Fix gear icon → wire to primary Map Settings popup, not advanced display
+- [x] Fix tooltip z-index (was behind detail panel, bumped to 300+)
+- [x] Center legend under donut
+- [x] Add "Provider Diversity" title above donut with hover tooltip ("Autonomous System Provider Diversity Analysis")
+- [x] Add score hover tooltip explaining what the number means
+- [x] Add color-coded quality word ABOVE the score (Excellent/Good/Moderate/Poor/Critical)
+- [x] Edge case: grey out donut when only private network peers (no AS data)
+- [x] Donut center updates when AS selected (shows AS name + count + pct)
+- [x] Click empty map space → deselect AS, close panel, clear filters
+- [x] Fan out lines to co-located peers + jitter dots at same lat/lon
+- [x] Rework network filter badges to radio-then-additive model
+- [x] Add visibility toggle buttons near logo (toggle Diversity, BTC Price, System Stats)
+
+### Phase 3 — Polish (if time permits)
 - [ ] Dropdown in donut center for searching all ASes
 - [ ] Smooth segment transitions when peer data updates
 - [ ] Keyboard navigation (arrow keys through segments)
 - [ ] Analysis settings section in map settings (ring pulse, etc.)
 - [ ] Mobile-friendly adjustments (if ever needed)
+- [ ] Multi-peer dot click: show list of all peers at that location
 
 ---
 

@@ -31,6 +31,23 @@
 }
 
 /* ==========================================================
+   2b. DONUT TITLE — "Provider Diversity" above the donut
+   ========================================================== */
+.as-donut-title {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-secondary);
+    text-align: center;
+    pointer-events: auto;
+    cursor: default;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+    margin-bottom: 2px;
+}
+
+/* ==========================================================
    3. DONUT CHART — SVG ring + center label (260px, 3D look)
    ========================================================== */
 .as-donut-wrap {
@@ -71,6 +88,24 @@
     pointer-events: auto;
     cursor: default;
 }
+/* Quality word ABOVE the score (Excellent / Good / etc.) */
+.as-score-quality {
+    font-family: var(--font-data);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    line-height: 1.2;
+    margin-bottom: 1px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    min-height: 12px;
+}
+.as-score-quality.q-excellent { color: var(--ok); }
+.as-score-quality.q-good      { color: var(--ok-bright); }
+.as-score-quality.q-moderate  { color: var(--warn); }
+.as-score-quality.q-poor      { color: var(--err); }
+.as-score-quality.q-critical  { color: var(--err-bright); }
+.as-score-quality.q-nodata    { color: var(--text-dim); }
 .as-score-value {
     font-family: var(--font-data);
     font-size: 32px;
@@ -78,6 +113,16 @@
     color: var(--text-primary);
     line-height: 1.1;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+}
+/* Selected AS state — show AS name/count inside donut */
+.as-score-value.as-selected-mode {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .as-score-label {
     font-family: var(--font-data);
@@ -96,6 +141,15 @@
 .as-score-moderate  { color: var(--warn); }
 .as-score-poor      { color: var(--err); }
 .as-score-critical  { color: var(--err-bright); }
+
+/* No-data greyed state */
+.as-diversity-container.no-data .as-donut-wrap {
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)) saturate(0.3);
+    opacity: 0.6;
+}
+.as-diversity-container.no-data .as-donut-title {
+    color: var(--text-dim);
+}
 
 /* Loading state */
 .as-loading {
@@ -126,6 +180,7 @@
 .as-legend {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 2px;
     pointer-events: auto;
     width: 260px;
@@ -141,6 +196,7 @@
     border-radius: 4px;
     transition: background var(--transition);
     white-space: nowrap;
+    width: 100%;
 }
 .as-legend-item:hover {
     background: rgba(88, 166, 255, 0.1);
@@ -192,7 +248,7 @@
    ========================================================== */
 .as-tooltip {
     position: fixed;
-    z-index: 200;
+    z-index: 310;
     background: var(--bg-surface);
     border: 1px solid rgba(88, 166, 255, 0.2);
     border-radius: 6px;
@@ -491,7 +547,9 @@ body.theme-light .as-legend-name,
 body.theme-light .as-legend-count,
 body.theme-light .as-legend-pct,
 body.theme-light .as-score-value,
-body.theme-light .as-score-label { text-shadow: none; }
+body.theme-light .as-score-label,
+body.theme-light .as-score-quality,
+body.theme-light .as-donut-title { text-shadow: none; }
 body.theme-light .as-detail-panel { border-left-color: rgba(88, 166, 255, 0.25); }
 body.theme-light .as-tooltip { border-color: rgba(88, 166, 255, 0.25); }
 body.theme-light .as-loading { color: var(--text-secondary); }
