@@ -20,7 +20,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 0;
     pointer-events: none;
     user-select: none;
     opacity: 0.88;
@@ -31,7 +31,7 @@
 }
 
 /* ==========================================================
-   2b. DONUT TITLE — "PEER PROVIDER" / "Diversity" above donut
+   2b. DONUT TITLE — "SERVICE PROVIDER" / "Diversity" above donut
    ========================================================== */
 .as-donut-title {
     font-family: var(--font-display);
@@ -43,8 +43,8 @@
     pointer-events: auto;
     cursor: default;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    margin-bottom: -4px;
-    line-height: 1.15;
+    margin-bottom: -6px;
+    line-height: 1.1;
 }
 .as-title-provider {
     color: var(--logo-primary);
