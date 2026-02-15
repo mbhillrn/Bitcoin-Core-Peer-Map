@@ -1,17 +1,17 @@
 # MBCore Dashboard (Bitcoin Core Geolocated Peer Map, GUI, and Tools)
 
-A real-time monitoring dashboard for your personal Bitcoin Core node. Geolocates connected peers on an interactive canvas world map, analyzes service provider diversity across your peer connections, and provides tools to manage peers directly — all from a browser GUI.
+A real-time monitoring dashboard for your personal Bitcoin Core node. Geolocates connected peers on an interactive canvas world map, analyzes service provider diversity across your peer connections, and provides tools to manage peers directly -- all from a browser GUI.
 
-![MBCore Dashboard — Full Map with Service Provider Diversity](docs/images/N-Hero1.png)
+![MBCore Dashboard -- Full Map with Service Provider Diversity](docs/images/N-Hero1.png)
 
-![MBCore Dashboard — Selected Provider with Connection Lines](docs/images/N-Hero2.png)
+![MBCore Dashboard -- Selected Provider with Connection Lines](docs/images/N-Hero2.png)
 
 *Selecting a service provider on the donut chart draws animated connection lines to all peers hosted by that provider (Digital Ocean, LLC shown above), with a full breakdown in the detail panel.*
 
 MBCore Dashboard uses `bitcoin-cli` to query your running Bitcoin Core node, geolocates public peers via a maintained database and online IP geolocation searches like [ip-api.com](http://ip-api.com), and aggregates peer data by Autonomous System (AS) to visualize how your connections are distributed across internet service providers and hosting companies. Maintains a local SQLite database of peer locations (latitude, longitude, ISP, AS info, and more) for instant recall. The database is continuously updated with new IP geolocations from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset).
 
 - Interactive HTML5 Canvas world map with geolocated Bitcoin Core peers
-- **Service provider diversity analysis** — donut chart with diversity score, concentration risk, and per-provider detail panel
+- **Service provider diversity analysis** -- donut chart with diversity score, concentration risk, and per-provider detail panel
 - Supports all 5 Bitcoin Core network types: **IPv4**, **IPv6**, **Tor**, **I2P**, **CJDNS**
 - Real-time peer data, system stats, and live Bitcoin price
 - Connect, disconnect, and ban peers directly from the dashboard
@@ -74,14 +74,14 @@ The top bar contains all primary information and navigation:
 
 **Center (top row):** All five Bitcoin Core network types as individual chips: **IPv4**, **IPv6**, **Tor**, **I2P**, and **CJDNS**. Each chip displays a colored status dot, the protocol name, and live inbound/outbound peer counts.
 
-- **Green dot** — the network is enabled and has active peers
-- **Red/gray dot** — the network is disabled or has no connected peers
+- **Green dot** -- the network is enabled and has active peers
+- **Red/gray dot** -- the network is disabled or has no connected peers
 
 Each chip shows real-time counts like `3↓ 5↑`. When a peer connects or disconnects, an animated delta indicator briefly appears next to the affected count.
 
 **Right (top row):** Update countdown, map load status, sync indicator, and current time.
 
-**Left (below):** System stats overlay — **Peers** total count, **CPU** utilization, **RAM** usage, and **NET ↓/↑** real-time network throughput with animated bars. Click any stat for a detailed system info modal.
+**Left (below):** System stats overlay -- **Peers** total count, **CPU** utilization, **RAM** usage, and **NET ↓/↑** real-time network throughput with animated bars. Click any stat for a detailed system info modal.
 
 **Center (below):** Live Bitcoin price with configurable currency and update frequency. Price turns **green** on increases and **red** on decreases. Below the price are map zoom controls (+/−) and a gear icon for Map Settings.
 
@@ -91,7 +91,7 @@ Each chip shows real-time counts like `3↓ 5↑`. When a peer connects or disco
 
 ![Service Provider Detail Panel](docs/images/N-AS-Screen1.png)
 
-The **Service Provider Diversity** donut chart in the upper-right corner of the map visualizes how your node's public peers are distributed across internet service providers, hosting companies, and other network operators (identified by their Autonomous System number). This helps you understand your node's network diversity — whether your connections are well-distributed or concentrated with a few large providers, which could represent a single point of failure or increase susceptibility to targeted network disruptions.
+The **Service Provider Diversity** donut chart in the upper-right corner of the map visualizes how your node's public peers are distributed across internet service providers, hosting companies, and other network operators (identified by their Autonomous System number). This helps you understand your node's network diversity -- whether your connections are well-distributed or concentrated with a few large providers, which could represent a single point of failure or increase susceptibility to targeted network disruptions.
 
 **Donut Chart:**
 - Displays the top 8 service providers by peer count, each as a color-coded segment
@@ -99,10 +99,10 @@ The **Service Provider Diversity** donut chart in the upper-right corner of the 
 - Hovering any segment or legend item shows a tooltip with provider name, peer count, percentage, and concentration risk level
 - Clicking a segment selects that provider: draws animated connection lines from the legend to every peer on the map hosted by that provider, filters the peer list, and opens the detail panel
 
-**Diversity Score (0–10):**
+**Diversity Score (0-10):**
 - Displayed in the center of the donut with the number of public peers analyzed
 - Higher scores indicate better distribution across providers
-- Color-coded quality rating: **Excellent** (8+), **Good** (6–8), **Moderate** (4–6), **Poor** (2–4), **Critical** (0–2)
+- Color-coded quality rating: **Excellent** (8+), **Good** (6-8), **Moderate** (4-6), **Poor** (2-4), **Critical** (0-2)
 - The score accounts for both the number of unique providers and how evenly peers are spread among them
 
 **Legend:**
@@ -115,14 +115,14 @@ The **Service Provider Diversity** donut chart in the upper-right corner of the 
 
 Clicking a provider segment opens a slide-in panel on the right side with comprehensive per-provider information:
 
-- **Peers** — total, inbound, outbound, block-relay-only counts
-- **Performance** — average connection duration, average ping latency, total data sent/received
-- **Software** — breakdown of Bitcoin Core versions running on that provider's peers
-- **Countries** — geographic distribution of peers within that provider
-- **Services** — service flags advertised by peers on that provider
+- **Peers** -- total, inbound, outbound, block-relay-only counts
+- **Performance** -- average connection duration, average ping latency, total data sent/received
+- **Software** -- breakdown of Bitcoin Core versions running on that provider's peers
+- **Countries** -- geographic distribution of peers within that provider
+- **Services** -- service flags advertised by peers on that provider
 - Click any individual peer row in the panel to view its popup on the map, or disconnect it directly
 
-![Others Category — All Providers](docs/images/N-AS-Screen2.png)
+![Others Category -- All Providers](docs/images/N-AS-Screen2.png)
 
 *Selecting the "Others" segment shows a full list of all providers in that category with their AS numbers and names, along with summary statistics for the group.*
 
@@ -141,20 +141,20 @@ Peers on private networks (Tor, I2P, CJDNS) don't have real geographic coordinat
 The bottom panel shows all connected peers in a sortable, filterable table.
 
 **Title bar features:**
-- **Network filters** — filter by All, IPv4, IPv6, Tor, I2P, or CJDNS (with live peer counts)
-- **Connect Peer** — manually connect to a new peer in any supported format
-- **Banned Peers** — view and manage the ban list
-- **NODE-INFO** — open the node information modal (version, blockchain, mempool details)
-- **MBCORE-DB** — open the GeoIP database modal (stats, auto-update toggle, manual update)
-- **FIT** — auto-size columns to fit content
-- **▼** — collapse/expand the peer table
-- **⚙** — table settings (transparency, visible rows, column toggles, Antarctica setting)
+- **Network filters** -- filter by All, IPv4, IPv6, Tor, I2P, or CJDNS (with live peer counts)
+- **Connect Peer** -- manually connect to a new peer in any supported format
+- **Banned Peers** -- view and manage the ban list
+- **NODE-INFO** -- open the node information modal (version, blockchain, mempool details)
+- **MBCORE-DB** -- open the GeoIP database modal (stats, auto-update toggle, manual update)
+- **FIT** -- auto-size columns to fit content
+- **▼** -- collapse/expand the peer table
+- **⚙** -- table settings (transparency, visible rows, column toggles, Antarctica setting)
 
 **Table features:**
-- **Sortable** — click any column header (cycles: unsorted → ascending → descending). Sent, Received, Duration, and Ping columns sort numerically by actual values.
-- **Resizable** — drag column edges to adjust width
-- **Click to fly** — click any row to zoom to that peer on the map
-- **Visible rows** — configurable from the table settings gear (default: 15 rows visible, scrollable beyond)
+- **Sortable** -- click any column header (cycles: unsorted → ascending → descending). Sent, Received, Duration, and Ping columns sort numerically by actual values.
+- **Resizable** -- drag column edges to adjust width
+- **Click to fly** -- click any row to zoom to that peer on the map
+- **Visible rows** -- configurable from the table settings gear (default: 15 rows visible, scrollable beyond)
 
 #### Default Columns (16 visible)
 
@@ -233,9 +233,9 @@ A typical modern full node will show `N W P` (full chain, SegWit, encrypted tran
 
 Click the **gear icon** below the Bitcoin price area to open Map Settings:
 
-- **Update Frequency** — configure how often peer data and node info are refreshed (3–120 seconds)
-- **Show / Hide** — toggle visibility of the Service Provider Diversity donut, Bitcoin price display, and system stats overlay
-- **Advanced** — opens the Advanced Display Settings panel (see below)
+- **Update Frequency** -- configure how often peer data and node info are refreshed (3-120 seconds)
+- **Show / Hide** -- toggle visibility of the Service Provider Diversity donut, Bitcoin price display, and system stats overlay
+- **Advanced** -- opens the Advanced Display Settings panel (see below)
 
 ### Advanced Display Settings
 
@@ -244,57 +244,57 @@ Click **Advanced** at the bottom of the Map Settings popup to open a floating, d
 **Theme**
 
 Choose from four built-in themes that set all sliders to curated presets:
-- **Dark** — the original dark canvas dashboard, ideal for low-light environments
-- **Light** — bright, clean interface with green land and blue ocean, best for well-lit rooms
-- **OLED** — pure black for OLED screens, maximum contrast, minimum power draw
-- **Midnight** — deep indigo-blue tones with purple accents, rich and atmospheric
+- **Dark** -- the original dark canvas dashboard, ideal for low-light environments
+- **Light** -- bright, clean interface with green land and blue ocean, best for well-lit rooms
+- **OLED** -- pure black for OLED screens, maximum contrast, minimum power draw
+- **Midnight** -- deep indigo-blue tones with purple accents, rich and atmospheric
 
 **Service Provider Diversity**
-- **Line Thickness** — width of the connection lines drawn from the donut to peers on the map (default 30)
-- **Line Fanning** — how much curved lines spread apart when multiple peers share the same location (default 50)
+- **Line Thickness** -- width of the connection lines drawn from the donut to peers on the map (default 30)
+- **Line Fanning** -- how much curved lines spread apart when multiple peers share the same location (default 50)
 
 **Peer Effects**
-- **Shimmer** — ambient twinkle intensity for long-lived peers (0 = off, which is the default)
-- **Pulse Depth In / Out** — how deep the breathing pulse goes for inbound vs outbound peers
-- **Pulse Speed In / Out** — how fast the pulse cycles (50 = original speed)
+- **Shimmer** -- ambient twinkle intensity for long-lived peers (0 = off, which is the default)
+- **Pulse Depth In / Out** -- how deep the breathing pulse goes for inbound vs outbound peers
+- **Pulse Speed In / Out** -- how fast the pulse cycles (50 = original speed)
 
 **Land**
-- **Hue** — shift the land color across the full spectrum (default 215 = dark blue-gray)
-- **Brightness** — darken or brighten the landmasses
-- **Snow the Poles** — gradually frost Antarctica and Arctic regions with an icy gray-white
+- **Hue** -- shift the land color across the full spectrum (default 215 = dark blue-gray)
+- **Brightness** -- darken or brighten the landmasses
+- **Snow the Poles** -- gradually frost Antarctica and Arctic regions with an icy gray-white
 
 **Ocean**
-- **Preset** — choose between Original (full hue range) and Light Blue (constrained sky blue range)
-- **Hue** — shift the ocean color (range depends on selected preset)
-- **Brightness** — darken or brighten the ocean and lakes
+- **Preset** -- choose between Original (full hue range) and Light Blue (constrained sky blue range)
+- **Hue** -- shift the ocean color (range depends on selected preset)
+- **Brightness** -- darken or brighten the ocean and lakes
 
 **Lat/Lon Grid**
-- **Visible** — toggle the latitude/longitude grid on or off
-- **Thickness** — grid line width
-- **Hue** — shift the grid line color
-- **Brightness** — grid line opacity
+- **Visible** -- toggle the latitude/longitude grid on or off
+- **Thickness** -- grid line width
+- **Hue** -- shift the grid line color
+- **Brightness** -- grid line opacity
 
 **Borders**
-- **Thickness** — scale country and state/region borders together (0 = hidden, 50 = default, 100 = 2x thick)
-- **Hue** — shift the border line color
+- **Thickness** -- scale country and state/region borders together (0 = hidden, 50 = default, 100 = 2x thick)
+- **Hue** -- shift the border line color
 
 **HUD Overlays**
-- **Solid Backgrounds** — adds semi-opaque backgrounds behind stats, price, and info panels for improved readability on lighter maps
+- **Solid Backgrounds** -- adds semi-opaque backgrounds behind stats, price, and info panels for improved readability on lighter maps
 
 **Saving and Resetting**
-- **Session Save** — keeps your settings for the current session only (closes the panel)
-- **Permanent Save** — persists your settings to localStorage so they survive browser refreshes and new sessions
-- **Reset** — snaps every slider back to the original defaults and resets the theme to Dark
+- **Session Save** -- keeps your settings for the current session only (closes the panel)
+- **Permanent Save** -- persists your settings to localStorage so they survive browser refreshes and new sessions
+- **Reset** -- snaps every slider back to the original defaults and resets the theme to Dark
 - Every slider label is a clickable link that resets just that one slider to its default
 
 ### Table Settings
 
 The gear (⚙) button on the peer list title bar opens Table Settings:
-- **Transparency** — adjust panel opacity (0–100% slider)
-- **Visible Rows** — control how many peer rows are displayed before scrolling (3–40, default 15)
-- **Column Toggles** — show or hide any column
-- **Private Networks** — toggle Antarctica display for Tor/I2P/CJDNS peers
-- **Defaults** — restore default columns, transparency, visible rows, and all settings
+- **Transparency** -- adjust panel opacity (0-100% slider)
+- **Visible Rows** -- control how many peer rows are displayed before scrolling (3-40, default 15)
+- **Column Toggles** -- show or hide any column
+- **Private Networks** -- toggle Antarctica display for Tor/I2P/CJDNS peers
+- **Defaults** -- restore default columns, transparency, visible rows, and all settings
 
 ### Connect Peer
 
@@ -329,7 +329,7 @@ Click the **Disconnect** button on any peer row in the table to open the disconn
 
 ![Geo/IP Database Settings](docs/images/3.geomenu.png)
 
-Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries. The auto-update setting syncs with the web dashboard — toggling it in one place updates the other.
+Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries. The auto-update setting syncs with the web dashboard -- toggling it in one place updates the other.
 
 ### Port Settings
 
@@ -360,7 +360,7 @@ The dashboard automatically checks GitHub for new versions of MBCore Dashboard:
 The GeoIP database that stores peer locations can also update itself:
 - When enabled, the database syncs from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset) at startup and once per hour while the dashboard is running
 - Toggle auto-update on/off from the dashboard's **MBCORE-DB** modal (green/red slider) or from the terminal's **g) Geo/IP Database** menu
-- The setting syncs between the dashboard and terminal — toggling it in one place updates the other
+- The setting syncs between the dashboard and terminal -- toggling it in one place updates the other
 - A brief status message appears in the top bar during updates: countdown, checking, and result ("DB already up to date" or "DB successfully updated")
 - When auto-update is disabled, the database still works with whatever data it already has cached
 
@@ -390,7 +390,7 @@ The GeoIP database that stores peer locations can also update itself:
 
 Geolocation uses [ip-api.com](http://ip-api.com) (free, no API key required) for new peers, with results cached in a local SQLite database (`./data/geo.db`). The [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset) provides pre-cached locations for thousands of known Bitcoin nodes.
 
-Service provider diversity analysis runs entirely client-side — peer AS (Autonomous System) data is aggregated in the browser, the diversity score is calculated from the distribution, and the donut chart, legend, and detail panel are rendered in real time as peers connect and disconnect.
+Service provider diversity analysis runs entirely client-side -- peer AS (Autonomous System) data is aggregated in the browser, the diversity score is calculated from the distribution, and the donut chart, legend, and detail panel are rendered in real time as peers connect and disconnect.
 
 ---
 
