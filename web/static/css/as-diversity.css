@@ -59,40 +59,39 @@
     z-index: 90;
     display: flex;
     align-items: flex-start;
-    gap: 18px;
+    gap: 24px;
     pointer-events: none;
     user-select: none;
 }
 .as-diversity-container.hidden { display: none; }
 
 /* ==========================================================
-   3. DONUT CHART — SVG ring + center label
+   3. DONUT CHART — SVG ring + center label (220px)
    ========================================================== */
 .as-donut-wrap {
     position: relative;
-    width: 160px;
-    height: 160px;
+    width: 220px;
+    height: 220px;
     flex-shrink: 0;
     pointer-events: auto;
 }
 .as-donut {
-    width: 160px;
-    height: 160px;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+    width: 220px;
+    height: 220px;
 }
 .as-donut-segment {
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.15s ease, filter 0.15s ease;
 }
 .as-donut-segment:hover {
-    opacity: 0.85;
-    filter: brightness(1.2);
+    filter: brightness(1.25) saturate(1.1);
 }
 .as-donut-segment.dimmed {
-    opacity: 0.25;
+    opacity: 0.2;
+    filter: saturate(0.4);
 }
 .as-donut-segment.selected {
-    filter: brightness(1.15);
+    filter: brightness(1.2) saturate(1.15);
 }
 
 /* Center overlay inside the donut hole */
@@ -107,27 +106,46 @@
 }
 .as-score-value {
     font-family: var(--font-data);
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.1;
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
 .as-score-label {
     font-family: var(--font-data);
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 600;
     letter-spacing: 1.2px;
     text-transform: uppercase;
     color: var(--text-muted);
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-top: 2px;
 }
-/* Color classes for score value */
+
+/* Score color classes */
 .as-score-excellent { color: var(--ok); }
 .as-score-good      { color: var(--ok-bright); }
 .as-score-moderate  { color: var(--warn); }
 .as-score-poor      { color: var(--err); }
 .as-score-critical  { color: var(--err-bright); }
+
+/* Loading state */
+.as-loading {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    animation: as-pulse 1.5s ease-in-out infinite;
+}
+@keyframes as-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
 
 /* ==========================================================
    4. LEGEND — Compact AS labels beside the donut
@@ -135,50 +153,64 @@
 .as-legend {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding-top: 8px;
+    gap: 3px;
+    padding-top: 12px;
     pointer-events: auto;
-    max-width: 200px;
+    min-width: 200px;
+    max-width: 260px;
 }
 .as-legend-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 3px;
+    padding: 4px 8px;
+    border-radius: 4px;
     transition: background var(--transition);
     white-space: nowrap;
 }
 .as-legend-item:hover {
-    background: rgba(88, 166, 255, 0.08);
+    background: rgba(88, 166, 255, 0.1);
 }
 .as-legend-item.dimmed {
-    opacity: 0.3;
+    opacity: 0.25;
 }
 .as-legend-item.selected {
-    background: rgba(88, 166, 255, 0.12);
+    background: rgba(88, 166, 255, 0.14);
+    border-left: 2px solid var(--accent);
+    padding-left: 6px;
 }
 .as-legend-dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 .as-legend-name {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 130px;
+    max-width: 140px;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    flex: 1;
 }
 .as-legend-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 18px;
+    text-align: right;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+.as-legend-pct {
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text-muted);
-    margin-left: auto;
+    min-width: 28px;
+    text-align: right;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
@@ -338,9 +370,7 @@
 .as-detail-close:hover { color: var(--text-primary); }
 
 /* Concentration bar in header */
-.as-detail-bar-wrap {
-    margin-top: 8px;
-}
+.as-detail-bar-wrap { margin-top: 8px; }
 .as-detail-bar-bg {
     width: 100%;
     height: 6px;
@@ -431,7 +461,7 @@
     font-size: 11px;
 }
 
-/* Sub-items in detail panel (version distribution, countries, etc.) */
+/* Sub-items in detail panel */
 .as-detail-sub-row {
     display: flex;
     justify-content: space-between;
@@ -455,7 +485,7 @@
 }
 
 /* ==========================================================
-   7. HUD SOLID BACKGROUND SUPPORT — Match existing pattern
+   7. HUD SOLID BACKGROUND SUPPORT
    ========================================================== */
 body.hud-solid .as-diversity-container {
     background: rgba(var(--surface-overlay-rgb), 0.72);
@@ -469,31 +499,21 @@ body.hud-solid .as-diversity-container {
    8. LIGHT THEME ADJUSTMENTS
    ========================================================== */
 body.theme-light .as-tt-number,
-body.theme-light .as-detail-asn {
-    text-shadow: none;
-}
+body.theme-light .as-detail-asn { text-shadow: none; }
 body.theme-light .as-legend-name,
 body.theme-light .as-legend-count,
+body.theme-light .as-legend-pct,
 body.theme-light .as-score-value,
-body.theme-light .as-score-label {
-    text-shadow: none;
-}
-body.theme-light .as-detail-panel {
-    border-left-color: rgba(88, 166, 255, 0.25);
-}
-body.theme-light .as-tooltip {
-    border-color: rgba(88, 166, 255, 0.25);
-}
+body.theme-light .as-score-label { text-shadow: none; }
+body.theme-light .as-detail-panel { border-left-color: rgba(88, 166, 255, 0.25); }
+body.theme-light .as-tooltip { border-color: rgba(88, 166, 255, 0.25); }
+body.theme-light .as-loading { color: var(--text-secondary); }
 
 /* ==========================================================
-   9. DETAIL PANEL SCROLLBAR — Match existing custom scrollbar
+   9. DETAIL PANEL SCROLLBAR
    ========================================================== */
-.as-detail-body::-webkit-scrollbar {
-    width: 6px;
-}
-.as-detail-body::-webkit-scrollbar-track {
-    background: transparent;
-}
+.as-detail-body::-webkit-scrollbar { width: 6px; }
+.as-detail-body::-webkit-scrollbar-track { background: transparent; }
 .as-detail-body::-webkit-scrollbar-thumb {
     background: rgba(88, 166, 255, 0.15);
     border-radius: 3px;

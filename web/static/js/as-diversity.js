@@ -15,9 +15,9 @@ window.ASDiversity = (function () {
     // ═══════════════════════════════════════════════════════════
 
     const MAX_SEGMENTS = 8;      // Top N ASes in the donut, rest = "Others"
-    const DONUT_SIZE = 160;      // SVG viewBox size
-    const DONUT_RADIUS = 68;     // Outer radius of the donut ring
-    const DONUT_WIDTH = 18;      // Width of the donut ring
+    const DONUT_SIZE = 220;      // SVG viewBox size
+    const DONUT_RADIUS = 98;     // Outer radius of the donut ring
+    const DONUT_WIDTH = 24;      // Width of the donut ring
     const INNER_RADIUS = DONUT_RADIUS - DONUT_WIDTH;
 
     // Curated colour palette — 9 colours (8 AS + Others), distinct and accessible
@@ -30,7 +30,7 @@ window.ASDiversity = (function () {
         '#d2a8ff',   // lavender
         '#79c0ff',   // light blue
         '#f0883e',   // orange
-        '#6e7681',   // gray (Others)
+        '#484f58',   // dark gray (Others)
     ];
 
     // ═══════════════════════════════════════════════════════════
@@ -44,14 +44,17 @@ window.ASDiversity = (function () {
     let selectedAs = null;         // AS number string currently selected (clicked)
     let diversityScore = 0;        // 0-10 score
     let totalPeers = 0;
+    let hasRenderedOnce = false;   // Track if we've ever rendered data
 
     // DOM refs (cached on init)
     let containerEl = null;
+    let donutWrapEl = null;
     let donutSvg = null;
     let donutCenter = null;
     let legendEl = null;
     let tooltipEl = null;
     let panelEl = null;
+    let loadingEl = null;
 
     // Integration hooks (set by bitapp.js)
     let _drawLinesForAs = null;    // fn(asNumber, peerIds, color) — draw lines on canvas
@@ -80,7 +83,7 @@ window.ASDiversity = (function () {
 
     /** Format bytes to human-readable */
     function fmtBytes(b) {
-        if (b == null || isNaN(b)) return '—';
+        if (b == null || isNaN(b)) return '\u2014';
         if (b < 1024) return b + ' B';
         if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
         if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
@@ -89,7 +92,7 @@ window.ASDiversity = (function () {
 
     /** Format seconds to human-readable duration */
     function fmtDuration(secs) {
-        if (!secs || secs <= 0) return '—';
+        if (!secs || secs <= 0) return '\u2014';
         const d = Math.floor(secs / 86400);
         const h = Math.floor((secs % 86400) / 3600);
         const m = Math.floor((secs % 3600) / 60);
@@ -109,7 +112,7 @@ window.ASDiversity = (function () {
 
     /** Get concentration risk level for a percentage */
     function getRisk(pct) {
-        if (pct >= 50) return { level: 'critical', label: 'Critical — Dominates Peers' };
+        if (pct >= 50) return { level: 'critical', label: 'Critical \u2014 Dominates Peers' };
         if (pct >= 30) return { level: 'high', label: 'High Concentration' };
         if (pct >= 15) return { level: 'moderate', label: 'Moderate Concentration' };
         return { level: 'low', label: '' };
@@ -189,7 +192,7 @@ window.ASDiversity = (function () {
             // Service flag combos
             const svcMap = {};
             for (const p of peers) {
-                const s = p.services_abbrev || '—';
+                const s = p.services_abbrev || '\u2014';
                 svcMap[s] = (svcMap[s] || 0) + 1;
             }
             const servicesCombos = Object.entries(svcMap)
@@ -258,7 +261,7 @@ window.ASDiversity = (function () {
             const othersPct = totalPeers > 0 ? (othersCount / totalPeers) * 100 : 0;
             segments.push({
                 asNumber: 'Others',
-                asName: rest.length + ' other ASes',
+                asName: rest.length + ' other providers',
                 asShort: '',
                 peerCount: othersCount,
                 percentage: othersPct,
@@ -267,6 +270,8 @@ window.ASDiversity = (function () {
                 color: PALETTE[PALETTE.length - 1],
                 peerIds: rest.flatMap(g => g.peerIds),
                 isOthers: true,
+                // Store the individual groups for the detail panel
+                _othersGroups: rest,
             });
         }
 
@@ -279,7 +284,6 @@ window.ASDiversity = (function () {
 
     /** Create an SVG arc path for a donut segment */
     function describeArc(cx, cy, outerR, innerR, startAngle, endAngle) {
-        // Clamp the sweep to avoid a full-circle issue with SVG arcs
         const sweep = endAngle - startAngle;
         const actualEnd = sweep >= 2 * Math.PI ? startAngle + 2 * Math.PI - 0.001 : endAngle;
         const largeArc = sweep > Math.PI ? 1 : 0;
@@ -294,10 +298,10 @@ window.ASDiversity = (function () {
         const iy2 = cy + innerR * Math.sin(startAngle);
 
         return [
-            `M ${ox1} ${oy1}`,
-            `A ${outerR} ${outerR} 0 ${largeArc} 1 ${ox2} ${oy2}`,
-            `L ${ix1} ${iy1}`,
-            `A ${innerR} ${innerR} 0 ${largeArc} 0 ${ix2} ${iy2}`,
+            'M ' + ox1 + ' ' + oy1,
+            'A ' + outerR + ' ' + outerR + ' 0 ' + largeArc + ' 1 ' + ox2 + ' ' + oy2,
+            'L ' + ix1 + ' ' + iy1,
+            'A ' + innerR + ' ' + innerR + ' 0 ' + largeArc + ' 0 ' + ix2 + ' ' + iy2,
             'Z',
         ].join(' ');
     }
@@ -308,21 +312,43 @@ window.ASDiversity = (function () {
 
         const cx = DONUT_SIZE / 2;
         const cy = DONUT_SIZE / 2;
-        const gap = 0.02; // gap between segments in radians
+        const gap = 0.03; // gap between segments in radians
         let html = '';
 
+        // SVG defs for drop shadow and gradients
+        html += '<defs>';
+        html += '<filter id="donut-shadow" x="-20%" y="-20%" width="140%" height="140%">';
+        html += '<feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/>';
+        html += '</filter>';
+        // Subtle inner glow
+        html += '<filter id="donut-glow" x="-10%" y="-10%" width="120%" height="120%">';
+        html += '<feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>';
+        html += '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>';
+        html += '</filter>';
+        html += '</defs>';
+
+        // Background track ring (subtle)
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="rgba(88,166,255,0.04)" stroke-width="' + DONUT_WIDTH + '" />';
+
+        // Outer decorative ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS + 2) + '" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="1" />';
+
+        // Inner decorative ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (INNER_RADIUS - 2) + '" fill="none" stroke="rgba(88,166,255,0.06)" stroke-width="0.5" />';
+
         if (donutSegments.length === 0) {
-            // Empty state — gray ring
-            html = `<circle cx="${cx}" cy="${cy}" r="${DONUT_RADIUS - DONUT_WIDTH / 2}" fill="none" stroke="#2d333b" stroke-width="${DONUT_WIDTH}" />`;
+            // Empty state — pulsing gray ring
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="#2d333b" stroke-width="' + DONUT_WIDTH + '" opacity="0.5" />';
         } else if (donutSegments.length === 1) {
-            // Single segment — full ring
             const seg = donutSegments[0];
-            html = `<circle cx="${cx}" cy="${cy}" r="${DONUT_RADIUS - DONUT_WIDTH / 2}" fill="none" stroke="${seg.color}" stroke-width="${DONUT_WIDTH}" class="as-donut-segment" data-as="${seg.asNumber}" />`;
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="' + seg.color + '" stroke-width="' + DONUT_WIDTH + '" class="as-donut-segment" data-as="' + seg.asNumber + '" filter="url(#donut-shadow)" />';
         } else {
             const totalGap = gap * donutSegments.length;
             const available = 2 * Math.PI - totalGap;
             let angle = -Math.PI / 2; // start at top
 
+            // Group for shadow on all segments
+            html += '<g filter="url(#donut-shadow)">';
             for (const seg of donutSegments) {
                 const sweep = (seg.peerCount / totalPeers) * available;
                 if (sweep <= 0) continue;
@@ -335,15 +361,22 @@ window.ASDiversity = (function () {
                 if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
                 if (selectedAs === seg.asNumber) cls.push('selected');
 
-                html += `<path d="${d}" fill="${seg.color}" class="${cls.join(' ')}" data-as="${seg.asNumber}" />`;
+                html += '<path d="' + d + '" fill="' + seg.color + '" class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '" />';
                 angle += sweep + gap;
             }
+            html += '</g>';
         }
 
         donutSvg.innerHTML = html;
 
+        // Hide loading once we have data
+        if (donutSegments.length > 0 && loadingEl) {
+            loadingEl.style.display = 'none';
+            hasRenderedOnce = true;
+        }
+
         // Attach segment event listeners
-        donutSvg.querySelectorAll('.as-donut-segment').forEach(el => {
+        donutSvg.querySelectorAll('.as-donut-segment').forEach(function (el) {
             el.addEventListener('mouseenter', onSegmentHover);
             el.addEventListener('mouseleave', onSegmentLeave);
             el.addEventListener('click', onSegmentClick);
@@ -353,9 +386,16 @@ window.ASDiversity = (function () {
     /** Update the donut center label */
     function renderCenter() {
         if (!donutCenter) return;
-        const scoreVal = donutCenter.querySelector('.as-score-value');
-        const scoreLbl = donutCenter.querySelector('.as-score-label');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
         if (!scoreVal || !scoreLbl) return;
+
+        if (totalPeers === 0) {
+            scoreVal.textContent = '\u2014';
+            scoreLbl.textContent = 'NO DATA';
+            scoreVal.className = 'as-score-value';
+            return;
+        }
 
         scoreVal.textContent = diversityScore.toFixed(1);
 
@@ -368,32 +408,33 @@ window.ASDiversity = (function () {
         else if (diversityScore >= 2) scoreVal.classList.add('as-score-poor');
         else scoreVal.classList.add('as-score-critical');
 
-        scoreLbl.textContent = 'DIVERSITY';
+        scoreLbl.textContent = totalPeers + ' PEERS';
     }
 
     /** Render the legend */
     function renderLegend() {
         if (!legendEl) return;
-        let html = '';
-        for (const seg of donutSegments) {
-            const cls = ['as-legend-item'];
+        var html = '';
+        for (var i = 0; i < donutSegments.length; i++) {
+            var seg = donutSegments[i];
+            var cls = ['as-legend-item'];
             if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
             if (selectedAs === seg.asNumber) cls.push('selected');
 
-            const displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
-            // Truncate long names
-            const shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+            var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
+            var shortName = displayName.length > 20 ? displayName.substring(0, 19) + '\u2026' : displayName;
 
-            html += `<div class="${cls.join(' ')}" data-as="${seg.asNumber}">`;
-            html += `<span class="as-legend-dot" style="background:${seg.color}"></span>`;
-            html += `<span class="as-legend-name" title="${displayName}">${shortName}</span>`;
-            html += `<span class="as-legend-count">${seg.peerCount}</span>`;
-            html += `</div>`;
+            html += '<div class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '">';
+            html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
+            html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+            html += '<span class="as-legend-count">' + seg.peerCount + '</span>';
+            html += '<span class="as-legend-pct">' + seg.percentage.toFixed(0) + '%</span>';
+            html += '</div>';
         }
         legendEl.innerHTML = html;
 
         // Attach legend event listeners
-        legendEl.querySelectorAll('.as-legend-item').forEach(el => {
+        legendEl.querySelectorAll('.as-legend-item').forEach(function (el) {
             el.addEventListener('mouseenter', onSegmentHover);
             el.addEventListener('mouseleave', onSegmentLeave);
             el.addEventListener('click', onSegmentClick);
@@ -406,39 +447,38 @@ window.ASDiversity = (function () {
 
     function showTooltip(asNum, event) {
         if (!tooltipEl) return;
-        const seg = donutSegments.find(s => s.asNumber === asNum);
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         if (!seg) return;
 
-        let html = '';
+        var html = '';
 
         // Line 1: AS number + org
-        html += `<div class="as-tt-header">`;
-        html += `<span class="as-tt-number">${seg.asNumber}</span>`;
+        html += '<div class="as-tt-header">';
+        html += '<span class="as-tt-number">' + seg.asNumber + '</span>';
         if (seg.asName && !seg.isOthers) {
-            html += `<span class="as-tt-sep">&middot;</span>`;
-            const name = seg.asName.length > 28 ? seg.asName.substring(0, 27) + '\u2026' : seg.asName;
-            html += `<span class="as-tt-name">${name}</span>`;
+            html += '<span class="as-tt-sep">&middot;</span>';
+            var name = seg.asName.length > 28 ? seg.asName.substring(0, 27) + '\u2026' : seg.asName;
+            html += '<span class="as-tt-name">' + name + '</span>';
         }
-        html += `</div>`;
+        html += '</div>';
 
         // Line 2: peer count + type
-        const typeLabel = seg.hostingLabel ? ' \u00b7 ' + seg.hostingLabel : '';
-        html += `<div class="as-tt-stats">${seg.peerCount} peer${seg.peerCount !== 1 ? 's' : ''} (${seg.percentage.toFixed(1)}%)${typeLabel}</div>`;
+        var typeLabel = seg.hostingLabel ? ' \u00b7 ' + seg.hostingLabel : '';
+        html += '<div class="as-tt-stats">' + seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '') + ' (' + seg.percentage.toFixed(1) + '%)' + typeLabel + '</div>';
 
         // Line 3: risk (only if notable)
         if (seg.riskLevel !== 'low' && seg.riskLabel) {
-            const icon = seg.riskLevel === 'critical' ? '\u26a0' : (seg.riskLevel === 'high' ? '\u26a0' : '\u26a0');
-            html += `<div class="as-tt-risk as-tt-risk-${seg.riskLevel}">${icon} ${seg.riskLabel}</div>`;
+            html += '<div class="as-tt-risk as-tt-risk-' + seg.riskLevel + '">\u26a0 ' + seg.riskLabel + '</div>';
         }
 
         tooltipEl.innerHTML = html;
         tooltipEl.classList.remove('hidden');
 
         // Position near cursor
-        const rect = tooltipEl.getBoundingClientRect();
-        const pad = 12;
-        let x = event.clientX + pad;
-        let y = event.clientY + pad;
+        var rect = tooltipEl.getBoundingClientRect();
+        var pad = 12;
+        var x = event.clientX + pad;
+        var y = event.clientY + pad;
         if (x + rect.width > window.innerWidth - pad) x = event.clientX - rect.width - pad;
         if (y + rect.height > window.innerHeight - pad) y = event.clientY - rect.height - pad;
         tooltipEl.style.left = x + 'px';
@@ -455,31 +495,30 @@ window.ASDiversity = (function () {
 
     function openPanel(asNum) {
         if (!panelEl) return;
-        const seg = donutSegments.find(s => s.asNumber === asNum);
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         if (!seg) return;
 
-        // For "Others" bucket, show a simplified panel
+        // For "Others" bucket, show the full list of individual ASes
         // For real ASes, get the full aggregated group
-        const fullGroup = seg.isOthers ? seg : asGroups.find(g => g.asNumber === asNum);
+        var fullGroup = seg.isOthers ? seg : asGroups.find(function (g) { return g.asNumber === asNum; });
         if (!fullGroup) return;
 
         // Build header
-        const headerInfo = panelEl.querySelector('.as-detail-header-info');
-        const asnEl = panelEl.querySelector('.as-detail-asn');
-        const orgEl = panelEl.querySelector('.as-detail-org');
-        const metaEl = panelEl.querySelector('.as-detail-meta');
-        const barFill = panelEl.querySelector('.as-detail-bar-fill');
-        const pctEl = panelEl.querySelector('.as-detail-pct');
-        const riskEl = panelEl.querySelector('.as-detail-risk');
+        var asnEl = panelEl.querySelector('.as-detail-asn');
+        var orgEl = panelEl.querySelector('.as-detail-org');
+        var metaEl = panelEl.querySelector('.as-detail-meta');
+        var barFill = panelEl.querySelector('.as-detail-bar-fill');
+        var pctEl = panelEl.querySelector('.as-detail-pct');
+        var riskEl = panelEl.querySelector('.as-detail-risk');
 
-        if (asnEl) asnEl.textContent = seg.asNumber;
+        if (asnEl) asnEl.textContent = seg.isOthers ? 'Others' : seg.asNumber;
         if (orgEl) orgEl.textContent = seg.isOthers ? seg.asName : (fullGroup.asName || seg.asNumber);
 
         // Meta badges
         if (metaEl && !seg.isOthers) {
-            const hosting = fullGroup.hostingLabel || '';
-            const cls = hosting === 'Cloud/Hosting' ? 'hosting' : (hosting === 'Residential' ? 'residential' : '');
-            metaEl.innerHTML = hosting ? `<span class="as-detail-type-badge ${cls}">${hosting}</span>` : '';
+            var hosting = fullGroup.hostingLabel || '';
+            var hcls = hosting === 'Cloud/Hosting' ? 'hosting' : (hosting === 'Residential' ? 'residential' : '');
+            metaEl.innerHTML = hosting ? '<span class="as-detail-type-badge ' + hcls + '">' + hosting + '</span>' : '';
         } else if (metaEl) {
             metaEl.innerHTML = '';
         }
@@ -503,26 +542,37 @@ window.ASDiversity = (function () {
         }
 
         // Build body
-        const bodyEl = panelEl.querySelector('.as-detail-body');
+        var bodyEl = panelEl.querySelector('.as-detail-body');
         if (!bodyEl) return;
 
-        let html = '';
+        var html = '';
 
         if (seg.isOthers) {
-            // Simplified view for "Others"
-            html += `<div class="modal-section-title">Summary</div>`;
+            // Full list of all individual ASes in the Others bucket
+            html += '<div class="modal-section-title">Summary</div>';
             html += row('Total Peers', seg.peerCount);
-            html += row('ASes Combined', seg.asName);
+            html += row('Providers', seg._othersGroups ? seg._othersGroups.length : '?');
             html += row('Share', seg.percentage.toFixed(1) + '%');
+
+            // List each individual AS
+            if (seg._othersGroups && seg._othersGroups.length > 0) {
+                html += '<div class="modal-section-title">All Providers</div>';
+                for (var i = 0; i < seg._othersGroups.length; i++) {
+                    var g = seg._othersGroups[i];
+                    var gName = g.asShort || g.asName || g.asNumber;
+                    if (gName.length > 24) gName = gName.substring(0, 23) + '\u2026';
+                    html += subRow(g.asNumber + ' \u00b7 ' + gName, g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : ''));
+                }
+            }
         } else {
             // Full detail for a specific AS
-            html += `<div class="modal-section-title">Peers</div>`;
+            html += '<div class="modal-section-title">Peers</div>';
             html += row('Total', fullGroup.peerCount);
             html += row('Inbound', fullGroup.inboundCount);
             html += row('Outbound', fullGroup.outboundCount);
             // Connection type breakdown
             if (fullGroup.connTypes) {
-                const typeLabels = {
+                var typeLabels = {
                     'outbound-full-relay': 'Full Relay',
                     'block-relay-only': 'Block-Only',
                     'inbound': 'Inbound',
@@ -530,38 +580,40 @@ window.ASDiversity = (function () {
                     'addr-fetch': 'Addr Fetch',
                     'feeler': 'Feeler',
                 };
-                for (const [t, c] of Object.entries(fullGroup.connTypes)) {
-                    html += row(typeLabels[t] || t, c);
+                for (var t in fullGroup.connTypes) {
+                    if (fullGroup.connTypes.hasOwnProperty(t)) {
+                        html += row(typeLabels[t] || t, fullGroup.connTypes[t]);
+                    }
                 }
             }
 
-            html += `<div class="modal-section-title">Performance</div>`;
+            html += '<div class="modal-section-title">Performance</div>';
             html += row('Avg Duration', fullGroup.avgDurationFmt);
-            html += row('Avg Ping', fullGroup.avgPingMs > 0 ? Math.round(fullGroup.avgPingMs) + 'ms' : '—');
+            html += row('Avg Ping', fullGroup.avgPingMs > 0 ? Math.round(fullGroup.avgPingMs) + 'ms' : '\u2014');
             html += row('Data Sent', fullGroup.totalBytesSentFmt);
             html += row('Data Recv', fullGroup.totalBytesRecvFmt);
 
             // Software versions
             if (fullGroup.versions && fullGroup.versions.length > 0) {
-                html += `<div class="modal-section-title">Software</div>`;
-                for (const v of fullGroup.versions) {
-                    html += subRow(v.subver, v.count + ' peer' + (v.count !== 1 ? 's' : ''));
+                html += '<div class="modal-section-title">Software</div>';
+                for (var vi = 0; vi < fullGroup.versions.length; vi++) {
+                    html += subRow(fullGroup.versions[vi].subver, fullGroup.versions[vi].count + ' peer' + (fullGroup.versions[vi].count !== 1 ? 's' : ''));
                 }
             }
 
             // Countries
             if (fullGroup.countries && fullGroup.countries.length > 0) {
-                html += `<div class="modal-section-title">Countries</div>`;
-                for (const c of fullGroup.countries) {
-                    html += subRow(c.code + '  ' + c.name, c.count);
+                html += '<div class="modal-section-title">Countries</div>';
+                for (var ci = 0; ci < fullGroup.countries.length; ci++) {
+                    html += subRow(fullGroup.countries[ci].code + '  ' + fullGroup.countries[ci].name, fullGroup.countries[ci].count);
                 }
             }
 
             // Services
             if (fullGroup.servicesCombos && fullGroup.servicesCombos.length > 0) {
-                html += `<div class="modal-section-title">Services</div>`;
-                for (const s of fullGroup.servicesCombos) {
-                    html += subRow(s.abbrev, s.count + ' peer' + (s.count !== 1 ? 's' : ''));
+                html += '<div class="modal-section-title">Services</div>';
+                for (var si = 0; si < fullGroup.servicesCombos.length; si++) {
+                    html += subRow(fullGroup.servicesCombos[si].abbrev, fullGroup.servicesCombos[si].count + ' peer' + (fullGroup.servicesCombos[si].count !== 1 ? 's' : ''));
                 }
             }
         }
@@ -570,7 +622,6 @@ window.ASDiversity = (function () {
 
         // Show panel with animation
         panelEl.classList.remove('hidden');
-        // Force reflow before adding visible class for transition
         void panelEl.offsetWidth;
         panelEl.classList.add('visible');
     }
@@ -578,8 +629,7 @@ window.ASDiversity = (function () {
     function closePanel() {
         if (!panelEl) return;
         panelEl.classList.remove('visible');
-        // Wait for transition to finish, then hide
-        setTimeout(() => {
+        setTimeout(function () {
             if (!panelEl.classList.contains('visible')) {
                 panelEl.classList.add('hidden');
             }
@@ -587,11 +637,11 @@ window.ASDiversity = (function () {
     }
 
     function row(label, value) {
-        return `<div class="modal-row"><span class="modal-label">${label}</span><span class="modal-val">${value}</span></div>`;
+        return '<div class="modal-row"><span class="modal-label">' + label + '</span><span class="modal-val">' + value + '</span></div>';
     }
 
     function subRow(label, value) {
-        return `<div class="as-detail-sub-row"><span class="as-detail-sub-label">${label}</span><span class="as-detail-sub-val">${value}</span></div>`;
+        return '<div class="as-detail-sub-row"><span class="as-detail-sub-label">' + label + '</span><span class="as-detail-sub-val">' + value + '</span></div>';
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -599,26 +649,32 @@ window.ASDiversity = (function () {
     // ═══════════════════════════════════════════════════════════
 
     function onSegmentHover(e) {
-        const asNum = e.currentTarget.dataset.as;
+        var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
         hoveredAs = asNum;
         showTooltip(asNum, e);
 
-        // Draw lines on canvas
-        const seg = donutSegments.find(s => s.asNumber === asNum);
-        if (seg && _drawLinesForAs) {
-            _drawLinesForAs(asNum, seg.peerIds, seg.color);
+        // Only draw hover lines if nothing is selected, or if hovering a different AS than selected
+        if (!selectedAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+            if (seg && _drawLinesForAs) {
+                _drawLinesForAs(asNum, seg.peerIds, seg.color);
+            }
         }
     }
 
     function onSegmentLeave() {
         hoveredAs = null;
         hideTooltip();
-        if (_clearAsLines) _clearAsLines();
+
+        // ONLY clear lines if nothing is selected — selection keeps its lines
+        if (!selectedAs) {
+            if (_clearAsLines) _clearAsLines();
+        }
     }
 
     function onSegmentClick(e) {
-        const asNum = e.currentTarget.dataset.as;
+        var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
 
         if (selectedAs === asNum) {
@@ -627,14 +683,13 @@ window.ASDiversity = (function () {
         } else {
             // Select this AS
             selectedAs = asNum;
-            const seg = donutSegments.find(s => s.asNumber === asNum);
+            var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg) {
                 openPanel(asNum);
                 if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
                 if (_drawLinesForAs) _drawLinesForAs(asNum, seg.peerIds, seg.color);
             }
-            // Update visuals
             renderDonut();
             renderLegend();
         }
@@ -663,14 +718,16 @@ window.ASDiversity = (function () {
     /** Initialize — cache DOM refs and attach events. Call once on page load. */
     function init() {
         containerEl = document.getElementById('as-diversity-container');
+        donutWrapEl = containerEl ? containerEl.querySelector('.as-donut-wrap') : null;
         donutSvg = document.getElementById('as-donut');
         donutCenter = document.getElementById('as-donut-center');
         legendEl = document.getElementById('as-legend');
         tooltipEl = document.getElementById('as-tooltip');
         panelEl = document.getElementById('as-detail-panel');
+        loadingEl = containerEl ? containerEl.querySelector('.as-loading') : null;
 
         // Close button on detail panel
-        const closeBtn = panelEl ? panelEl.querySelector('.as-detail-close') : null;
+        var closeBtn = panelEl ? panelEl.querySelector('.as-detail-close') : null;
         if (closeBtn) {
             closeBtn.addEventListener('click', deselect);
         }
@@ -700,15 +757,15 @@ window.ASDiversity = (function () {
         renderCenter();
         renderLegend();
 
-        // If a selection is active, refresh the panel + filter
+        // If a selection is active, refresh the panel + filter + keep lines
         if (selectedAs) {
-            const seg = donutSegments.find(s => s.asNumber === selectedAs);
+            var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (seg) {
                 openPanel(selectedAs);
                 if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
             } else {
-                // Selected AS no longer exists in data
                 deselect();
             }
         }
@@ -718,6 +775,10 @@ window.ASDiversity = (function () {
     function activate() {
         isActive = true;
         if (containerEl) containerEl.classList.remove('hidden');
+        // Show loading indicator if we haven't rendered yet
+        if (!hasRenderedOnce && loadingEl) {
+            loadingEl.style.display = '';
+        }
     }
 
     /** Deactivate the AS Diversity view */
@@ -733,9 +794,11 @@ window.ASDiversity = (function () {
         return isActive;
     }
 
-    /** Get the currently hovered AS number (for canvas line drawing in frame loop) */
-    function getHoveredAs() {
-        return hoveredAs;
+    /** Get the donut center screen position for line drawing */
+    function getDonutCenter() {
+        if (!donutWrapEl) return null;
+        var rect = donutWrapEl.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }
 
     /** Get the currently selected AS number */
@@ -743,15 +806,20 @@ window.ASDiversity = (function () {
         return selectedAs;
     }
 
+    /** Get the currently hovered AS number */
+    function getHoveredAs() {
+        return hoveredAs;
+    }
+
     /** Get peer IDs for a given AS number */
     function getPeerIdsForAs(asNum) {
-        const seg = donutSegments.find(s => s.asNumber === asNum);
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         return seg ? seg.peerIds : [];
     }
 
     /** Get the color for a given AS number */
     function getColorForAs(asNum) {
-        const seg = donutSegments.find(s => s.asNumber === asNum);
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         return seg ? seg.color : null;
     }
 
@@ -761,16 +829,17 @@ window.ASDiversity = (function () {
     }
 
     return {
-        init,
-        setHooks,
-        update,
-        activate,
-        deactivate,
-        isViewActive,
-        getHoveredAs,
-        getSelectedAs,
-        getPeerIdsForAs,
-        getColorForAs,
-        getSegments,
+        init: init,
+        setHooks: setHooks,
+        update: update,
+        activate: activate,
+        deactivate: deactivate,
+        isViewActive: isViewActive,
+        getDonutCenter: getDonutCenter,
+        getHoveredAs: getHoveredAs,
+        getSelectedAs: getSelectedAs,
+        getPeerIdsForAs: getPeerIdsForAs,
+        getColorForAs: getColorForAs,
+        getSegments: getSegments,
     };
 })();

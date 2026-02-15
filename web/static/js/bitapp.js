@@ -2859,35 +2859,60 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // [AS-DIVERSITY] Draw lines from map center to peers of a hovered/selected AS
+    // [AS-DIVERSITY] Draw lines from DONUT to peers of a hovered/selected AS
+    // Lines originate from the donut chart position, not map center.
+    // Adapts to map pan/zoom since this runs every frame.
     // ═══════════════════════════════════════════════════════════
 
     function drawAsLines(wrapOffsets) {
         if (!asLinePeerIds || !asLineColor) return;
+        const ASD = window.ASDiversity;
+        if (!ASD) return;
+
+        // Get the donut's screen position as the line origin
+        const donutCenter = ASD.getDonutCenter();
+        if (!donutCenter) return;
+
         const peerIdSet = new Set(asLinePeerIds);
         const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
         if (matchingNodes.length === 0) return;
 
-        // Find center of viewport in world coordinates
-        const centerWorld = screenToWorld(W / 2, H / 2);
+        // Convert donut center from page coords to canvas logical coords
+        const canvasRect = canvas.getBoundingClientRect();
+        const originX = (donutCenter.x - canvasRect.left) * (W / canvasRect.width);
+        const originY = (donutCenter.y - canvasRect.top) * (H / canvasRect.height);
 
-        ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.35;
+        ctx.save();
+        ctx.lineWidth = 1.2;
         ctx.strokeStyle = asLineColor;
 
         for (const node of matchingNodes) {
+            // Find the closest visible wrap copy of this node
+            let bestS = null;
+            let bestDist = Infinity;
             for (const off of wrapOffsets) {
                 const s = worldToScreen(node.lon + off, node.lat);
-                if (s.x < -50 || s.x > W + 50 || s.y < -50 || s.y > H + 50) continue;
-                const c = worldToScreen(centerWorld.lon + off, centerWorld.lat);
-                ctx.beginPath();
-                ctx.moveTo(c.x, c.y);
-                ctx.lineTo(s.x, s.y);
-                ctx.stroke();
+                if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                const dx = s.x - originX;
+                const dy = s.y - originY;
+                const d2 = dx * dx + dy * dy;
+                if (d2 < bestDist) {
+                    bestDist = d2;
+                    bestS = s;
+                }
             }
+            if (!bestS) continue;
+
+            const dist = Math.sqrt(bestDist);
+            const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.moveTo(originX, originY);
+            ctx.lineTo(bestS.x, bestS.y);
+            ctx.stroke();
         }
 
-        ctx.globalAlpha = 1;
+        ctx.restore();
     }
 
     // ═══════════════════════════════════════════════════════════

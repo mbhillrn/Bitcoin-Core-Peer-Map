@@ -16,8 +16,8 @@
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="version" title="View on GitHub">v{{ version }}</a>
             <!-- [AS-DIVERSITY] View toggle -->
             <div class="as-view-toggle" id="as-view-toggle">
-                <button class="as-vt-btn active" data-view="map" title="Live world map showing all connected peers">Peer Map</button>
-                <button class="as-vt-btn" data-view="as" title="Autonomous System diversity — how your peers are distributed across internet providers and hosting networks">AS Diversity</button>
+                <button class="as-vt-btn active" data-view="map" title="Live world map showing all connected peers with real-time data">Peer Map</button>
+                <button class="as-vt-btn" data-view="as" title="Provider diversity analysis — see how your peers are distributed across internet providers, hosting networks, and autonomous systems (ASes). High diversity means better network resilience.">Diversity</button>
             </div>
         </div>
         <div class="topbar-right">
@@ -65,11 +65,12 @@
     <!-- [AS-DIVERSITY] AS Diversity container — replaces flight deck when active -->
     <div id="as-diversity-container" class="as-diversity-container hidden">
         <div class="as-donut-wrap">
-            <svg id="as-donut" class="as-donut" viewBox="0 0 160 160"></svg>
+            <svg id="as-donut" class="as-donut" viewBox="0 0 220 220"></svg>
             <div id="as-donut-center" class="as-donut-center">
-                <div class="as-score-value">—</div>
+                <div class="as-score-value">&mdash;</div>
                 <div class="as-score-label">DIVERSITY</div>
             </div>
+            <div class="as-loading">Scanning providers&hellip;</div>
         </div>
         <div id="as-legend" class="as-legend"></div>
     </div>
