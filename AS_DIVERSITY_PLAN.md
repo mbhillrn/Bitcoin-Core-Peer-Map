@@ -1,0 +1,575 @@
+# AS Diversity Analysis — Feature Plan
+
+> **Branch:** `claude/add-as-diversity-analysis-rc6Ne`
+> **Status:** In Progress
+> **Last Updated:** 2026-02-15
+
+This document tracks everything about the AS Diversity Analysis feature — the plan,
+progress, data inventory, ideas, and architecture decisions. It exists so that any
+future conversation can pick up exactly where we left off, and so the feature can
+be cleanly reverted if needed.
+
+---
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Revert Strategy](#2-revert-strategy)
+3. [Files Modified / Created](#3-files-modified--created)
+4. [Todo List](#4-todo-list)
+5. [Architecture & Design](#5-architecture--design)
+6. [Data Inventory — What's Available Per Peer](#6-data-inventory)
+7. [Database Schema](#7-database-schema)
+8. [AS Aggregation — What We Compute](#8-as-aggregation)
+9. [UI Components](#9-ui-components)
+10. [Interaction Model](#10-interaction-model)
+11. [Ideas & Future Enhancements](#11-ideas--future-enhancements)
+12. [Existing Patterns to Reuse](#12-existing-patterns-to-reuse)
+13. [Technical Notes](#13-technical-notes)
+
+---
+
+## 1. Overview
+
+**What:** A new "AS Diversity" view that sits alongside the existing Peer Map view,
+toggled via a tab in the top bar. It visualizes how connected peers are distributed
+across Autonomous Systems (ASes) — answering the question "am I too concentrated
+on a single hosting provider / ISP?"
+
+**Why:** AS diversity is a meaningful metric for Bitcoin node health. If 60% of your
+peers are on Hetzner, that's a single point of failure. This view makes that visible
+at a glance.
+
+**How it works (user perspective):**
+
+1. Toggle `Peer Map | AS Diversity` in the top bar
+2. Flight deck hides, replaced by a donut chart (top 8 ASes + Others)
+3. Hover any AS segment → compact 3-line tooltip + animated lines on map
+4. Click any AS segment → detail panel slides in from right + peer list filters
+5. Click again / X / Escape → deselects, everything reverts
+
+---
+
+## 2. Revert Strategy
+
+All AS Diversity code is isolated into **separate files** to keep the diff clean
+and make reverting trivial.
+
+### New files (delete to revert):
+- `web/static/js/as-diversity.js` — All AS Diversity JS logic
+- `web/static/css/as-diversity.css` — All AS Diversity CSS
+- `AS_DIVERSITY_PLAN.md` — This file
+
+### Modified files (minimal, clearly marked changes):
+- `web/templates/bitindex.html` — Adds:
+  - Two `<script>` / `<link>` tags for the new files
+  - The view toggle HTML in the topbar
+  - The AS diversity container div (empty shell)
+  - The AS detail panel div (empty shell)
+- `web/static/js/bitapp.js` — Adds:
+  - A thin integration layer (~30-50 lines) that:
+    - Exposes `lastPeers` and `nodes` to the AS module
+    - Calls `ASDiversity.update()` from `fetchPeers()`
+    - Handles view toggle state
+    - Provides map line drawing hook
+  - All integration points are marked with `// [AS-DIVERSITY]` comments
+
+### To fully revert:
+```bash
+# Delete new files
+rm web/static/js/as-diversity.js
+rm web/static/css/as-diversity.css
+rm AS_DIVERSITY_PLAN.md
+
+# Then revert the modified files to their pre-feature state
+git checkout main -- web/templates/bitindex.html
+git checkout main -- web/static/js/bitapp.js
+```
+
+---
+
+## 3. Files Modified / Created
+
+| File | Action | Purpose |
+|------|--------|---------|
+| `web/static/js/as-diversity.js` | **NEW** | All AS diversity logic (aggregation, donut, tooltips, panel) |
+| `web/static/css/as-diversity.css` | **NEW** | All AS diversity styling |
+| `web/templates/bitindex.html` | **EDIT** | Shell HTML elements + script/css includes |
+| `web/static/js/bitapp.js` | **EDIT** | Thin integration hooks (~30-50 lines, marked `[AS-DIVERSITY]`) |
+| `AS_DIVERSITY_PLAN.md` | **NEW** | This document |
+
+---
+
+## 4. Todo List
+
+### Phase 1 — Core Feature
+- [x] Codebase exploration & data inventory
+- [x] Write this plan document
+- [ ] Create `as-diversity.js` with AS aggregation logic
+- [ ] Create `as-diversity.css` with all styling
+- [ ] Add shell HTML to `bitindex.html` (containers, script/css tags)
+- [ ] Build SVG donut chart component
+- [ ] Build diversity score calculation
+- [ ] Build compact hover tooltip (3 lines max)
+- [ ] Build AS detail slide-in panel (right side)
+- [ ] Build view toggle in topbar (`Peer Map | AS Diversity`)
+- [ ] Add integration hooks in `bitapp.js` (marked with `[AS-DIVERSITY]`)
+- [ ] Wire click: filter peer list + highlight map + open panel
+- [ ] Wire hover: draw lines to AS peers on canvas
+- [ ] Wire Escape / X / re-click to deselect
+- [ ] Test with live data
+- [ ] Commit and push
+
+### Phase 2 — Polish (if time permits)
+- [ ] Dropdown in donut center for searching all ASes
+- [ ] Smooth segment transitions when peer data updates
+- [ ] Keyboard navigation (arrow keys through segments)
+- [ ] Mobile-friendly adjustments (if ever needed)
+
+---
+
+## 5. Architecture & Design
+
+### View Toggle
+- Location: Inside `#topbar .topbar-left`, after the version badge
+- HTML: Two styled tab links, one active at a time
+- Toggling hides/shows the flight deck vs AS diversity container
+- Body class `as-diversity-active` controls which view is visible
+
+### Donut Chart
+- Pure SVG, ~160px diameter, positioned top-center (replaces flight deck area)
+- Top 8 ASes by peer count, then "Others" bucket
+- Each segment colored from a curated 9-color palette
+- Center text: diversity score (e.g., "7.2 / 10")
+- Center is clickable → opens a searchable AS dropdown
+
+### Hover Tooltip
+- Small, compact, 3 lines max:
+  ```
+  AS24940 · Hetzner Online GmbH
+  12 peers (18.2%) · Hosting
+  ⚠ Moderate Concentration
+  ```
+- Positioned near cursor, same pattern as existing `showTooltip()`
+- Canvas draws animated lines from node center to all peers of that AS
+
+### AS Detail Panel
+- Slides in from right edge, ~320px wide
+- Uses existing modal CSS patterns (`.modal-section-title`, `.modal-row`, etc.)
+- Positioned: `right: 0`, `top: 46px` (below topbar), `bottom: 368px` (above peer panel)
+- Z-index: 260 (above most UI, below modals)
+- Close: X button, Escape key, or click selected segment again
+- Opening the panel also:
+  - Filters the peer table to only show that AS's peers
+  - Dims non-matching peers on the canvas
+  - Draws lines from your node to matching peers
+
+### Panel Sections
+1. **Header** — AS number, org name, hosting type, percentage bar, risk level
+2. **Peers** — Total, inbound/outbound, connection type breakdown
+3. **Performance** — Avg duration, avg ping, total data sent/recv
+4. **Software** — Version distribution (e.g., "Satoshi:27.0 — 10 peers")
+5. **Countries** — Country distribution with flags/codes
+6. **Services** — Service flag combinations
+
+---
+
+## 6. Data Inventory
+
+### Per-Peer Fields Available (35 total from `/api/peers`)
+
+**Identity & Connection:**
+| Field | Type | Example | Notes |
+|-------|------|---------|-------|
+| `id` | number | `42` | Peer ID from Bitcoin Core |
+| `network` | string | `"ipv4"` | One of: ipv4, ipv6, onion, i2p, cjdns |
+| `ip` | string | `"185.220.101.42"` | Extracted IP |
+| `port` | number | `8333` | Extracted port |
+| `addr` | string | `"185.220.101.42:8333"` | Full address |
+| `direction` | string | `"IN"` or `"OUT"` | Connection direction |
+| `connection_type` | string | `"outbound-full-relay"` | Full type name |
+| `connection_type_abbrev` | string | `"OFR"` | Abbreviated |
+| `conntime` | number | `1707912345` | Connection start (unix) |
+| `conntime_fmt` | string | `"2d4h"` | Formatted duration |
+| `version` | number | `70016` | Protocol version |
+| `subver` | string | `"/Satoshi:27.0.0/"` | Client software |
+| `services` | array | `["NETWORK","WITNESS"]` | Service flag names |
+| `services_abbrev` | string | `"N L W C"` | Abbreviated services |
+| `in_addrman` | boolean | `true` | In Bitcoin's addrman |
+
+**Traffic:**
+| Field | Type | Example | Notes |
+|-------|------|---------|-------|
+| `bytessent` | number | `142800000` | Bytes sent to this peer |
+| `bytesrecv` | number | `89300000` | Bytes received from peer |
+| `bytessent_fmt` | string | `"142.8 MB"` | Formatted |
+| `bytesrecv_fmt` | string | `"89.3 MB"` | Formatted |
+| `ping_ms` | number | `32.5` | Ping latency in ms |
+
+**Geolocation:**
+| Field | Type | Example | Notes |
+|-------|------|---------|-------|
+| `lat` | number | `48.1351` | Latitude |
+| `lon` | number | `11.5820` | Longitude |
+| `city` | string | `"Munich"` | City name |
+| `region` | string | `"BY"` | Region/state code |
+| `regionName` | string | `"Bavaria"` | Region full name |
+| `country` | string | `"Germany"` | Country name |
+| `countryCode` | string | `"DE"` | ISO 3166 country code |
+| `continent` | string | `"Europe"` | Continent name |
+| `continentCode` | string | `"EU"` | Continent code |
+| `timezone` | string | `"Europe/Berlin"` | IANA timezone |
+| `location` | string | `"Munich, Bavaria"` | Formatted |
+| `location_status` | string | `"ok"` | ok / pending / private / unavailable |
+
+**Organization / ASN:**
+| Field | Type | Example | Notes |
+|-------|------|---------|-------|
+| `isp` | string | `"Hetzner Online GmbH"` | ISP name |
+| `org` | string | `"Hetzner Online GmbH"` | Organization |
+| `as` | string | `"AS24940 Hetzner..."` | ASN string (number + name) |
+| `asname` | string | `"HETZNER-AS"` | Short AS identifier |
+
+**Flags:**
+| Field | Type | Example | Notes |
+|-------|------|---------|-------|
+| `mobile` | boolean | `false` | Mobile network? |
+| `proxy` | boolean | `false` | VPN/proxy? |
+| `hosting` | boolean | `true` | Datacenter/hosting? |
+
+---
+
+## 7. Database Schema
+
+**Database:** SQLite at `data/geo.db`
+**Table:** `geo_cache`
+
+```sql
+CREATE TABLE IF NOT EXISTS geo_cache (
+    ip            TEXT PRIMARY KEY,
+    continent     TEXT,
+    continentCode TEXT,
+    country       TEXT,
+    countryCode   TEXT,
+    region        TEXT,
+    regionName    TEXT,
+    city          TEXT,
+    district      TEXT,
+    zip           TEXT,
+    lat           REAL,
+    lon           REAL,
+    timezone      TEXT,
+    utc_offset    INTEGER,
+    currency      TEXT,
+    isp           TEXT,
+    org           TEXT,
+    as_info       TEXT,       -- "AS24940 Hetzner Online GmbH" (number + name)
+    asname        TEXT,       -- "HETZNER-AS" (short identifier)
+    mobile        INTEGER DEFAULT 0,
+    proxy         INTEGER DEFAULT 0,
+    hosting       INTEGER DEFAULT 0,
+    last_updated  INTEGER     -- Unix timestamp
+);
+
+-- Indexes:
+CREATE INDEX idx_geo_country ON geo_cache(countryCode);
+CREATE INDEX idx_geo_updated ON geo_cache(last_updated);
+```
+
+**Key ASN columns:**
+- `as_info` → exposed to frontend as `peer.as` (e.g., `"AS24940 Hetzner Online GmbH"`)
+- `asname` → exposed to frontend as `peer.asname` (e.g., `"HETZNER-AS"`)
+
+**Data source:** ip-api.com (free tier, rate limited to 1 req/1.5s)
+
+---
+
+## 8. AS Aggregation — What We Compute
+
+All computation happens **client-side in JavaScript** from the `lastPeers` array.
+No backend changes needed.
+
+### Per-AS Computed Fields
+
+```javascript
+{
+    asNumber: "AS24940",              // Extracted from peer.as
+    asName: "Hetzner Online GmbH",   // Extracted from peer.as (after number)
+    asShort: "HETZNER-AS",           // From peer.asname
+    color: "#...",                    // Assigned from palette
+
+    // Counts
+    peerCount: 12,
+    percentage: 18.2,
+    inboundCount: 8,
+    outboundCount: 4,
+
+    // Connection type breakdown
+    fullRelayCount: 4,
+    blockOnlyCount: 6,
+    inboundTypeCount: 2,             // inbound connection_type
+    manualCount: 0,
+
+    // Performance averages
+    avgPingMs: 32.5,
+    avgDurationSecs: 389000,
+    avgDurationFmt: "4d 12h",
+    totalBytesSent: 142800000,
+    totalBytesRecv: 89300000,
+    totalBytesSentFmt: "142.8 MB",
+    totalBytesRecvFmt: "89.3 MB",
+
+    // Software distribution
+    versions: [
+        { subver: "/Satoshi:27.0.0/", count: 10 },
+        { subver: "/Satoshi:25.0.0/", count: 2 },
+    ],
+
+    // Country distribution
+    countries: [
+        { code: "DE", name: "Germany", count: 10 },
+        { code: "FI", name: "Finland", count: 2 },
+    ],
+
+    // Service flag distribution
+    servicesCombos: [
+        { abbrev: "N L W C", count: 8 },
+        { abbrev: "N L W", count: 4 },
+    ],
+
+    // Flags
+    isHosting: true,                 // majority of peers have hosting=true
+    hostingLabel: "Cloud/Hosting",   // or "Residential", "Mixed"
+
+    // Risk assessment
+    riskLevel: "moderate",           // "low", "moderate", "high", "critical"
+    riskLabel: "Moderate Concentration",
+
+    // Peer references
+    peerIds: [1, 5, 12, ...],       // For filtering and map highlighting
+}
+```
+
+### Diversity Score Formula
+
+```
+Score = (1 - HHI) * 10
+
+Where HHI = Σ(share_i²)  (Herfindahl-Hirschman Index)
+share_i = peer_count_of_AS_i / total_peers
+```
+
+| Score | Label | Color |
+|-------|-------|-------|
+| 8-10 | Excellent diversity | Green |
+| 6-8 | Good diversity | Light green |
+| 4-6 | Moderate — could improve | Yellow/warn |
+| 2-4 | Poor — too concentrated | Orange |
+| 0-2 | Critical — single AS dominance | Red |
+
+### Concentration Risk Per-AS
+
+| % of peers | Risk Level | Label |
+|------------|------------|-------|
+| < 15% | Low | — (no warning shown) |
+| 15-30% | Moderate | Moderate Concentration |
+| 30-50% | High | High Concentration |
+| > 50% | Critical | Critical — Dominates Network |
+
+---
+
+## 9. UI Components
+
+### A. View Toggle (in topbar)
+
+```html
+<div class="as-view-toggle">
+    <button class="as-vt-btn active" data-view="map">Peer Map</button>
+    <button class="as-vt-btn" data-view="as">AS Diversity</button>
+</div>
+```
+
+### B. Donut Chart Container
+
+```html
+<div id="as-diversity-container" class="as-diversity-container hidden">
+    <svg id="as-donut" class="as-donut" viewBox="0 0 200 200"></svg>
+    <div id="as-donut-center" class="as-donut-center">
+        <div class="as-score-value">7.2</div>
+        <div class="as-score-label">DIVERSITY</div>
+    </div>
+    <div id="as-legend" class="as-legend"></div>
+</div>
+```
+
+### C. Hover Tooltip
+
+```html
+<div id="as-tooltip" class="as-tooltip hidden"></div>
+```
+
+### D. Detail Panel
+
+```html
+<div id="as-detail-panel" class="as-detail-panel hidden">
+    <div class="as-detail-header">...</div>
+    <div class="as-detail-body">...</div>
+</div>
+```
+
+---
+
+## 10. Interaction Model
+
+### State Machine
+
+```
+IDLE
+  │
+  ├─ hover segment/legend → HOVERING (show tooltip + lines)
+  │   └─ leave → IDLE (hide tooltip + lines)
+  │
+  └─ click segment/legend → SELECTED (open panel + filter + highlight)
+      │
+      ├─ hover different segment → show tooltip over panel (lines update)
+      │
+      ├─ click same segment → IDLE (close panel, unfilter, unhighlight)
+      ├─ click different segment → SELECTED (switch to that AS)
+      ├─ click X button → IDLE
+      ├─ press Escape → IDLE
+      └─ click outside → IDLE
+```
+
+### Map Integration
+
+**Hover:**
+- Draw semi-transparent lines from map center to each peer of hovered AS
+- Lines use the AS's assigned color
+- Non-hovered peers keep normal rendering
+
+**Selected:**
+- Dim all peers NOT in the selected AS (reduce opacity to ~0.2)
+- Draw prominent lines to selected AS's peers
+- Selected AS's peers render at full brightness
+
+---
+
+## 11. Ideas & Future Enhancements
+
+### Near-term
+- **Searchable dropdown** in donut center — type to find any AS
+- **AS history** — track AS distribution over time (would need backend)
+- **Export** — copy AS diversity report to clipboard
+- **Keyboard nav** — arrow keys to cycle through segments
+
+### Medium-term
+- **Country diversity** — same donut concept but grouped by country
+- **ISP diversity** — similar view using ISP field instead of AS
+- **Hosting ratio** — what % of peers are datacenter vs residential
+- **Network diversity overlay** — AS diversity per network type (IPv4 vs Tor etc.)
+
+### Long-term
+- **Peer recommendation** — suggest adding manual peers to improve diversity
+- **Historical trends** — graph diversity score over days/weeks
+- **Alert thresholds** — notify when diversity drops below threshold
+- **Comparison** — compare your diversity against network averages
+
+---
+
+## 12. Existing Patterns to Reuse
+
+### CSS Variables (from bitstyle.css `:root`)
+```css
+--bg-void: #06080c;
+--bg-deep: #0a0e14;
+--bg-surface: #111820;
+--bg-raised: #19202b;
+--text-primary: #e6edf3;
+--text-secondary: #8b949e;
+--text-muted: #6e7681;
+--accent: #58a6ff;
+--ok: #3fb950;
+--warn: #d29922;
+--err: #f85149;
+--title-accent: #e8c547;
+--section-color: #b0b8c4;
+--font-ui: 'Inter', ...;
+--font-data: 'SF Mono', ...;
+--transition: 0.2s ease;
+--radius: 6px;
+```
+
+### Modal HTML Pattern
+```javascript
+// All modals follow this exact pattern:
+const overlay = document.createElement('div');
+overlay.className = 'modal-overlay';
+overlay.innerHTML = `
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title">TITLE</span>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">...</div>
+    </div>`;
+document.body.appendChild(overlay);
+```
+
+### Section Title Pattern
+```html
+<div class="modal-section-title">SECTION NAME</div>
+<div class="modal-row">
+    <span class="modal-label">Label</span>
+    <span class="modal-val">Value</span>
+</div>
+```
+
+### Tooltip Row Pattern
+```javascript
+function ttRow(label, value) {
+    if (!value) return '';
+    return `<div class="tt-row"><span class="tt-label">${label}</span><span class="tt-val">${value}</span></div>`;
+}
+```
+
+### Z-Index Layers
+```
+50  — map overlays (left, right)
+80  — peer panel
+85  — btc price, map controls
+90  — flight deck
+100 — topbar
+200 — tooltips
+250 — popups, settings
+260 — advanced panel  ← AS detail panel goes here
+300 — modals (topmost)
+```
+
+---
+
+## 13. Technical Notes
+
+### Data Flow
+1. `fetchPeers()` in bitapp.js fetches `/api/peers` every 10s
+2. Response is stored in `lastPeers[]` (raw) and `nodes[]` (canvas-ready)
+3. Integration hook calls `ASDiversity.update(lastPeers)` after each fetch
+4. AS module aggregates, re-renders donut, updates panel if open
+5. All computation is O(n) where n = peer count (typically 30-125 peers)
+
+### No Backend Changes Required
+Everything is computed client-side from existing peer data. The `as` and `asname`
+fields are already present in the API response. No new endpoints needed.
+
+### Browser Compatibility
+Same as existing app — modern browsers with ES6+ support. SVG for donut,
+CSS custom properties, backdrop-filter, flexbox.
+
+### Performance
+- Donut SVG is lightweight (~10 path elements)
+- Aggregation runs once per 10s poll (trivial cost)
+- Detail panel content is built once on open, not continuously
+- Canvas line drawing for hover/selection reuses existing render loop
+
+---
+
+*End of plan document.*

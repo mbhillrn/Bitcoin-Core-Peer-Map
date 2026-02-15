@@ -653,6 +653,11 @@
     let lastPeers = [];      // raw API response for table rendering
     let highlightedPeerId = null;  // peer ID highlighted via map↔table interaction
 
+    // [AS-DIVERSITY] State for AS Diversity integration
+    let asFilterPeerIds = null;    // Set of peer IDs to show when AS is selected (null = no filter)
+    let asLinePeerIds = null;      // Array of peer IDs to draw lines to (hover/selection)
+    let asLineColor = null;        // Color string for AS lines
+
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
     const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
     let enabledNets = new Set(ALL_NETS);  // start with all enabled
@@ -1800,6 +1805,11 @@
             // Update flight deck network counts
             updateFlightDeck(nodes);
 
+            // [AS-DIVERSITY] Update AS Diversity view with latest peer data
+            if (window.ASDiversity && window.ASDiversity.isViewActive()) {
+                window.ASDiversity.update(lastPeers);
+            }
+
             // Refresh the peer table panel
             renderPeerTable();
 
@@ -2742,6 +2752,12 @@
         // (but always draw fading-out nodes so they dissolve gracefully)
         if (!passesNetFilter(node.net) && node.alive) return;
 
+        // [AS-DIVERSITY] Dim peers not in the selected AS
+        let asDimFactor = 1;
+        if (asFilterPeerIds && node.alive && !asFilterPeerIds.has(node.peerId)) {
+            asDimFactor = 0.15;
+        }
+
         const c = node.color;
         const ageMs = now - node.spawnTime;
         const nowSec = Math.floor(now / 1000);
@@ -2788,6 +2804,9 @@
         const r = CFG.nodeRadius * scale;
         const gr = CFG.glowRadius * scale * pulse;
 
+        // [AS-DIVERSITY] Apply dim factor to opacity
+        const finalOpacity = opacity * asDimFactor;
+
         // Draw at each wrap offset
         for (const off of wrapOffsets) {
             const s = worldToScreen(node.lon + off, node.lat);
@@ -2797,10 +2816,10 @@
 
             // Arrival bloom effect (ring + glow) — drawn behind the node
             if (inArrival && node.alive) {
-                drawArrivalBloom(s.x, s.y, c, ageMs, opacity);
+                drawArrivalBloom(s.x, s.y, c, ageMs, finalOpacity);
             }
 
-            drawNodeAt(s.x, s.y, c, r, gr, pulse, opacity, brightness);
+            drawNodeAt(s.x, s.y, c, r, gr, pulse, finalOpacity, brightness);
         }
     }
 
@@ -2837,6 +2856,38 @@
                 ctx.stroke();
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] Draw lines from map center to peers of a hovered/selected AS
+    // ═══════════════════════════════════════════════════════════
+
+    function drawAsLines(wrapOffsets) {
+        if (!asLinePeerIds || !asLineColor) return;
+        const peerIdSet = new Set(asLinePeerIds);
+        const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
+        if (matchingNodes.length === 0) return;
+
+        // Find center of viewport in world coordinates
+        const centerWorld = screenToWorld(W / 2, H / 2);
+
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = asLineColor;
+
+        for (const node of matchingNodes) {
+            for (const off of wrapOffsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+                if (s.x < -50 || s.x > W + 50 || s.y < -50 || s.y > H + 50) continue;
+                const c = worldToScreen(centerWorld.lon + off, centerWorld.lat);
+                ctx.beginPath();
+                ctx.moveTo(c.x, c.y);
+                ctx.lineTo(s.x, s.y);
+                ctx.stroke();
+            }
+        }
+
+        ctx.globalAlpha = 1;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3350,6 +3401,11 @@
         // Apply network filter to table as well
         if (!isAllNetsEnabled()) {
             sorted = sorted.filter(p => passesNetFilter(p.network || 'ipv4'));
+        }
+
+        // [AS-DIVERSITY] Apply AS filter when an AS is selected
+        if (asFilterPeerIds) {
+            sorted = sorted.filter(p => asFilterPeerIds.has(p.id));
         }
 
         handleCountEl.textContent = sorted.length;
@@ -4181,6 +4237,11 @@
         drawCities();
         // 9. Connection mesh lines between nearby peers
         drawConnectionLines(now, wrapOffsets);
+
+        // [AS-DIVERSITY] 9b. Draw lines from map center to AS peers (hover/selection)
+        if (asLinePeerIds && asLinePeerIds.length > 0 && asLineColor) {
+            drawAsLines(wrapOffsets);
+        }
 
         // 10. Peer nodes (alive + fading out)
         for (const node of nodes) {
@@ -5412,6 +5473,69 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] — View toggle + module initialization
+    // ═══════════════════════════════════════════════════════════
+
+    function initAsDiversity() {
+        if (!window.ASDiversity) return;
+
+        const ASD = window.ASDiversity;
+        ASD.init();
+
+        // Provide integration hooks
+        ASD.setHooks({
+            drawLinesForAs: function (asNum, peerIds, color) {
+                asLinePeerIds = peerIds;
+                asLineColor = color;
+            },
+            clearAsLines: function () {
+                asLinePeerIds = null;
+                asLineColor = null;
+            },
+            filterPeerTable: function (peerIds) {
+                asFilterPeerIds = peerIds ? new Set(peerIds) : null;
+                renderPeerTable();
+            },
+            dimMapPeers: function (peerIds) {
+                asFilterPeerIds = peerIds ? new Set(peerIds) : null;
+            },
+            getWorldToScreen: worldToScreen,
+        });
+
+        // View toggle buttons
+        const toggle = document.getElementById('as-view-toggle');
+        if (!toggle) return;
+        const btns = toggle.querySelectorAll('.as-vt-btn');
+        const flightDeck = document.getElementById('flight-deck');
+        const btcBar = document.getElementById('btc-price-bar');
+
+        btns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const view = btn.dataset.view;
+                btns.forEach(b => b.classList.toggle('active', b === btn));
+
+                if (view === 'as') {
+                    // Switch to AS Diversity
+                    if (flightDeck) flightDeck.style.display = 'none';
+                    if (btcBar) btcBar.style.display = 'none';
+                    ASD.activate();
+                    ASD.update(lastPeers);
+                } else {
+                    // Switch to Peer Map
+                    if (flightDeck) flightDeck.style.display = '';
+                    if (btcBar) btcBar.style.display = '';
+                    ASD.deactivate();
+                    // Clear any AS filters
+                    asFilterPeerIds = null;
+                    asLinePeerIds = null;
+                    asLineColor = null;
+                    renderPeerTable();
+                }
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
 
@@ -5474,6 +5598,9 @@
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)
         requestAnimationFrame(frame);
+
+        // [AS-DIVERSITY] Initialize AS Diversity module and view toggle
+        initAsDiversity();
     }
 
     init();

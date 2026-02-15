@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M₿Core Dashboard</title>
     <link rel="stylesheet" href="/static/css/bitstyle.css">
+    <link rel="stylesheet" href="/static/css/as-diversity.css"><!-- [AS-DIVERSITY] -->
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -13,6 +14,11 @@
         <div class="topbar-left">
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="logo" title="Peer info, map, and tools for Bitcoin Core — View on GitHub"><span class="logo-m">M</span><span class="logo-b">&#x20bf;</span><span class="logo-core">Core</span> <span class="logo-dash">Dashboard</span></a>
             <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" class="version" title="View on GitHub">v{{ version }}</a>
+            <!-- [AS-DIVERSITY] View toggle -->
+            <div class="as-view-toggle" id="as-view-toggle">
+                <button class="as-vt-btn active" data-view="map">Peer Map</button>
+                <button class="as-vt-btn" data-view="as">AS Diversity</button>
+            </div>
         </div>
         <div class="topbar-right">
             <span id="db-update-status" class="db-update-status" style="display:none"></span>
@@ -55,6 +61,21 @@
             </div>
         </div>
     </div>
+
+    <!-- [AS-DIVERSITY] AS Diversity container — replaces flight deck when active -->
+    <div id="as-diversity-container" class="as-diversity-container hidden">
+        <div class="as-donut-wrap">
+            <svg id="as-donut" class="as-donut" viewBox="0 0 160 160"></svg>
+            <div id="as-donut-center" class="as-donut-center">
+                <div class="as-score-value">—</div>
+                <div class="as-score-label">DIVERSITY</div>
+            </div>
+        </div>
+        <div id="as-legend" class="as-legend"></div>
+    </div>
+
+    <!-- [AS-DIVERSITY] Hover tooltip -->
+    <div id="as-tooltip" class="as-tooltip hidden"></div>
 
     <!-- BTC price — centered below flight deck -->
     <div id="btc-price-bar" class="btc-price-bar" title="Bitcoin price/currency options">
@@ -148,12 +169,33 @@
         </div>
     </div>
 
+    <!-- [AS-DIVERSITY] Detail panel — slides in from right -->
+    <div id="as-detail-panel" class="as-detail-panel hidden">
+        <div class="as-detail-header">
+            <div class="as-detail-header-info">
+                <div class="as-detail-asn"></div>
+                <div class="as-detail-org"></div>
+                <div class="as-detail-meta"></div>
+                <div class="as-detail-bar-wrap">
+                    <div class="as-detail-bar-bg"><div class="as-detail-bar-fill"></div></div>
+                    <div class="as-detail-bar-label">
+                        <span class="as-detail-pct"></span>
+                        <span class="as-detail-risk"></span>
+                    </div>
+                </div>
+            </div>
+            <button class="as-detail-close" title="Close">&times;</button>
+        </div>
+        <div class="as-detail-body"></div>
+    </div>
+
     <!-- Footer -->
     <footer id="footer" class="footer">
         <span class="footer-btc" id="footer-btc">Support (btc): <span class="footer-btc-addr">bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5</span></span>
         <span class="footer-author">Created by <a class="footer-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map" target="_blank" rel="noopener" title="Visit mbhillrn MBCore repository: GitHub">@mbhillrn</a></span>
     </footer>
 
+    <script src="/static/js/as-diversity.js"></script><!-- [AS-DIVERSITY] loaded before bitapp -->
     <script src="/static/js/bitapp.js"></script>
 </body>
 </html>
