@@ -261,16 +261,23 @@ html, body {
 /* Update available badge */
 .update-badge {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     font-family: var(--font-data);
-    color: var(--warn);
+    color: #FFD700;
     cursor: pointer;
     position: relative;
     white-space: nowrap;
+    text-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
+    animation: update-pulse 2s ease-in-out infinite;
     transition: color 0.15s ease;
 }
+@keyframes update-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
 .update-badge:hover {
-    color: #e8b84a;
+    color: #FFEA00;
+    text-shadow: 0 0 10px rgba(255, 234, 0, 0.7);
 }
 .update-tooltip {
     display: none;
@@ -310,6 +317,110 @@ html, body {
     line-height: 1.4;
     padding-top: 6px;
     border-top: 1px solid rgba(88, 166, 255, 0.08);
+}
+/* System update popup modal */
+.update-modal-box {
+    background: var(--bg-surface);
+    border: 2px solid #FFD700;
+    border-radius: 8px;
+    min-width: 340px;
+    max-width: 460px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+.update-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+    background: rgba(255, 215, 0, 0.06);
+}
+.update-modal-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #FFD700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.update-modal-body {
+    padding: 16px;
+    font-family: var(--font-ui);
+}
+.update-modal-version {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    margin-bottom: 14px;
+}
+.update-modal-version span {
+    color: #FFD700;
+    font-weight: 700;
+}
+.update-modal-instructions {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    text-align: center;
+    margin-bottom: 14px;
+}
+.update-modal-instructions b {
+    color: var(--text-primary);
+}
+.update-modal-step {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.update-modal-step-num {
+    color: #FFD700;
+    font-weight: 700;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.update-modal-changes {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 215, 0, 0.1);
+    max-height: 100px;
+    overflow-y: auto;
+}
+.update-modal-changes-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+.update-modal-dismiss {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-top: 14px;
+    background: rgba(255, 215, 0, 0.1);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    border-radius: 4px;
+    color: #FFD700;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: background 0.15s ease;
+}
+.update-modal-dismiss:hover {
+    background: rgba(255, 215, 0, 0.18);
 }
 .topbar-clock {
     font-size: 13px;
