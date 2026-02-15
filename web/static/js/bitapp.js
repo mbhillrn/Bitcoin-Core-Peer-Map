@@ -87,6 +87,9 @@
         pulseDepthOut:   0.48,       // outbound pulse amplitude
         pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
         pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
+        // AS Diversity line settings
+        asLineWidth:     30,         // slider 0-100, 30 = ~1.4px (default — subtle but visible)
+        asLineFan:       50,         // slider 0-100, 50 = 35% spread (default)
         // Land appearance
         landHue:        215,         // hue degrees (current dark blue-gray)
         landBright:      50,         // slider 0-100, 50 = original L=12%
@@ -653,6 +656,12 @@
     let lastPeers = [];      // raw API response for table rendering
     let highlightedPeerId = null;  // peer ID highlighted via map↔table interaction
 
+    // [AS-DIVERSITY] State for AS Diversity integration
+    let asFilterPeerIds = null;    // Set of peer IDs to show when AS is selected (null = no filter)
+    let asLinePeerIds = null;      // Array of peer IDs to draw lines to (hover/selection)
+    let asLineColor = null;        // Color string for AS lines
+    let asLineAsNum = null;        // AS number for legend dot lookup
+
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
     const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
     let enabledNets = new Set(ALL_NETS);  // start with all enabled
@@ -906,17 +915,6 @@
     // ═══════════════════════════════════════════════════════════
 
     const minimizeBtn = document.getElementById('btn-minimize');
-    const mapControlsEl = document.getElementById('map-controls');
-
-    /** Reposition map controls below the right overlay */
-    function repositionMapControls() {
-        if (!mapControlsEl) return;
-        const rightOverlay = document.getElementById('right-overlay');
-        if (rightOverlay) {
-            const rect = rightOverlay.getBoundingClientRect();
-            mapControlsEl.style.top = (rect.bottom + 8) + 'px';
-        }
-    }
 
     if (minimizeBtn) {
         minimizeBtn.addEventListener('click', (e) => {
@@ -925,16 +923,11 @@
             if (panel) {
                 panel.classList.toggle('collapsed');
                 const isCollapsed = panel.classList.contains('collapsed');
-                minimizeBtn.innerHTML = isCollapsed ? 'Show Table &#9650;' : 'Hide Table &#9660;';
-                // Reposition map controls after transition completes
-                setTimeout(repositionMapControls, 350);
+                minimizeBtn.innerHTML = isCollapsed ? '&#9650;' : '&#9660;';
+                minimizeBtn.title = isCollapsed ? 'Show peer list table' : 'Hide peer list table';
             }
         });
     }
-
-    // Initial positioning of map controls + reposition on resize
-    setTimeout(repositionMapControls, 200);
-    window.addEventListener('resize', repositionMapControls);
 
     // ═══════════════════════════════════════════════════════════
     // BTC PRICE STATE
@@ -1800,6 +1793,11 @@
             // Update flight deck network counts
             updateFlightDeck(nodes);
 
+            // [AS-DIVERSITY] Update AS Diversity donut with latest peer data (always active)
+            if (window.ASDiversity) {
+                window.ASDiversity.update(lastPeers);
+            }
+
             // Refresh the peer table panel
             renderPeerTable();
 
@@ -2183,17 +2181,13 @@
 
     function updateConnectionStatus(connected) {
         const dot = document.getElementById('status-dot');
-        const txt = document.getElementById('status-text');
+        if (!dot) return;
         if (connected) {
             dot.classList.add('online');
             dot.title = 'MBCore dashboard is running and connected';
-            txt.title = 'MBCore dashboard is running and connected';
-            txt.textContent = 'Running';
         } else {
             dot.classList.remove('online');
             dot.title = 'MBCore dashboard service is not responding';
-            txt.title = 'MBCore dashboard service is not responding';
-            txt.textContent = 'Stopped';
         }
     }
 
@@ -2742,6 +2736,12 @@
         // (but always draw fading-out nodes so they dissolve gracefully)
         if (!passesNetFilter(node.net) && node.alive) return;
 
+        // [AS-DIVERSITY] Dim peers not in the selected AS
+        let asDimFactor = 1;
+        if (asFilterPeerIds && node.alive && !asFilterPeerIds.has(node.peerId)) {
+            asDimFactor = 0.15;
+        }
+
         const c = node.color;
         const ageMs = now - node.spawnTime;
         const nowSec = Math.floor(now / 1000);
@@ -2788,6 +2788,9 @@
         const r = CFG.nodeRadius * scale;
         const gr = CFG.glowRadius * scale * pulse;
 
+        // [AS-DIVERSITY] Apply dim factor to opacity
+        const finalOpacity = opacity * asDimFactor;
+
         // Draw at each wrap offset
         for (const off of wrapOffsets) {
             const s = worldToScreen(node.lon + off, node.lat);
@@ -2797,10 +2800,10 @@
 
             // Arrival bloom effect (ring + glow) — drawn behind the node
             if (inArrival && node.alive) {
-                drawArrivalBloom(s.x, s.y, c, ageMs, opacity);
+                drawArrivalBloom(s.x, s.y, c, ageMs, finalOpacity);
             }
 
-            drawNodeAt(s.x, s.y, c, r, gr, pulse, opacity, brightness);
+            drawNodeAt(s.x, s.y, c, r, gr, pulse, finalOpacity, brightness);
         }
     }
 
@@ -2837,6 +2840,123 @@
                 ctx.stroke();
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] Draw lines from DONUT to peers of a hovered/selected AS
+    // Lines originate from the donut chart position, not map center.
+    // Adapts to map pan/zoom since this runs every frame.
+    // ═══════════════════════════════════════════════════════════
+
+    function drawAsLines(wrapOffsets) {
+        if (!asLinePeerIds || !asLineColor) return;
+        const ASD = window.ASDiversity;
+        if (!ASD) return;
+
+        // Try legend dot position first (when legend is visible), fall back to donut center
+        let lineOrigin = null;
+        if (asLineAsNum) {
+            lineOrigin = ASD.getLegendDotPosition(asLineAsNum);
+        }
+        if (!lineOrigin) {
+            lineOrigin = ASD.getDonutCenter();
+        }
+        if (!lineOrigin) return;
+        const donutCenter = lineOrigin;
+
+        const peerIdSet = new Set(asLinePeerIds);
+        const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
+        if (matchingNodes.length === 0) return;
+
+        // Convert donut center from page coords to canvas logical coords
+        const canvasRect = canvas.getBoundingClientRect();
+        const originX = (donutCenter.x - canvasRect.left) * (W / canvasRect.width);
+        const originY = (donutCenter.y - canvasRect.top) * (H / canvasRect.height);
+
+        // Resolve screen positions for each matching node
+        const resolved = [];
+        for (const node of matchingNodes) {
+            let bestS = null;
+            let bestDist = Infinity;
+            for (const off of wrapOffsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+                if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                const dx = s.x - originX;
+                const dy = s.y - originY;
+                const d2 = dx * dx + dy * dy;
+                if (d2 < bestDist) {
+                    bestDist = d2;
+                    bestS = s;
+                }
+            }
+            if (bestS) resolved.push({ node: node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
+        }
+        if (resolved.length === 0) return;
+
+        // Group by approximate screen position (within 8px = same dot)
+        const SNAP = 8;
+        const groups = [];
+        for (const r of resolved) {
+            let found = false;
+            for (const g of groups) {
+                if (Math.abs(g.cx - r.sx) < SNAP && Math.abs(g.cy - r.sy) < SNAP) {
+                    g.items.push(r);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                groups.push({ cx: r.sx, cy: r.sy, items: [r] });
+            }
+        }
+
+        // Line width from advSettings: slider 0→0.3px, 50→1.2px, 100→4px
+        const lwSlider = advSettings.asLineWidth;
+        const lineW = 0.3 + (lwSlider / 100) * 3.7;
+        // Fan spread from advSettings: slider 0→0%, 50→35%, 100→70% of line length
+        const fanSlider = advSettings.asLineFan;
+        const fanPct = (fanSlider / 100) * 0.7;
+        const fanMax = 40 + (fanSlider / 100) * 120;  // 40px at 0, 160px at 100
+
+        ctx.save();
+        ctx.lineWidth = lineW;
+        ctx.strokeStyle = asLineColor;
+
+        for (const g of groups) {
+            const count = g.items.length;
+            // All lines converge on the same dot position (no dot displacement)
+            const destX = g.cx;
+            const destY = g.cy;
+
+            for (let i = 0; i < count; i++) {
+                const r = g.items[i];
+                const dist = r.dist;
+                const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.moveTo(originX, originY);
+
+                if (count > 1) {
+                    // Fan lines via curved paths — all arrive at same destination
+                    const midX = (originX + destX) / 2;
+                    const midY = (originY + destY) / 2;
+                    const dx = destX - originX;
+                    const dy = destY - originY;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const perpX = -dy / len;
+                    const perpY = dx / len;
+                    // Spread controlled by fan slider
+                    const spread = Math.min(len * fanPct, fanMax);
+                    const bulge = (i - (count - 1) / 2) * (spread / Math.max(1, count - 1));
+                    ctx.quadraticCurveTo(midX + perpX * bulge, midY + perpY * bulge, destX, destY);
+                } else {
+                    ctx.lineTo(destX, destY);
+                }
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3214,8 +3334,21 @@
     // Panel toggle (clicking the title bar)
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
         panelEl.classList.toggle('collapsed');
-        setTimeout(repositionMapControls, 350);
+        // [AS-DIVERSITY] When expanding peer list, bring it on top of AS panel
+        if (!panelEl.classList.contains('collapsed')) {
+            document.body.classList.add('panel-focus-peers');
+            document.body.classList.remove('panel-focus-as');
+        }
     });
+
+    // [AS-DIVERSITY] Clicking anywhere in peer panel body → bring peers to front
+    const peerPanelBody = document.querySelector('.peer-panel-body');
+    if (peerPanelBody) {
+        peerPanelBody.addEventListener('click', () => {
+            document.body.classList.add('panel-focus-peers');
+            document.body.classList.remove('panel-focus-as');
+        });
+    }
 
     /** Get sorted copy of lastPeers based on current sort state.
      *  sortKey=null means unsorted (original peer order). */
@@ -3235,6 +3368,24 @@
                 va = parseInt(va) || 0;
                 vb = parseInt(vb) || 0;
                 return sortAsc ? va - vb : vb - va;
+            }
+            // Sort Sent/Recv by raw byte count, not formatted string
+            if (sortKey === 'bytessent_fmt') {
+                va = a.bytessent || 0;
+                vb = b.bytessent || 0;
+                return sortAsc ? va - vb : vb - va;
+            }
+            if (sortKey === 'bytesrecv_fmt') {
+                va = a.bytesrecv || 0;
+                vb = b.bytesrecv || 0;
+                return sortAsc ? va - vb : vb - va;
+            }
+            // Sort Duration by raw conntime (unix timestamp — lower = connected longer)
+            if (sortKey === 'conntime_fmt') {
+                va = a.conntime || 0;
+                vb = b.conntime || 0;
+                // Lower conntime = connected longer = "more" duration
+                return sortAsc ? vb - va : va - vb;
             }
             va = String(va);
             vb = String(vb);
@@ -3350,6 +3501,11 @@
         // Apply network filter to table as well
         if (!isAllNetsEnabled()) {
             sorted = sorted.filter(p => passesNetFilter(p.network || 'ipv4'));
+        }
+
+        // [AS-DIVERSITY] Apply AS filter when an AS is selected
+        if (asFilterPeerIds) {
+            sorted = sorted.filter(p => asFilterPeerIds.has(p.id));
         }
 
         handleCountEl.textContent = sorted.length;
@@ -3566,6 +3722,10 @@
         html += '<div class="tsp-section">Transparency</div>';
         html += `<div class="tsp-slider-row"><input type="range" class="tsp-slider" id="tsp-opacity" min="0" max="100" value="${panelOpacity}"><span class="tsp-slider-val" id="tsp-opacity-val">${panelOpacity}%</span></div>`;
 
+        // ── Visible rows ──
+        html += '<div class="tsp-section">Visible Rows</div>';
+        html += `<div class="tsp-slider-row"><input type="range" class="tsp-slider" id="tsp-rows" min="3" max="40" value="${maxPeerRows}"><span class="tsp-slider-val" id="tsp-rows-val">${maxPeerRows}</span></div>`;
+
         // ── Column toggles ──
         html += '<div class="tsp-section">Columns</div>';
         html += '<div class="tsp-col-grid">';
@@ -3598,6 +3758,17 @@
                 panelOpacity = parseInt(opacitySlider.value);
                 opacityVal.textContent = panelOpacity + '%';
                 applyPanelOpacity();
+            });
+        }
+
+        // Bind visible rows slider
+        const rowsSlider = document.getElementById('tsp-rows');
+        const rowsVal = document.getElementById('tsp-rows-val');
+        if (rowsSlider) {
+            rowsSlider.addEventListener('input', () => {
+                maxPeerRows = parseInt(rowsSlider.value);
+                if (rowsVal) rowsVal.textContent = maxPeerRows;
+                applyMaxPeerRows();
             });
         }
 
@@ -3647,6 +3818,9 @@
                 showAntarcticaPeers = true;
                 antNoteDismissed = false;
                 antNote.classList.remove('hidden');
+                // Reset visible rows to default
+                maxPeerRows = 10;
+                applyMaxPeerRows();
                 // Reset auto-fit
                 autoFitColumns = true;
                 userColumnWidths = {};
@@ -4182,6 +4356,11 @@
         // 9. Connection mesh lines between nearby peers
         drawConnectionLines(now, wrapOffsets);
 
+        // [AS-DIVERSITY] 9b. Draw lines from map center to AS peers (hover/selection)
+        if (asLinePeerIds && asLinePeerIds.length > 0 && asLineColor) {
+            drawAsLines(wrapOffsets);
+        }
+
         // 10. Peer nodes (alive + fading out)
         for (const node of nodes) {
             drawNode(node, now, wrapOffsets);
@@ -4268,10 +4447,16 @@
                 if (!panelEl.classList.contains('collapsed')) {
                     highlightTableRow(node.peerId, true);
                 }
-            } else if (pinnedNode) {
-                // Clicked empty space — unpin
-                hideTooltip();
-                highlightTableRow(null);
+            } else {
+                // Clicked empty space — unpin tooltip
+                if (pinnedNode) {
+                    hideTooltip();
+                    highlightTableRow(null);
+                }
+                // [AS-DIVERSITY] Deselect any selected AS when clicking empty map
+                if (window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+                    window.ASDiversity.deselect();
+                }
             }
         }
         dragging = false;
@@ -4366,8 +4551,10 @@
         // and session dismissal — no longer tied to filter toggles
     }
 
-    // Click to toggle network badges (multi-select)
-    // stopPropagation prevents the peer-panel-handle click from toggling the panel
+    // Click to toggle network badges (radio-then-additive model)
+    // First click from "All" = radio (show only that network)
+    // Subsequent clicks = additive toggle
+    // Clicking "All" = reset to all
     netBadges.forEach(badge => {
         badge.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -4375,16 +4562,25 @@
             if (net === 'all') {
                 // "All" → select everything
                 enabledNets = new Set(ALL_NETS);
+            } else if (isAllNetsEnabled()) {
+                // Currently showing All → radio: show only the clicked network
+                enabledNets = new Set([net]);
             } else {
-                // Toggle this network
+                // Specific filter(s) active → additive toggle
                 if (enabledNets.has(net)) {
                     enabledNets.delete(net);
-                    // Don't allow empty selection — re-enable if it would be empty
+                    // Don't allow empty selection — revert to All
                     if (enabledNets.size === 0) {
                         enabledNets = new Set(ALL_NETS);
                     }
                 } else {
                     enabledNets.add(net);
+                    // If all nets are now enabled, switch back to "All" state
+                    if (enabledNets.size === ALL_NETS.size) {
+                        var allMatch = true;
+                        for (var n of ALL_NETS) { if (!enabledNets.has(n)) { allMatch = false; break; } }
+                        // Already a full set, state is naturally "all"
+                    }
                 }
             }
             updateBadgeStates();
@@ -4480,6 +4676,7 @@
     // ═══════════════════════════════════════════════════════════
 
     let displaySettingsEl = null;
+    let maxPeerRows = 10;  // Default visible rows in peer table (resize panel to fit)
 
     function openDisplaySettingsPopup(anchorEl) {
         closeDisplaySettingsPopup();
@@ -4490,25 +4687,25 @@
         const pollSec = Math.round(CFG.pollInterval / 1000);
         const infoSec = Math.round(CFG.infoPollInterval / 1000);
 
-        // Right-side display toggle states
-        const rightItems = [
-            { id: 'ro-row-statusmsg', label: 'Map Status', visible: true },
-            { id: 'ro-row-nodestatus', label: 'Node Info', visible: true },
-            { id: 'ro-row-geodb', label: 'MBCore DB', visible: true },
+        // Visibility toggle items — the sections on the map
+        const visItems = [
+            { id: 'as-diversity-container', label: 'Diversity Score', visible: true },
+            { id: 'btc-price-bar', label: 'Bitcoin Price', visible: true },
+            { id: 'map-overlay', label: 'System Stats', visible: true },
         ];
         // Check actual visibility
-        rightItems.forEach(item => {
+        visItems.forEach(item => {
             const el = document.getElementById(item.id);
             if (el) item.visible = el.style.display !== 'none';
         });
 
-        let html = '<div class="dsp-title">Display Settings</div>';
+        let html = '<div class="dsp-title">Map Settings</div>';
         html += '<div class="dsp-section">Update Frequency</div>';
         html += `<div class="dsp-row"><span class="dsp-label" title="How often peer list is fetched from Bitcoin Core">Peer list</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
         html += `<div class="dsp-row"><span class="dsp-label" title="How often node info and BTC price are refreshed">Node info &amp; price</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
         html += '<div class="dsp-section">Show / Hide</div>';
-        rightItems.forEach(item => {
-            html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
+        visItems.forEach(item => {
+            html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
         html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
         popup.innerHTML = html;
@@ -4561,11 +4758,20 @@
             });
         }
 
-        // Bind show/hide toggles
-        popup.querySelectorAll('.dsp-toggle input[type="checkbox"]').forEach(cb => {
+        // Bind show/hide visibility toggles
+        popup.querySelectorAll('.dsp-toggle input[data-vis-target]').forEach(cb => {
             cb.addEventListener('change', () => {
-                const target = document.getElementById(cb.dataset.target);
-                if (target) target.style.display = cb.checked ? '' : 'none';
+                const target = document.getElementById(cb.dataset.visTarget);
+                if (!target) return;
+                if (cb.checked) {
+                    target.style.display = '';
+                } else {
+                    target.style.display = 'none';
+                    // If hiding diversity donut, deselect any active AS
+                    if (cb.dataset.visTarget === 'as-diversity-container' && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+                        window.ASDiversity.deselect();
+                    }
+                }
             });
         });
 
@@ -4573,6 +4779,20 @@
         setTimeout(() => {
             document.addEventListener('click', closeDisplaySettingsOnOutside);
         }, 0);
+    }
+
+    /** Apply max peer rows setting — resizes the peer panel to show N rows.
+     *  The handle is ~48px, thead ~22px, each body row ~22px. */
+    function applyMaxPeerRows() {
+        const panel = document.querySelector('.peer-panel');
+        if (!panel) return;
+        if (maxPeerRows > 0) {
+            // handle(48) + thead(22) + rows * 22 + a tiny bit of padding
+            const h = 48 + 22 + (maxPeerRows * 22) + 4;
+            panel.style.maxHeight = h + 'px';
+        } else {
+            panel.style.maxHeight = '';
+        }
     }
 
     function closeDisplaySettingsOnOutside(e) {
@@ -5016,6 +5236,11 @@
         h += '</div>'; // end theme-wrap
         h += '</div>'; // end theme-section
 
+        // ── Service Provider Diversity ──
+        h += '<div class="adv-section">Service Provider Diversity</div>';
+        h += advSliderHTML('adv-as-linewidth', 'Line Thickness', advSettings.asLineWidth, 0, 100, 1);
+        h += advSliderHTML('adv-as-fan', 'Line Fanning', advSettings.asLineFan, 0, 100, 1);
+
         // ── Peer Effects ──
         h += '<div class="adv-section">Peer Effects</div>';
         h += advSliderHTML('adv-shimmer', 'Shimmer', advSettings.shimmerStrength, 0, 1, 0.01);
@@ -5076,7 +5301,8 @@
         // Footer buttons + feedback area
         h += '<div class="adv-footer">';
         h += '<button class="adv-btn adv-btn-reset" id="adv-reset">Reset</button>';
-        h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves across sessions. To save for this session only, just close the menu.">Permanent Save</button>';
+        h += '<button class="adv-btn adv-btn-session" id="adv-session-save" title="Keeps settings for this session only — closes menu">Session Save</button>';
+        h += '<button class="adv-btn adv-btn-save" id="adv-save" title="Saves settings permanently across sessions">Permanent Save</button>';
         h += '</div>';
         h += '<div class="adv-feedback" id="adv-feedback"></div>';
 
@@ -5178,6 +5404,8 @@
         bindAdvSlider('adv-grid-thick', v => { advSettings.gridThickness = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-hue', v => { advSettings.gridHue = v; updateAdvColors(); });
         bindAdvSlider('adv-grid-bright', v => { advSettings.gridBright = v; updateAdvColors(); });
+        bindAdvSlider('adv-as-linewidth', v => { advSettings.asLineWidth = v; });
+        bindAdvSlider('adv-as-fan', v => { advSettings.asLineFan = v; });
         bindAdvSlider('adv-border-scale', v => { advSettings.borderScale = v; });
         bindAdvSlider('adv-border-hue', v => { advSettings.borderHue = v; updateAdvColors(); });
 
@@ -5216,7 +5444,13 @@
             showAdvFeedback('All settings reset to defaults');
         });
 
-        // ── Save button ──
+        // ── Session Save button — just close the panel (settings persist in memory) ──
+        document.getElementById('adv-session-save').addEventListener('click', () => {
+            showAdvFeedback('Session settings applied');
+            setTimeout(closeAdvancedPanel, 400);
+        });
+
+        // ── Permanent Save button ──
         document.getElementById('adv-save').addEventListener('click', () => {
             saveAdvSettings();
             saveTheme();
@@ -5260,6 +5494,8 @@
 
     /** Refresh all slider positions from current advSettings */
     function refreshAllAdvSliders() {
+        setSliderValue('adv-as-linewidth', advSettings.asLineWidth);
+        setSliderValue('adv-as-fan', advSettings.asLineFan);
         setSliderValue('adv-shimmer', advSettings.shimmerStrength);
         setSliderValue('adv-pdepth-in', advSettings.pulseDepthIn);
         setSliderValue('adv-pdepth-out', advSettings.pulseDepthOut);
@@ -5279,6 +5515,8 @@
 
     /** Map slider IDs to their advSettings key and default value */
     const SLIDER_DEFAULTS = {
+        'adv-as-linewidth':{ key: 'asLineWidth' },
+        'adv-as-fan':      { key: 'asLineFan' },
         'adv-shimmer':     { key: 'shimmerStrength', cfg: 'shimmerStrength' },
         'adv-pdepth-in':   { key: 'pulseDepthIn',   cfg: 'pulseDepthInbound' },
         'adv-pdepth-out':  { key: 'pulseDepthOut',   cfg: 'pulseDepthOutbound' },
@@ -5412,6 +5650,91 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] — Module initialization (always-on, no toggle)
+    // ═══════════════════════════════════════════════════════════
+
+    function initAsDiversity() {
+        if (!window.ASDiversity) return;
+
+        const ASD = window.ASDiversity;
+        ASD.init();
+
+        // Provide integration hooks
+        ASD.setHooks({
+            drawLinesForAs: function (asNum, peerIds, color) {
+                asLinePeerIds = peerIds;
+                asLineColor = color;
+                asLineAsNum = asNum;
+            },
+            clearAsLines: function () {
+                asLinePeerIds = null;
+                asLineColor = null;
+                asLineAsNum = null;
+            },
+            filterPeerTable: function (peerIds) {
+                asFilterPeerIds = peerIds ? new Set(peerIds) : null;
+                renderPeerTable();
+            },
+            dimMapPeers: function (peerIds) {
+                asFilterPeerIds = peerIds ? new Set(peerIds) : null;
+            },
+            getWorldToScreen: worldToScreen,
+        });
+
+        // Donut is always active — feed it initial data if available
+        if (lastPeers.length > 0) {
+            ASD.update(lastPeers);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] Peer panel + topbar button wiring
+    // ═══════════════════════════════════════════════════════════
+
+    function initNewButtons() {
+        // NODE-INFO button in peer panel handle
+        const nodeInfoPeerBtn = document.getElementById('btn-node-info-peer');
+        if (nodeInfoPeerBtn) {
+            nodeInfoPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openNodeInfoModal(); });
+        }
+
+        // MBCORE-DB button in peer panel handle
+        const mbcoreDbPeerBtn = document.getElementById('btn-mbcore-db-peer');
+        if (mbcoreDbPeerBtn) {
+            mbcoreDbPeerBtn.addEventListener('click', (e) => { e.stopPropagation(); openGeoDBDropdown(); });
+        }
+
+        // Topbar gear icon → open primary Map Settings popup
+        const topbarGear = document.getElementById('topbar-gear');
+        if (topbarGear) {
+            topbarGear.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDisplaySettingsPopup(topbarGear);
+            });
+        }
+
+        // Topbar countdown → open display settings
+        const topbarCountdown = document.getElementById('topbar-countdown');
+        if (topbarCountdown) {
+            topbarCountdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDisplaySettingsPopup(topbarCountdown);
+            });
+        }
+
+        // Topbar status message → open display settings
+        const topbarStatusMsg = document.getElementById('mo-status-msg');
+        if (topbarStatusMsg) {
+            topbarStatusMsg.style.cursor = 'pointer';
+            topbarStatusMsg.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDisplaySettingsPopup(topbarStatusMsg);
+            });
+        }
+
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // INIT — Start everything
     // ═══════════════════════════════════════════════════════════
 
@@ -5474,6 +5797,15 @@
         // Start the render loop (grid + nodes render immediately,
         // landmasses + lakes appear once JSON assets finish loading)
         requestAnimationFrame(frame);
+
+        // [AS-DIVERSITY] Initialize AS Diversity module (always-on donut)
+        initAsDiversity();
+
+        // [AS-DIVERSITY] Wire up new peer panel buttons and topbar gear
+        initNewButtons();
+
+        // Apply default visible row count to peer panel
+        applyMaxPeerRows();
     }
 
     init();

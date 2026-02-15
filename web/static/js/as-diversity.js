@@ -1,0 +1,1022 @@
+/* ============================================================
+   AS Diversity Analysis — JavaScript Module
+   Isolated logic for the AS Diversity view.
+   Delete this file to fully revert the feature.
+
+   Integration points in bitapp.js are marked with [AS-DIVERSITY].
+   This module exposes window.ASDiversity for the main app to call.
+   ============================================================ */
+
+window.ASDiversity = (function () {
+    'use strict';
+
+    // ═══════════════════════════════════════════════════════════
+    // CONFIGURATION
+    // ═══════════════════════════════════════════════════════════
+
+    const MAX_SEGMENTS = 8;      // Top N ASes in the donut, rest = "Others"
+    const DONUT_SIZE = 260;      // SVG viewBox size
+    const DONUT_RADIUS = 116;    // Outer radius of the donut ring
+    const DONUT_WIDTH = 28;      // Width of the donut ring
+    const INNER_RADIUS = DONUT_RADIUS - DONUT_WIDTH;
+
+    // Curated colour palette — 9 colours (8 AS + Others), distinct and accessible
+    const PALETTE = [
+        '#58a6ff',   // blue
+        '#3fb950',   // green
+        '#e3b341',   // gold
+        '#f07178',   // coral
+        '#8b5cf6',   // purple
+        '#d2a8ff',   // lavender
+        '#79c0ff',   // light blue
+        '#f0883e',   // orange
+        '#484f58',   // dark gray (Others)
+    ];
+
+    // ═══════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════
+
+    let isActive = true;           // Always active now (no toggle)
+    let asGroups = [];             // Aggregated AS data (sorted by count desc)
+    let donutSegments = [];        // Top N + Others for donut rendering
+    let hoveredAs = null;          // AS number string currently hovered
+    let selectedAs = null;         // AS number string currently selected (clicked)
+    let diversityScore = 0;        // 0-10 score
+    let totalPeers = 0;
+    let hasRenderedOnce = false;   // Track if we've ever rendered data
+
+    // DOM refs (cached on init)
+    let containerEl = null;
+    let donutWrapEl = null;
+    let donutSvg = null;
+    let donutCenter = null;
+    let legendEl = null;
+    let tooltipEl = null;
+    let panelEl = null;
+    let loadingEl = null;
+
+    // Integration hooks (set by bitapp.js)
+    let _drawLinesForAs = null;    // fn(asNumber, peerIds, color) — draw lines on canvas
+    let _clearAsLines = null;      // fn() — clear AS lines from canvas
+    let _filterPeerTable = null;   // fn(peerIds | null) — filter peer table
+    let _dimMapPeers = null;       // fn(peerIds | null) — dim non-matching peers
+    let _getWorldToScreen = null;  // fn(lon, lat) => {x, y}
+
+    // ═══════════════════════════════════════════════════════════
+    // PARSING & AGGREGATION
+    // ═══════════════════════════════════════════════════════════
+
+    /** Extract AS number from the "AS12345 Org Name" string */
+    function parseAsNumber(asField) {
+        if (!asField) return null;
+        var m = asField.match(/^(AS\d+)/);
+        return m ? m[1] : null;
+    }
+
+    /** Extract org name from the "AS12345 Org Name" string */
+    function parseAsOrg(asField) {
+        if (!asField) return '';
+        var m = asField.match(/^AS\d+\s+(.+)/);
+        return m ? m[1].trim() : asField;
+    }
+
+    /** Format bytes to human-readable */
+    function fmtBytes(b) {
+        if (b == null || isNaN(b)) return '\u2014';
+        if (b < 1024) return b + ' B';
+        if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+        if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+        return (b / 1073741824).toFixed(2) + ' GB';
+    }
+
+    /** Format seconds to human-readable duration */
+    function fmtDuration(secs) {
+        if (!secs || secs <= 0) return '\u2014';
+        var d = Math.floor(secs / 86400);
+        var h = Math.floor((secs % 86400) / 3600);
+        var m = Math.floor((secs % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
+    }
+
+    /** Get hosting label from peer flags */
+    function getHostingLabel(peers) {
+        var hostingCount = peers.filter(function (p) { return p.hosting; }).length;
+        var ratio = hostingCount / peers.length;
+        if (ratio >= 0.7) return 'Cloud/Hosting';
+        if (ratio <= 0.3) return 'Residential';
+        return 'Mixed';
+    }
+
+    /** Get concentration risk level for a percentage */
+    function getRisk(pct) {
+        if (pct >= 50) return { level: 'critical', label: 'Critical \u2014 Dominates Peers' };
+        if (pct >= 30) return { level: 'high', label: 'High Concentration' };
+        if (pct >= 15) return { level: 'moderate', label: 'Moderate Concentration' };
+        return { level: 'low', label: '' };
+    }
+
+    /** Aggregate peer data into per-AS groups */
+    function aggregatePeers(peers) {
+        var map = {};
+        var locatablePeers = 0;
+
+        for (var pi = 0; pi < peers.length; pi++) {
+            var p = peers[pi];
+            var asNum = parseAsNumber(p.as);
+            if (!asNum) continue;
+            locatablePeers++;
+
+            if (!map[asNum]) {
+                map[asNum] = {
+                    asNumber: asNum,
+                    asName: parseAsOrg(p.as),
+                    asShort: p.asname || '',
+                    peers: [],
+                };
+            }
+            map[asNum].peers.push(p);
+        }
+
+        totalPeers = locatablePeers;
+
+        // Build full group objects
+        var keys = Object.keys(map);
+        var groups = [];
+        for (var ki = 0; ki < keys.length; ki++) {
+            var g = map[keys[ki]];
+            var gPeers = g.peers;
+            var count = gPeers.length;
+            var pct = totalPeers > 0 ? (count / totalPeers) * 100 : 0;
+
+            // Inbound / outbound
+            var inbound = 0;
+            for (var ii = 0; ii < gPeers.length; ii++) {
+                if (gPeers[ii].direction === 'IN') inbound++;
+            }
+            var outbound = count - inbound;
+
+            // Connection types
+            var connTypes = {};
+            for (var ci = 0; ci < gPeers.length; ci++) {
+                var t = gPeers[ci].connection_type || 'unknown';
+                connTypes[t] = (connTypes[t] || 0) + 1;
+            }
+
+            // Performance
+            var pings = [];
+            for (var pii = 0; pii < gPeers.length; pii++) {
+                if (gPeers[pii].ping_ms > 0) pings.push(gPeers[pii].ping_ms);
+            }
+            var avgPing = pings.length > 0 ? pings.reduce(function (a, b) { return a + b; }, 0) / pings.length : 0;
+
+            var nowSec = Math.floor(Date.now() / 1000);
+            var durations = [];
+            for (var di = 0; di < gPeers.length; di++) {
+                if (gPeers[di].conntime > 0) {
+                    var dur = nowSec - gPeers[di].conntime;
+                    if (dur > 0) durations.push(dur);
+                }
+            }
+            var avgDuration = durations.length > 0 ? durations.reduce(function (a, b) { return a + b; }, 0) / durations.length : 0;
+
+            var totalSent = 0, totalRecv = 0;
+            for (var bi = 0; bi < gPeers.length; bi++) {
+                totalSent += (gPeers[bi].bytessent || 0);
+                totalRecv += (gPeers[bi].bytesrecv || 0);
+            }
+
+            // Software versions
+            var verMap = {};
+            for (var vi = 0; vi < gPeers.length; vi++) {
+                var v = gPeers[vi].subver || 'Unknown';
+                verMap[v] = (verMap[v] || 0) + 1;
+            }
+            var versions = [];
+            var verKeys = Object.keys(verMap);
+            for (var vk = 0; vk < verKeys.length; vk++) {
+                versions.push({ subver: verKeys[vk], count: verMap[verKeys[vk]] });
+            }
+            versions.sort(function (a, b) { return b.count - a.count; });
+
+            // Countries
+            var countryMap = {};
+            for (var coi = 0; coi < gPeers.length; coi++) {
+                if (!gPeers[coi].countryCode || gPeers[coi].countryCode === '') continue;
+                var ckey = gPeers[coi].countryCode;
+                if (!countryMap[ckey]) countryMap[ckey] = { code: ckey, name: gPeers[coi].country || ckey, count: 0 };
+                countryMap[ckey].count++;
+            }
+            var countries = [];
+            var coKeys = Object.keys(countryMap);
+            for (var ck = 0; ck < coKeys.length; ck++) {
+                countries.push(countryMap[coKeys[ck]]);
+            }
+            countries.sort(function (a, b) { return b.count - a.count; });
+
+            // Service flag combos
+            var svcMap = {};
+            for (var si = 0; si < gPeers.length; si++) {
+                var s = gPeers[si].services_abbrev || '\u2014';
+                svcMap[s] = (svcMap[s] || 0) + 1;
+            }
+            var servicesCombos = [];
+            var sKeys = Object.keys(svcMap);
+            for (var sk = 0; sk < sKeys.length; sk++) {
+                servicesCombos.push({ abbrev: sKeys[sk], count: svcMap[sKeys[sk]] });
+            }
+            servicesCombos.sort(function (a, b) { return b.count - a.count; });
+
+            var risk = getRisk(pct);
+
+            groups.push({
+                asNumber: g.asNumber,
+                asName: g.asName,
+                asShort: g.asShort,
+                peerCount: count,
+                percentage: pct,
+                inboundCount: inbound,
+                outboundCount: outbound,
+                connTypes: connTypes,
+                avgPingMs: avgPing,
+                avgDurationSecs: avgDuration,
+                avgDurationFmt: fmtDuration(avgDuration),
+                totalBytesSent: totalSent,
+                totalBytesRecv: totalRecv,
+                totalBytesSentFmt: fmtBytes(totalSent),
+                totalBytesRecvFmt: fmtBytes(totalRecv),
+                versions: versions,
+                countries: countries,
+                servicesCombos: servicesCombos,
+                hostingLabel: getHostingLabel(gPeers),
+                riskLevel: risk.level,
+                riskLabel: risk.label,
+                peerIds: gPeers.map(function (p) { return p.id; }),
+                color: '#6e7681',  // assigned later from palette
+            });
+        }
+
+        // Sort by peer count descending
+        groups.sort(function (a, b) { return b.peerCount - a.peerCount; });
+        return groups;
+    }
+
+    /** Calculate Herfindahl-Hirschman diversity score (0-10) */
+    function calcDiversityScore(groups) {
+        if (totalPeers === 0) return 0;
+        var hhi = 0;
+        for (var i = 0; i < groups.length; i++) {
+            var share = groups[i].peerCount / totalPeers;
+            hhi += share * share;
+        }
+        return Math.round((1 - hhi) * 100) / 10; // 0.0 to 10.0
+    }
+
+    /** Build donut segments: top N + Others bucket */
+    function buildDonutSegments(groups) {
+        var top = groups.slice(0, MAX_SEGMENTS);
+        var rest = groups.slice(MAX_SEGMENTS);
+
+        // Assign colors
+        for (var i = 0; i < top.length; i++) {
+            top[i].color = PALETTE[i % PALETTE.length];
+        }
+
+        var segments = top.slice();
+
+        if (rest.length > 0) {
+            var othersCount = 0;
+            var othersPeerIds = [];
+            for (var ri = 0; ri < rest.length; ri++) {
+                othersCount += rest[ri].peerCount;
+                for (var rpi = 0; rpi < rest[ri].peerIds.length; rpi++) {
+                    othersPeerIds.push(rest[ri].peerIds[rpi]);
+                }
+            }
+            var othersPct = totalPeers > 0 ? (othersCount / totalPeers) * 100 : 0;
+            segments.push({
+                asNumber: 'Others',
+                asName: rest.length + ' other providers',
+                asShort: '',
+                peerCount: othersCount,
+                percentage: othersPct,
+                riskLevel: 'low',
+                riskLabel: '',
+                color: PALETTE[PALETTE.length - 1],
+                peerIds: othersPeerIds,
+                isOthers: true,
+                _othersGroups: rest,
+            });
+        }
+
+        return segments;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SVG DONUT RENDERING
+    // ═══════════════════════════════════════════════════════════
+
+    /** Create an SVG arc path for a donut segment */
+    function describeArc(cx, cy, outerR, innerR, startAngle, endAngle) {
+        var sweep = endAngle - startAngle;
+        var actualEnd = sweep >= 2 * Math.PI ? startAngle + 2 * Math.PI - 0.001 : endAngle;
+        var largeArc = sweep > Math.PI ? 1 : 0;
+
+        var ox1 = cx + outerR * Math.cos(startAngle);
+        var oy1 = cy + outerR * Math.sin(startAngle);
+        var ox2 = cx + outerR * Math.cos(actualEnd);
+        var oy2 = cy + outerR * Math.sin(actualEnd);
+        var ix1 = cx + innerR * Math.cos(actualEnd);
+        var iy1 = cy + innerR * Math.sin(actualEnd);
+        var ix2 = cx + innerR * Math.cos(startAngle);
+        var iy2 = cy + innerR * Math.sin(startAngle);
+
+        return [
+            'M ' + ox1 + ' ' + oy1,
+            'A ' + outerR + ' ' + outerR + ' 0 ' + largeArc + ' 1 ' + ox2 + ' ' + oy2,
+            'L ' + ix1 + ' ' + iy1,
+            'A ' + innerR + ' ' + innerR + ' 0 ' + largeArc + ' 0 ' + ix2 + ' ' + iy2,
+            'Z',
+        ].join(' ');
+    }
+
+    /** Render the donut SVG */
+    function renderDonut() {
+        if (!donutSvg) return;
+
+        var cx = DONUT_SIZE / 2;
+        var cy = DONUT_SIZE / 2;
+        var gap = 0.03; // gap between segments in radians
+        var html = '';
+
+        // SVG defs for 3D-style effects
+        html += '<defs>';
+        // Drop shadow for depth
+        html += '<filter id="donut-shadow" x="-20%" y="-20%" width="140%" height="140%">';
+        html += '<feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.55"/>';
+        html += '</filter>';
+        // Inner shadow for 3D ring illusion
+        html += '<filter id="donut-inner-shadow" x="-10%" y="-10%" width="120%" height="120%">';
+        html += '<feGaussianBlur in="SourceAlpha" stdDeviation="3" result="shadow"/>';
+        html += '<feOffset dx="0" dy="2" result="shadow-offset"/>';
+        html += '<feComposite in="SourceGraphic" in2="shadow-offset" operator="over"/>';
+        html += '</filter>';
+        // Highlight gradient for 3D ring top-light
+        html += '<linearGradient id="donut-highlight" x1="0" y1="0" x2="0" y2="1">';
+        html += '<stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>';
+        html += '<stop offset="50%" stop-color="rgba(255,255,255,0)"/>';
+        html += '<stop offset="100%" stop-color="rgba(0,0,0,0.12)"/>';
+        html += '</linearGradient>';
+        html += '</defs>';
+
+        // Background track ring (subtle)
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="rgba(88,166,255,0.04)" stroke-width="' + DONUT_WIDTH + '" />';
+
+        // Outer decorative ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS + 3) + '" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="1" />';
+
+        // Inner decorative ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (INNER_RADIUS - 3) + '" fill="none" stroke="rgba(88,166,255,0.06)" stroke-width="0.5" />';
+
+        if (donutSegments.length === 0) {
+            // Empty state — pulsing gray ring
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="#2d333b" stroke-width="' + DONUT_WIDTH + '" opacity="0.5" />';
+        } else if (donutSegments.length === 1) {
+            var seg = donutSegments[0];
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="' + seg.color + '" stroke-width="' + DONUT_WIDTH + '" class="as-donut-segment" data-as="' + seg.asNumber + '" filter="url(#donut-shadow)" />';
+        } else {
+            var totalGap = gap * donutSegments.length;
+            var available = 2 * Math.PI - totalGap;
+            var angle = -Math.PI / 2; // start at top
+
+            // Group for shadow on all segments
+            html += '<g filter="url(#donut-shadow)">';
+            for (var si = 0; si < donutSegments.length; si++) {
+                var seg = donutSegments[si];
+                var sweep = (seg.peerCount / totalPeers) * available;
+                if (sweep <= 0) continue;
+
+                var startA = angle + gap / 2;
+                var endA = angle + sweep + gap / 2;
+                var d = describeArc(cx, cy, DONUT_RADIUS, INNER_RADIUS, startA, endA);
+
+                var cls = ['as-donut-segment'];
+                if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
+                if (selectedAs === seg.asNumber) cls.push('selected');
+
+                html += '<path d="' + d + '" fill="' + seg.color + '" class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '" />';
+                angle += sweep + gap;
+            }
+            html += '</g>';
+
+            // 3D highlight overlay — a semi-transparent ring on top for depth illusion
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (DONUT_RADIUS - DONUT_WIDTH / 2) + '" fill="none" stroke="url(#donut-highlight)" stroke-width="' + DONUT_WIDTH + '" pointer-events="none" />';
+        }
+
+        donutSvg.innerHTML = html;
+
+        // Hide loading once we have data
+        if (donutSegments.length > 0 && loadingEl) {
+            loadingEl.style.display = 'none';
+            hasRenderedOnce = true;
+        }
+
+        // Attach segment event listeners
+        var segEls = donutSvg.querySelectorAll('.as-donut-segment');
+        for (var i = 0; i < segEls.length; i++) {
+            segEls[i].addEventListener('mouseenter', onSegmentHover);
+            segEls[i].addEventListener('mouseleave', onSegmentLeave);
+            segEls[i].addEventListener('click', onSegmentClick);
+        }
+    }
+
+    /** Get quality rating for a diversity score */
+    function getQuality(score) {
+        if (score >= 8) return { word: 'Excellent', cls: 'q-excellent' };
+        if (score >= 6) return { word: 'Good', cls: 'q-good' };
+        if (score >= 4) return { word: 'Moderate', cls: 'q-moderate' };
+        if (score >= 2) return { word: 'Poor', cls: 'q-poor' };
+        return { word: 'Critical', cls: 'q-critical' };
+    }
+
+    /** Build score tooltip text */
+    function buildScoreTooltip(score) {
+        var q = getQuality(score);
+        return 'Diversity Score: ' + score.toFixed(1) + '/10 (' + q.word + ')\n'
+             + 'Based on Herfindahl\u2013Hirschman Index (HHI)\n'
+             + 'Higher = more evenly distributed peers across providers';
+    }
+
+    /** Update the donut center label.
+     *  Layout: SCORE: heading | big number | quality word | peer count
+     *  When AS selected: peer count heading | AS name | percentage */
+    function renderCenter() {
+        if (!donutCenter) return;
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+        if (!scoreVal || !scoreLbl) return;
+
+        // If an AS is selected, show AS info instead of score
+        if (selectedAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (seg) {
+                var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
+                if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
+
+                if (headingEl) {
+                    headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+                    headingEl.style.color = seg.color;
+                }
+                scoreVal.textContent = displayName;
+                scoreVal.className = 'as-score-value as-selected-mode';
+                scoreVal.style.color = seg.color;
+                scoreVal.title = seg.asNumber + ' \u00b7 ' + (seg.asName || '') + '\n'
+                    + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
+                if (qualityEl) {
+                    qualityEl.textContent = seg.percentage.toFixed(1) + '%';
+                    qualityEl.className = 'as-score-quality';
+                    qualityEl.style.color = seg.color;
+                }
+                scoreLbl.textContent = seg.asNumber;
+                return;
+            }
+        }
+
+        // Reset any selected-mode styling
+        scoreVal.className = 'as-score-value';
+        scoreVal.style.color = '';
+        if (headingEl) {
+            headingEl.style.color = '';
+        }
+        if (qualityEl) {
+            qualityEl.style.color = '';
+        }
+
+        // Edge case: no locatable peers (all private/tor/i2p/cjdns)
+        if (totalPeers === 0) {
+            if (headingEl) headingEl.textContent = '';
+            if (qualityEl) {
+                qualityEl.textContent = '';
+                qualityEl.className = 'as-score-quality q-nodata';
+            }
+            scoreVal.textContent = '\u2014';
+            scoreVal.title = 'No AS data available \u2014 all peers are on private or anonymous networks';
+            scoreLbl.textContent = 'NO DATA';
+            return;
+        }
+
+        // Normal: show diversity score
+        var q = getQuality(diversityScore);
+
+        if (headingEl) {
+            headingEl.textContent = 'SCORE:';
+        }
+
+        scoreVal.textContent = diversityScore.toFixed(1);
+        scoreVal.title = buildScoreTooltip(diversityScore);
+
+        // Remove old score classes and add new
+        scoreVal.classList.remove('as-score-excellent', 'as-score-good', 'as-score-moderate', 'as-score-poor', 'as-score-critical');
+        if (diversityScore >= 8) scoreVal.classList.add('as-score-excellent');
+        else if (diversityScore >= 6) scoreVal.classList.add('as-score-good');
+        else if (diversityScore >= 4) scoreVal.classList.add('as-score-moderate');
+        else if (diversityScore >= 2) scoreVal.classList.add('as-score-poor');
+        else scoreVal.classList.add('as-score-critical');
+
+        if (qualityEl) {
+            qualityEl.textContent = q.word;
+            qualityEl.className = 'as-score-quality ' + q.cls;
+        }
+
+        scoreLbl.textContent = totalPeers + ' (PUBLIC) PEERS';
+    }
+
+    /** Render the legend */
+    function renderLegend() {
+        if (!legendEl) return;
+        var html = '';
+        for (var i = 0; i < donutSegments.length; i++) {
+            var seg = donutSegments[i];
+            var cls = ['as-legend-item'];
+            if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
+            if (selectedAs === seg.asNumber) cls.push('selected');
+
+            var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
+            var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+
+            html += '<div class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '">';
+            html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
+            html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+            html += '<span class="as-legend-count">' + seg.peerCount + '</span>';
+            html += '<span class="as-legend-pct">' + seg.percentage.toFixed(0) + '%</span>';
+            html += '</div>';
+        }
+        legendEl.innerHTML = html;
+
+        // Attach legend event listeners
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var li = 0; li < items.length; li++) {
+            items[li].addEventListener('mouseenter', onSegmentHover);
+            items[li].addEventListener('mouseleave', onSegmentLeave);
+            items[li].addEventListener('click', onSegmentClick);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // HOVER TOOLTIP
+    // ═══════════════════════════════════════════════════════════
+
+    function showTooltip(asNum, event) {
+        if (!tooltipEl) return;
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        if (!seg) return;
+
+        var html = '';
+
+        // Line 1: AS number + org
+        html += '<div class="as-tt-header">';
+        html += '<span class="as-tt-number">' + seg.asNumber + '</span>';
+        if (seg.asName && !seg.isOthers) {
+            html += '<span class="as-tt-sep">&middot;</span>';
+            var name = seg.asName.length > 28 ? seg.asName.substring(0, 27) + '\u2026' : seg.asName;
+            html += '<span class="as-tt-name">' + name + '</span>';
+        }
+        html += '</div>';
+
+        // Line 2: peer count + type
+        var typeLabel = seg.hostingLabel ? ' \u00b7 ' + seg.hostingLabel : '';
+        html += '<div class="as-tt-stats">' + seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '') + ' (' + seg.percentage.toFixed(1) + '%)' + typeLabel + '</div>';
+
+        // Line 3: risk (only if notable)
+        if (seg.riskLevel !== 'low' && seg.riskLabel) {
+            html += '<div class="as-tt-risk as-tt-risk-' + seg.riskLevel + '">\u26a0 ' + seg.riskLabel + '</div>';
+        }
+
+        tooltipEl.innerHTML = html;
+        tooltipEl.classList.remove('hidden');
+
+        // Position near cursor
+        var rect = tooltipEl.getBoundingClientRect();
+        var pad = 12;
+        var x = event.clientX + pad;
+        var y = event.clientY + pad;
+        if (x + rect.width > window.innerWidth - pad) x = event.clientX - rect.width - pad;
+        if (y + rect.height > window.innerHeight - pad) y = event.clientY - rect.height - pad;
+        tooltipEl.style.left = x + 'px';
+        tooltipEl.style.top = y + 'px';
+    }
+
+    function hideTooltip() {
+        if (tooltipEl) tooltipEl.classList.add('hidden');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // DETAIL PANEL — Right slide-in (pushes content)
+    // ═══════════════════════════════════════════════════════════
+
+    function openPanel(asNum) {
+        if (!panelEl) return;
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        if (!seg) return;
+
+        var fullGroup = seg.isOthers ? seg : asGroups.find(function (g) { return g.asNumber === asNum; });
+        if (!fullGroup) return;
+
+        // Build header
+        var asnEl = panelEl.querySelector('.as-detail-asn');
+        var orgEl = panelEl.querySelector('.as-detail-org');
+        var metaEl = panelEl.querySelector('.as-detail-meta');
+        var barFill = panelEl.querySelector('.as-detail-bar-fill');
+        var pctEl = panelEl.querySelector('.as-detail-pct');
+        var riskEl = panelEl.querySelector('.as-detail-risk');
+
+        if (asnEl) asnEl.textContent = seg.isOthers ? 'Others' : seg.asNumber;
+        if (orgEl) orgEl.textContent = seg.isOthers ? seg.asName : (fullGroup.asName || seg.asNumber);
+
+        // Meta badges
+        if (metaEl && !seg.isOthers) {
+            var hosting = fullGroup.hostingLabel || '';
+            var hcls = hosting === 'Cloud/Hosting' ? 'hosting' : (hosting === 'Residential' ? 'residential' : '');
+            metaEl.innerHTML = hosting ? '<span class="as-detail-type-badge ' + hcls + '">' + hosting + '</span>' : '';
+        } else if (metaEl) {
+            metaEl.innerHTML = '';
+        }
+
+        // Percentage bar
+        if (barFill) {
+            barFill.style.width = seg.percentage.toFixed(1) + '%';
+            barFill.style.background = seg.color;
+        }
+        if (pctEl) pctEl.textContent = seg.percentage.toFixed(1) + '% of peers';
+
+        // Risk label
+        if (riskEl) {
+            riskEl.className = 'as-detail-risk';
+            if (seg.riskLevel !== 'low' && seg.riskLabel) {
+                riskEl.classList.add('as-detail-risk-' + seg.riskLevel);
+                riskEl.textContent = seg.riskLabel;
+            } else {
+                riskEl.textContent = '';
+            }
+        }
+
+        // Build body
+        var bodyEl = panelEl.querySelector('.as-detail-body');
+        if (!bodyEl) return;
+
+        var html = '';
+
+        if (seg.isOthers) {
+            html += '<div class="modal-section-title">Summary</div>';
+            html += row('Total Peers', seg.peerCount);
+            html += row('Providers', seg._othersGroups ? seg._othersGroups.length : '?');
+            html += row('Share', seg.percentage.toFixed(1) + '%');
+
+            if (seg._othersGroups && seg._othersGroups.length > 0) {
+                html += '<div class="modal-section-title">All Providers</div>';
+                for (var i = 0; i < seg._othersGroups.length; i++) {
+                    var g = seg._othersGroups[i];
+                    var gName = g.asShort || g.asName || g.asNumber;
+                    if (gName.length > 24) gName = gName.substring(0, 23) + '\u2026';
+                    html += subRow(g.asNumber + ' \u00b7 ' + gName, g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : ''));
+                }
+            }
+        } else {
+            html += '<div class="modal-section-title">Peers</div>';
+            html += row('Total', fullGroup.peerCount);
+            html += row('Inbound', fullGroup.inboundCount);
+            html += row('Outbound', fullGroup.outboundCount);
+            if (fullGroup.connTypes) {
+                var typeLabels = {
+                    'outbound-full-relay': 'Full Relay',
+                    'block-relay-only': 'Block-Only',
+                    'inbound': 'Inbound',
+                    'manual': 'Manual',
+                    'addr-fetch': 'Addr Fetch',
+                    'feeler': 'Feeler',
+                };
+                for (var t in fullGroup.connTypes) {
+                    if (fullGroup.connTypes.hasOwnProperty(t)) {
+                        html += row(typeLabels[t] || t, fullGroup.connTypes[t]);
+                    }
+                }
+            }
+
+            html += '<div class="modal-section-title">Performance</div>';
+            html += row('Avg Duration', fullGroup.avgDurationFmt);
+            html += row('Avg Ping', fullGroup.avgPingMs > 0 ? Math.round(fullGroup.avgPingMs) + 'ms' : '\u2014');
+            html += row('Data Sent', fullGroup.totalBytesSentFmt);
+            html += row('Data Recv', fullGroup.totalBytesRecvFmt);
+
+            if (fullGroup.versions && fullGroup.versions.length > 0) {
+                html += '<div class="modal-section-title">Software</div>';
+                for (var vi = 0; vi < fullGroup.versions.length; vi++) {
+                    html += subRow(fullGroup.versions[vi].subver, fullGroup.versions[vi].count + ' peer' + (fullGroup.versions[vi].count !== 1 ? 's' : ''));
+                }
+            }
+
+            if (fullGroup.countries && fullGroup.countries.length > 0) {
+                html += '<div class="modal-section-title">Countries</div>';
+                for (var ci = 0; ci < fullGroup.countries.length; ci++) {
+                    html += subRow(fullGroup.countries[ci].code + '  ' + fullGroup.countries[ci].name, fullGroup.countries[ci].count);
+                }
+            }
+
+            if (fullGroup.servicesCombos && fullGroup.servicesCombos.length > 0) {
+                html += '<div class="modal-section-title">Services</div>';
+                for (var si = 0; si < fullGroup.servicesCombos.length; si++) {
+                    html += subRow(fullGroup.servicesCombos[si].abbrev, fullGroup.servicesCombos[si].count + ' peer' + (fullGroup.servicesCombos[si].count !== 1 ? 's' : ''));
+                }
+            }
+        }
+
+        bodyEl.innerHTML = html;
+
+        // Show panel with animation + push content
+        panelEl.classList.remove('hidden');
+        void panelEl.offsetWidth;
+        panelEl.classList.add('visible');
+        document.body.classList.add('as-panel-open');
+        // Bring AS panel to front
+        document.body.classList.add('panel-focus-as');
+        document.body.classList.remove('panel-focus-peers');
+    }
+
+    function closePanel() {
+        if (!panelEl) return;
+        panelEl.classList.remove('visible');
+        document.body.classList.remove('as-panel-open');
+        document.body.classList.remove('panel-focus-as');
+        setTimeout(function () {
+            if (!panelEl.classList.contains('visible')) {
+                panelEl.classList.add('hidden');
+            }
+        }, 310);
+    }
+
+    function row(label, value) {
+        return '<div class="modal-row"><span class="modal-label">' + label + '</span><span class="modal-val">' + value + '</span></div>';
+    }
+
+    function subRow(label, value) {
+        return '<div class="as-detail-sub-row"><span class="as-detail-sub-label">' + label + '</span><span class="as-detail-sub-val">' + value + '</span></div>';
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // EVENT HANDLERS
+    // ═══════════════════════════════════════════════════════════
+
+    function onSegmentHover(e) {
+        var asNum = e.currentTarget.dataset.as;
+        if (!asNum) return;
+        hoveredAs = asNum;
+        showTooltip(asNum, e);
+
+        // Only draw hover lines if nothing is selected
+        if (!selectedAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+            if (seg && _drawLinesForAs) {
+                _drawLinesForAs(asNum, seg.peerIds, seg.color);
+            }
+        }
+    }
+
+    function onSegmentLeave() {
+        hoveredAs = null;
+        hideTooltip();
+
+        // ONLY clear lines if nothing is selected — selection keeps its lines
+        if (!selectedAs) {
+            if (_clearAsLines) _clearAsLines();
+        }
+    }
+
+    function onSegmentClick(e) {
+        var asNum = e.currentTarget.dataset.as;
+        if (!asNum) return;
+
+        if (selectedAs === asNum) {
+            // Deselect
+            deselect();
+        } else {
+            // Select this AS
+            selectedAs = asNum;
+            var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+            if (seg) {
+                openPanel(asNum);
+                if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                if (_drawLinesForAs) _drawLinesForAs(asNum, seg.peerIds, seg.color);
+            }
+            // Keep legend visible while selected
+            if (containerEl) containerEl.classList.add('as-legend-visible');
+            renderDonut();
+            renderCenter();
+            renderLegend();
+        }
+    }
+
+    function deselect() {
+        selectedAs = null;
+        closePanel();
+        if (containerEl) containerEl.classList.remove('as-legend-visible');
+        if (_filterPeerTable) _filterPeerTable(null);
+        if (_dimMapPeers) _dimMapPeers(null);
+        if (_clearAsLines) _clearAsLines();
+        renderDonut();
+        renderCenter();
+        renderLegend();
+    }
+
+    function onKeyDown(e) {
+        if (e.key === 'Escape' && selectedAs) {
+            deselect();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PUBLIC API — Called by bitapp.js
+    // ═══════════════════════════════════════════════════════════
+
+    /** Initialize — cache DOM refs and attach events. Call once on page load. */
+    function init() {
+        containerEl = document.getElementById('as-diversity-container');
+        donutWrapEl = document.getElementById('as-donut-wrap');
+        donutSvg = document.getElementById('as-donut');
+        donutCenter = document.getElementById('as-donut-center');
+        legendEl = document.getElementById('as-legend');
+        tooltipEl = document.getElementById('as-tooltip');
+        panelEl = document.getElementById('as-detail-panel');
+        loadingEl = containerEl ? containerEl.querySelector('.as-loading') : null;
+
+        // Close button on detail panel
+        var closeBtn = panelEl ? panelEl.querySelector('.as-detail-close') : null;
+        if (closeBtn) {
+            closeBtn.addEventListener('click', deselect);
+        }
+
+        // Clicking the AS detail panel brings it to front
+        if (panelEl) {
+            panelEl.addEventListener('click', function () {
+                document.body.classList.add('panel-focus-as');
+                document.body.classList.remove('panel-focus-peers');
+            });
+        }
+
+        // Escape key
+        document.addEventListener('keydown', onKeyDown);
+
+        // Always active — show immediately
+        isActive = true;
+    }
+
+    /** Register integration callbacks from bitapp.js */
+    function setHooks(hooks) {
+        _drawLinesForAs = hooks.drawLinesForAs || null;
+        _clearAsLines = hooks.clearAsLines || null;
+        _filterPeerTable = hooks.filterPeerTable || null;
+        _dimMapPeers = hooks.dimMapPeers || null;
+        _getWorldToScreen = hooks.getWorldToScreen || null;
+    }
+
+    /** Update with new peer data. Called after each fetchPeers(). */
+    function update(peers) {
+        if (!isActive) return;
+
+        // Check if >10% of peers are still being geolocated
+        var pendingCount = 0;
+        for (var pi = 0; pi < peers.length; pi++) {
+            if (peers[pi].location_status === 'pending') pendingCount++;
+        }
+        var pendingPct = peers.length > 0 ? (pendingCount / peers.length) * 100 : 0;
+        var isGeoLoading = pendingPct > 10;
+
+        // Show/hide the loading overlay
+        if (loadingEl) {
+            if (isGeoLoading) {
+                loadingEl.textContent = 'Locating ' + pendingCount + ' peer' + (pendingCount !== 1 ? 's' : '') + '\u2026';
+                loadingEl.style.display = '';
+            } else if (hasRenderedOnce) {
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        asGroups = aggregatePeers(peers);
+        diversityScore = calcDiversityScore(asGroups);
+        donutSegments = buildDonutSegments(asGroups);
+
+        // Toggle no-data state on the container
+        if (containerEl) {
+            if (totalPeers === 0 && !isGeoLoading) containerEl.classList.add('no-data');
+            else containerEl.classList.remove('no-data');
+        }
+
+        renderDonut();
+        renderCenter();
+        renderLegend();
+
+        // If a selection is active, refresh the panel + filter + keep lines
+        if (selectedAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (seg) {
+                openPanel(selectedAs);
+                if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
+            } else {
+                deselect();
+            }
+        }
+    }
+
+    /** Activate the AS Diversity view (always active now, kept for API compat) */
+    function activate() {
+        isActive = true;
+    }
+
+    /** Deactivate the AS Diversity view */
+    function deactivate() {
+        isActive = false;
+        deselect();
+        hideTooltip();
+    }
+
+    /** Returns true if this view is currently active */
+    function isViewActive() {
+        return isActive;
+    }
+
+    /** Get the donut center screen position for line drawing */
+    function getDonutCenter() {
+        if (!donutWrapEl) return null;
+        var rect = donutWrapEl.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+
+    /** Get the screen position of a legend dot for a specific AS number.
+     *  Returns {x, y} in page coords, or null if not found / legend not visible. */
+    function getLegendDotPosition(asNum) {
+        if (!legendEl) return null;
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].dataset.as === asNum) {
+                var dot = items[i].querySelector('.as-legend-dot');
+                if (dot) {
+                    var rect = dot.getBoundingClientRect();
+                    // Check if actually visible (legend might be hidden)
+                    if (rect.width === 0 && rect.height === 0) return null;
+                    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Get the currently selected AS number */
+    function getSelectedAs() {
+        return selectedAs;
+    }
+
+    /** Get the currently hovered AS number */
+    function getHoveredAs() {
+        return hoveredAs;
+    }
+
+    /** Get peer IDs for a given AS number */
+    function getPeerIdsForAs(asNum) {
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        return seg ? seg.peerIds : [];
+    }
+
+    /** Get the color for a given AS number */
+    function getColorForAs(asNum) {
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        return seg ? seg.color : null;
+    }
+
+    /** Get all segments (for canvas integration) */
+    function getSegments() {
+        return donutSegments;
+    }
+
+    return {
+        init: init,
+        setHooks: setHooks,
+        update: update,
+        activate: activate,
+        deactivate: deactivate,
+        deselect: deselect,
+        isViewActive: isViewActive,
+        getDonutCenter: getDonutCenter,
+        getLegendDotPosition: getLegendDotPosition,
+        getHoveredAs: getHoveredAs,
+        getSelectedAs: getSelectedAs,
+        getPeerIdsForAs: getPeerIdsForAs,
+        getColorForAs: getColorForAs,
+        getSegments: getSegments,
+    };
+})();

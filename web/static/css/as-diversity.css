@@ -1,0 +1,616 @@
+/* ============================================================
+   AS Diversity Analysis — Stylesheet
+   Isolated CSS for the AS Diversity view.
+   Delete this file to fully revert the feature.
+   ============================================================ */
+
+/* ==========================================================
+   1. REMOVED — View toggle no longer needed (donut always visible)
+   ========================================================== */
+.as-view-toggle { display: none; }
+
+/* ==========================================================
+   2. AS DIVERSITY CONTAINER — Upper-right corner of map
+   ========================================================== */
+.as-diversity-container {
+    position: fixed;
+    top: 52px;
+    right: 14px;
+    z-index: 85;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.88;
+    transition: opacity 0.3s ease, right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.as-diversity-container:hover {
+    opacity: 1;
+}
+
+/* ==========================================================
+   2b. DONUT TITLE — "SERVICE PROVIDER" / "Diversity" above donut
+   ========================================================== */
+.as-donut-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    text-align: center;
+    pointer-events: auto;
+    cursor: default;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    margin-bottom: -6px;
+    line-height: 1.1;
+}
+.as-title-provider {
+    color: var(--logo-primary);
+}
+.as-title-diversity {
+    color: var(--logo-accent);
+    font-size: 14px;
+    letter-spacing: 2px;
+}
+
+/* ==========================================================
+   3. DONUT CHART — SVG ring + center label (260px, 3D look)
+   ========================================================== */
+.as-donut-wrap {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    flex-shrink: 0;
+    pointer-events: auto;
+    /* 3D depth effect */
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)) drop-shadow(0 1px 3px rgba(0,0,0,0.3));
+}
+.as-donut {
+    width: 260px;
+    height: 260px;
+}
+.as-donut-segment {
+    cursor: pointer;
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+.as-donut-segment:hover {
+    filter: brightness(1.3) saturate(1.15);
+}
+.as-donut-segment.dimmed {
+    opacity: 0.2;
+    filter: saturate(0.4);
+}
+.as-donut-segment.selected {
+    filter: brightness(1.25) saturate(1.2);
+}
+
+/* Center overlay inside the donut hole */
+.as-donut-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: auto;
+    cursor: default;
+}
+/* "SCORE:" heading above the number */
+.as-score-heading {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+/* The big score number */
+.as-score-value {
+    font-family: var(--font-data);
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.05;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+}
+/* Quality word BELOW the score (Excellent / Good / etc.) */
+.as-score-quality {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    line-height: 1.2;
+    margin-top: 1px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    min-height: 14px;
+}
+.as-score-quality.q-excellent { color: var(--ok); }
+.as-score-quality.q-good      { color: var(--ok-bright); }
+.as-score-quality.q-moderate  { color: var(--warn); }
+.as-score-quality.q-poor      { color: var(--err); }
+.as-score-quality.q-critical  { color: var(--err-bright); }
+.as-score-quality.q-nodata    { color: var(--text-dim); }
+/* Peer count label */
+.as-score-label {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-top: 1px;
+}
+/* Selected AS state — show AS name/count inside donut */
+.as-score-value.as-selected-mode {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Score color classes */
+.as-score-excellent { color: var(--ok); }
+.as-score-good      { color: var(--ok-bright); }
+.as-score-moderate  { color: var(--warn); }
+.as-score-poor      { color: var(--err); }
+.as-score-critical  { color: var(--err-bright); }
+
+/* No-data greyed state */
+.as-diversity-container.no-data .as-donut-wrap {
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)) saturate(0.3);
+    opacity: 0.6;
+}
+.as-diversity-container.no-data .as-donut-title {
+    color: var(--text-dim);
+}
+
+/* Loading state */
+.as-loading {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    animation: as-pulse 1.5s ease-in-out infinite;
+}
+@keyframes as-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+/* Update pulse ring animation */
+@keyframes as-ring-pulse {
+    0% { opacity: 0.6; r: inherit; }
+    100% { opacity: 0; r: calc(inherit + 8px); }
+}
+
+/* ==========================================================
+   4. LEGEND — Compact AS labels below the donut
+   ========================================================== */
+.as-legend {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: auto;
+    width: 260px;
+    max-height: 260px;
+    overflow-y: auto;
+    /* Hidden by default, revealed on hover or selection */
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+/* Show legend when hovering the donut area */
+.as-diversity-container:hover .as-legend,
+.as-diversity-container.as-legend-visible .as-legend {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.as-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: background var(--transition);
+    white-space: nowrap;
+    width: auto;
+    max-width: 100%;
+}
+.as-legend-item:hover {
+    background: rgba(88, 166, 255, 0.1);
+}
+.as-legend-item.dimmed {
+    opacity: 0.25;
+}
+.as-legend-item.selected {
+    background: rgba(88, 166, 255, 0.14);
+    border-left: 2px solid var(--accent);
+    padding-left: 4px;
+}
+.as-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+.as-legend-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    flex: 1;
+}
+.as-legend-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 16px;
+    text-align: right;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+.as-legend-pct {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    min-width: 26px;
+    text-align: right;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ==========================================================
+   5. HOVER TOOLTIP — Compact 3-line AS info
+   ========================================================== */
+.as-tooltip {
+    position: fixed;
+    z-index: 310;
+    background: var(--bg-surface);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    max-width: 280px;
+    white-space: nowrap;
+}
+.as-tooltip.hidden { display: none; }
+
+.as-tt-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+.as-tt-number {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+}
+.as-tt-sep {
+    color: var(--text-dim);
+    font-size: 10px;
+}
+.as-tt-name {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.as-tt-stats {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+.as-tt-risk {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+}
+.as-tt-risk-low      { color: var(--ok); }
+.as-tt-risk-moderate { color: var(--warn); }
+.as-tt-risk-high     { color: var(--err); }
+.as-tt-risk-critical { color: var(--err-bright); }
+
+/* ==========================================================
+   6. DETAIL PANEL — Slide-in from right, PUSHES content
+   ========================================================== */
+.as-detail-panel {
+    position: fixed;
+    top: 46px;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    z-index: 260;
+    background: var(--bg-surface);
+    border-left: 1px solid rgba(88, 166, 255, 0.15);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.as-detail-panel.visible {
+    transform: translateX(0);
+}
+.as-detail-panel.hidden {
+    display: none;
+}
+
+/* --- Z-index stacking: whichever panel was last clicked goes on top --- */
+body.panel-focus-peers .peer-panel { z-index: 270; }
+body.panel-focus-as .as-detail-panel { z-index: 270; }
+body.panel-focus-as .peer-panel { z-index: 80; }
+
+/* --- Push effect: when detail panel is open, shift the donut and map elements --- */
+body.as-panel-open .as-diversity-container {
+    right: 334px;
+}
+body.as-panel-open #worldmap {
+    right: 320px;
+}
+body.as-panel-open .peer-panel {
+    right: 320px;
+}
+body.as-panel-open .footer {
+    right: 320px;
+}
+
+/* Panel header */
+.as-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.as-detail-header-info {
+    flex: 1;
+    min-width: 0;
+}
+.as-detail-asn {
+    font-family: var(--font-data);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 2px;
+}
+.as-detail-org {
+    font-family: var(--font-data);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+.as-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.as-detail-type-badge {
+    font-family: var(--font-data);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(88, 166, 255, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid rgba(88, 166, 255, 0.15);
+}
+.as-detail-type-badge.hosting {
+    color: var(--warn);
+    background: rgba(210, 153, 34, 0.1);
+    border-color: rgba(210, 153, 34, 0.25);
+}
+.as-detail-type-badge.residential {
+    color: var(--ok);
+    background: rgba(63, 185, 80, 0.1);
+    border-color: rgba(63, 185, 80, 0.25);
+}
+.as-detail-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color var(--transition);
+    flex-shrink: 0;
+}
+.as-detail-close:hover { color: var(--text-primary); }
+
+/* Concentration bar in header */
+.as-detail-bar-wrap { margin-top: 8px; }
+.as-detail-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: rgba(88, 166, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.as-detail-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+.as-detail-bar-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 3px;
+}
+.as-detail-pct {
+    font-family: var(--font-data);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.as-detail-risk {
+    font-family: var(--font-data);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.as-detail-risk-low      { color: var(--ok); }
+.as-detail-risk-moderate { color: var(--warn); }
+.as-detail-risk-high     { color: var(--err); }
+.as-detail-risk-critical { color: var(--err-bright); }
+
+/* Scrollable body */
+.as-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px 16px;
+}
+
+/* Section titles — reuse modal pattern */
+.as-detail-body .modal-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--section-color);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(88, 166, 255, 0.06);
+}
+.as-detail-body .modal-section-title:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Info rows — reuse modal pattern */
+.as-detail-body .modal-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    gap: 12px;
+    font-size: 12px;
+}
+.as-detail-body .modal-label {
+    color: var(--text-secondary);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+.as-detail-body .modal-val {
+    color: var(--text-primary);
+    font-weight: 500;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-data);
+    font-size: 11px;
+}
+
+/* Sub-items in detail panel */
+.as-detail-sub-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0 2px 8px;
+    gap: 8px;
+    font-size: 11px;
+}
+.as-detail-sub-label {
+    color: var(--text-secondary);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.as-detail-sub-val {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* ==========================================================
+   7. HUD SOLID BACKGROUND SUPPORT
+   ========================================================== */
+body.hud-solid .as-diversity-container {
+    background: rgba(var(--surface-overlay-rgb), 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+/* ==========================================================
+   8. LIGHT THEME ADJUSTMENTS
+   ========================================================== */
+body.theme-light .as-tt-number,
+body.theme-light .as-detail-asn { text-shadow: none; }
+body.theme-light .as-legend-name,
+body.theme-light .as-legend-count,
+body.theme-light .as-legend-pct,
+body.theme-light .as-score-value,
+body.theme-light .as-score-label,
+body.theme-light .as-score-quality,
+body.theme-light .as-donut-title { text-shadow: none; }
+body.theme-light .as-detail-panel { border-left-color: rgba(88, 166, 255, 0.25); }
+body.theme-light .as-tooltip { border-color: rgba(88, 166, 255, 0.25); }
+body.theme-light .as-loading { color: var(--text-secondary); }
+
+/* ==========================================================
+   9. DETAIL PANEL SCROLLBAR
+   ========================================================== */
+.as-detail-body::-webkit-scrollbar { width: 6px; }
+.as-detail-body::-webkit-scrollbar-track { background: transparent; }
+.as-detail-body::-webkit-scrollbar-thumb {
+    background: rgba(88, 166, 255, 0.15);
+    border-radius: 3px;
+}
+.as-detail-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(88, 166, 255, 0.3);
+}
+
+/* Legend scrollbar */
+.as-legend::-webkit-scrollbar { width: 4px; }
+.as-legend::-webkit-scrollbar-track { background: transparent; }
+.as-legend::-webkit-scrollbar-thumb {
+    background: rgba(88, 166, 255, 0.12);
+    border-radius: 2px;
+}
