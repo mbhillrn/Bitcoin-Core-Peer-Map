@@ -88,7 +88,7 @@
         pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
         pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
         // AS Diversity line settings
-        asLineWidth:     50,         // slider 0-100, 50 = 1.2px (default)
+        asLineWidth:     30,         // slider 0-100, 30 = ~1.4px (default — subtle but visible)
         asLineFan:       50,         // slider 0-100, 50 = 35% spread (default)
         // Land appearance
         landHue:        215,         // hue degrees (current dark blue-gray)

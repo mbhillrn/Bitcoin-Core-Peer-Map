@@ -185,20 +185,73 @@ git checkout main -- web/static/js/bitapp.js
 - [x] Panel z-index stacking: peer panel / AS panel — last-clicked goes on top
 - [x] Peer panel click (expand or body) → peers on top; AS panel click → AS on top
 
+### Phase 2c — Advanced Display + Final Polish (COMPLETE)
+- [x] Title renamed "SERVICE PROVIDER" / "Diversity" (from "Peer Provider")
+- [x] Title spacing tightened: container gap 0, margin-bottom -6px, line-height 1.1
+- [x] Advanced Display: new "Service Provider Diversity" section (below Theme, above Peer Effects)
+- [x] Line Thickness slider (0-100, maps 0.3-4px, default=30)
+- [x] Line Fanning slider (0-100, controls curve spread 0-70%, default=50)
+- [x] Both sliders saved/restored with Permanent Save, reset with Reset
+- [x] Footer: added Session Save button (blue, closes panel after feedback) alongside Reset + Permanent Save
+- [x] Light theme confirmed still looks good
+
 ### Phase 3 — Polish (if time permits)
 - [ ] Dropdown in donut center for searching all ASes
 - [ ] Smooth segment transitions when peer data updates
 - [ ] Keyboard navigation (arrow keys through segments)
-- [ ] Analysis settings section in map settings (ring pulse, etc.)
 - [ ] Mobile-friendly adjustments (if ever needed)
 - [ ] Multi-peer dot click: show list of all peers at that location
 
-### TODO — Repo & Documentation
-- [ ] **Repo topics:** Add AS-related topics (e.g., `autonomous-system`, `as-diversity`, `network-security`, `peer-analysis`). Consider removing some to stay under limit — candidates to drop: `cjdns` (niche), `geoip` (redundant with `geolocation`), `fastapi` (implementation detail). Suggested final set: `python linux real-time canvas dashboard bitcoin geolocation tor cryptocurrency network-visualization i2p world-map bitcoin-core bitcoin-node bitcoin-cli node-monitoring bitcoin-peers autonomous-system peer-analysis as-diversity`
-- [ ] **Repo About description:** Rewrite to include AS diversity, e.g.: "Real-time Bitcoin Core dashboard with a live geolocated peer map, AS provider diversity analysis, system auto-detection, mempool statistics, and peer management tools. Visualizes autonomous system concentration, connects/disconnects/bans peers directly. Peer locations derived from a maintained database and free IP geolocation APIs. Runs locally with zero configuration."
-- [ ] **README rewrite:** The entire README needs to be redone — the map looks completely different now. New hero images/screenshots needed showing: dark theme donut + map, light theme donut + map, AS detail panel open with lines, selected AS with filtered peer list. All feature descriptions need updating.
-- [ ] **Light theme audit:** Test how the AS donut, lines, legend, detail panel, and title look with the light dashboard theme. May need color/shadow/opacity adjustments for readability on light backgrounds.
-- [ ] **New hero images:** Screenshot dark theme, light theme, AS selected state, line fanning, detail panel — for README and repo social preview
+---
+
+## TODO — Repo & Documentation (README, Topics, About, PR)
+
+### Repo Topics
+**Current:** `python linux real-time canvas dashboard bitcoin geolocation tor cryptocurrency cjdns geoip network-visualization i2p world-map bitcoin-core bitcoin-node bitcoin-cli fastapi node-monitoring bitcoin-peers`
+
+**Candidates to remove (making room for new ones):**
+- `cjdns` — very niche, few people search for this
+- `geoip` — redundant with `geolocation`
+- `fastapi` — implementation detail, not a feature users search for
+
+**New topics to add:**
+- `network-security` — broad, highly searchable, describes the diversity analysis angle
+- `peer-diversity` — descriptive of the new feature, human-readable
+- `autonomous-system` — technical but correct, for people who know what they're looking for
+- `isp-analysis` — bridges the gap between technical jargon and what people understand ("is my node too dependent on one ISP?")
+
+**Proposed final set (20 topics):**
+`python linux real-time canvas dashboard bitcoin geolocation tor cryptocurrency network-visualization i2p world-map bitcoin-core bitcoin-node bitcoin-cli node-monitoring bitcoin-peers network-security peer-diversity autonomous-system`
+
+### Repo About Description
+**Current:** "Real-time Bitcoin Core dashboard with a live geolocated peer map, GUI, system auto-detection, mempool statistics, and peer management tools. Connects, disconnects, and bans peers directly. Peer locations derived from a maintained database and free IP geolocation APIs. Runs locally with zero configuration."
+
+**Proposed rewrite (emphasize diversity + plain language):**
+"Real-time Bitcoin Core dashboard with a live geolocated peer map, service provider diversity analysis, and full peer management. Visualizes how your peers are distributed across internet service providers and hosting companies to identify single points of failure. Connects, disconnects, and bans peers directly. Features dark and light themes, mempool statistics, and system auto-detection. Peer locations from a maintained database and free geolocation APIs. Zero configuration."
+
+### README Rewrite Plan
+The README needs a complete overhaul. The map looks totally different now. Key sections:
+
+1. **Hero section** — New screenshot(s) showing the full dashboard with donut, lines, dark theme
+2. **What is this?** — One-paragraph plain-English explanation. Mention: peer map, service provider diversity donut, peer management, mempool stats. Avoid unexplained jargon.
+3. **Features list** — Organized by category:
+   - **Peer Map:** Real-time geolocated canvas map, pan/zoom, network filters, peer tooltips
+   - **Service Provider Diversity:** Donut chart showing AS distribution, diversity score (0-10), concentration risk per provider, interactive detail panel with per-provider stats (peers, ping, traffic, software versions, countries), animated lines from donut to peers on map
+   - **Peer Management:** Connect/disconnect/ban peers, peer table with sorting/filtering, ban list management
+   - **System Monitoring:** CPU/RAM, mempool stats, block height, BTC price, network status
+   - **Customization:** Dark/light/custom themes, advanced display (land/ocean/border colors, peer effects, line thickness/fanning), map settings (update frequency, visibility toggles, peer row limits)
+4. **Screenshots** — Multiple: dark theme overview, light theme, AS selected with lines, detail panel, peer table, advanced display panel
+5. **Quick Start** — Installation/run instructions (existing content, just refreshed)
+6. **How It Works** — Brief technical explanation: Bitcoin Core RPC, geolocation pipeline, AS aggregation client-side, canvas rendering
+7. **Configuration** — Environment vars, CLI flags if any
+8. **Tech Stack** — Python/FastAPI backend, vanilla JS/Canvas frontend, SQLite geo cache, ip-api.com
+
+### PR Description Notes
+When this branch is merged, the PR should cover:
+- **Summary:** Added service provider diversity analysis — a donut chart showing how peers are distributed across autonomous systems (ISPs/hosting providers), with a diversity score, concentration risk warnings, interactive detail panel, and animated map lines
+- **What changed:** New files (as-diversity.js, as-diversity.css), modified topbar/peer panel layout, new Advanced Display sliders, Map Settings overhaul, panel z-stacking
+- **Screenshots:** Dark theme, light theme, AS selected, detail panel, advanced display
+- **Testing notes:** Works with 0 peers (no-data state), private-only peers (grey state), loading state (>10% pending geo), all themes, panel overlap behavior
 
 ---
 
