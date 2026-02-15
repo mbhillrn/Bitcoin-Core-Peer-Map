@@ -152,19 +152,32 @@ git checkout main -- web/static/js/bitapp.js
 - [x] Internet/Running dots: just dots, hover for info
 - [x] Gear icon in topbar → opens advanced display settings
 
-### Phase 2 — UX Refinements (IN PROGRESS)
+### Phase 2 — UX Refinements (COMPLETE)
 - [x] Fix gear icon → wire to primary Map Settings popup, not advanced display
 - [x] Fix tooltip z-index (was behind detail panel, bumped to 300+)
 - [x] Center legend under donut
 - [x] Add "Provider Diversity" title above donut with hover tooltip ("Autonomous System Provider Diversity Analysis")
 - [x] Add score hover tooltip explaining what the number means
-- [x] Add color-coded quality word ABOVE the score (Excellent/Good/Moderate/Poor/Critical)
+- [x] Add color-coded quality word BELOW the score (Excellent/Good/Moderate/Poor/Critical)
 - [x] Edge case: grey out donut when only private network peers (no AS data)
 - [x] Donut center updates when AS selected (shows AS name + count + pct)
 - [x] Click empty map space → deselect AS, close panel, clear filters
-- [x] Fan out lines to co-located peers + jitter dots at same lat/lon
+- [x] Fan out lines to co-located peers (curved paths, dots stay in place)
 - [x] Rework network filter badges to radio-then-additive model
-- [x] Add visibility toggle buttons near logo (toggle Diversity, BTC Price, System Stats)
+- [x] Visibility toggles moved to gear settings (Diversity/Price/Stats)
+
+### Phase 2b — Visual & Settings Polish (COMPLETE)
+- [x] Donut title redesign: "PROVIDER" (logo-primary) + "DIVERSITY" (logo-accent), 16px font
+- [x] Score layout: SCORE: heading → big number (42px) → quality word → peer count
+- [x] Selected AS center: peer count heading → AS name (18px) → pct → AS number
+- [x] Bump all font sizes: legend 11px, quality 11px, labels 10px
+- [x] Remove endpoint dot jitter from fanning, lines converge on same dot
+- [x] Line fan spread proportional to distance (up to 25% of line length, max 60px)
+- [x] Loading state: "Locating N peers..." when >10% peers still geolocating
+- [x] Close AS detail panel when clicking peer list handle
+- [x] Peer list visible rows setting in Map Settings popup
+- [x] Defunct Show/Hide items replaced with Diversity Score, Bitcoin Price, System Stats
+- [x] Display Settings popup title → "Map Settings"
 
 ### Phase 3 — Polish (if time permits)
 - [ ] Dropdown in donut center for searching all ASes

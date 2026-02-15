@@ -31,20 +31,25 @@
 }
 
 /* ==========================================================
-   2b. DONUT TITLE — "Provider Diversity" above the donut
+   2b. DONUT TITLE — "PROVIDER DIVERSITY" above the donut
    ========================================================== */
 .as-donut-title {
-    font-family: var(--font-data);
-    font-size: 11px;
+    font-family: var(--font-display);
+    font-size: 16px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: var(--text-secondary);
+    letter-spacing: 1.5px;
     text-align: center;
     pointer-events: auto;
     cursor: default;
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
-    margin-bottom: 2px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    margin-bottom: 0;
+}
+.as-title-provider {
+    color: var(--logo-primary);
+}
+.as-title-diversity {
+    color: var(--logo-accent);
 }
 
 /* ==========================================================
@@ -88,17 +93,38 @@
     pointer-events: auto;
     cursor: default;
 }
-/* Quality word ABOVE the score (Excellent / Good / etc.) */
+/* "SCORE:" heading above the number */
+.as-score-heading {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+/* The big score number */
+.as-score-value {
+    font-family: var(--font-data);
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.05;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+}
+/* Quality word BELOW the score (Excellent / Good / etc.) */
 .as-score-quality {
     font-family: var(--font-data);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
     line-height: 1.2;
-    margin-bottom: 1px;
+    margin-top: 1px;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-    min-height: 12px;
+    min-height: 14px;
 }
 .as-score-quality.q-excellent { color: var(--ok); }
 .as-score-quality.q-good      { color: var(--ok-bright); }
@@ -106,33 +132,26 @@
 .as-score-quality.q-poor      { color: var(--err); }
 .as-score-quality.q-critical  { color: var(--err-bright); }
 .as-score-quality.q-nodata    { color: var(--text-dim); }
-.as-score-value {
-    font-family: var(--font-data);
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1.1;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
-}
-/* Selected AS state — show AS name/count inside donut */
-.as-score-value.as-selected-mode {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.3;
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+/* Peer count label */
 .as-score-label {
     font-family: var(--font-data);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 600;
     letter-spacing: 1.4px;
     text-transform: uppercase;
     color: var(--text-muted);
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-    margin-top: 2px;
+    margin-top: 1px;
+}
+/* Selected AS state — show AS name/count inside donut */
+.as-score-value.as-selected-mode {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Score color classes */
@@ -217,17 +236,17 @@
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 .as-legend-name {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    max-width: 130px;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
     flex: 1;
 }
 .as-legend-count {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-primary);
     min-width: 16px;
@@ -235,7 +254,7 @@
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 .as-legend-pct {
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 500;
     color: var(--text-muted);
     min-width: 26px;

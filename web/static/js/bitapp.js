@@ -2903,39 +2903,22 @@
         ctx.lineWidth = 1.2;
         ctx.strokeStyle = asLineColor;
 
-        // Fan offset in pixels for co-located peers
-        const FAN_SPREAD = 18;
-
         for (const g of groups) {
             const count = g.items.length;
+            // All lines converge on the same dot position (no dot displacement)
+            const destX = g.cx;
+            const destY = g.cy;
+
             for (let i = 0; i < count; i++) {
                 const r = g.items[i];
-
-                // Calculate fan offset if multiple peers at same location
-                let destX = r.sx;
-                let destY = r.sy;
-                if (count > 1) {
-                    // Fan perpendicular to the line from origin
-                    const dx = r.sx - originX;
-                    const dy = r.sy - originY;
-                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                    // Perpendicular unit vector
-                    const perpX = -dy / len;
-                    const perpY = dx / len;
-                    // Spread factor: center the fan
-                    const t = (i - (count - 1) / 2) * (FAN_SPREAD / Math.max(1, count - 1));
-                    destX += perpX * t;
-                    destY += perpY * t;
-                }
-
                 const dist = r.dist;
                 const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
                 ctx.globalAlpha = alpha;
                 ctx.beginPath();
                 ctx.moveTo(originX, originY);
 
-                // Draw a slight curve for fanned lines (looks better than straight)
                 if (count > 1) {
+                    // Fan lines via curved paths — all arrive at same destination
                     const midX = (originX + destX) / 2;
                     const midY = (originY + destY) / 2;
                     const dx = destX - originX;
@@ -2943,21 +2926,14 @@
                     const len = Math.sqrt(dx * dx + dy * dy) || 1;
                     const perpX = -dy / len;
                     const perpY = dx / len;
-                    const bulge = (i - (count - 1) / 2) * 6;
+                    // Spread increases with count — each line gets a distinct bulge
+                    const spread = Math.min(len * 0.25, 60);
+                    const bulge = (i - (count - 1) / 2) * (spread / Math.max(1, count - 1));
                     ctx.quadraticCurveTo(midX + perpX * bulge, midY + perpY * bulge, destX, destY);
                 } else {
                     ctx.lineTo(destX, destY);
                 }
                 ctx.stroke();
-
-                // Draw a small endpoint dot for fanned lines to show each peer
-                if (count > 1) {
-                    ctx.globalAlpha = Math.min(0.7, alpha + 0.2);
-                    ctx.beginPath();
-                    ctx.arc(destX, destY, 2.5, 0, Math.PI * 2);
-                    ctx.fillStyle = asLineColor;
-                    ctx.fill();
-                }
             }
         }
 
@@ -3339,6 +3315,10 @@
     // Panel toggle (clicking the title bar)
     document.getElementById('peer-panel-handle').addEventListener('click', () => {
         panelEl.classList.toggle('collapsed');
+        // [AS-DIVERSITY] Close AS detail panel when opening peer list
+        if (!panelEl.classList.contains('collapsed') && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+            window.ASDiversity.deselect();
+        }
     });
 
     /** Get sorted copy of lastPeers based on current sort state.
@@ -4631,6 +4611,7 @@
     // ═══════════════════════════════════════════════════════════
 
     let displaySettingsEl = null;
+    let maxPeerRows = 0;  // 0 = unlimited (default)
 
     function openDisplaySettingsPopup(anchorEl) {
         closeDisplaySettingsPopup();
@@ -4641,25 +4622,27 @@
         const pollSec = Math.round(CFG.pollInterval / 1000);
         const infoSec = Math.round(CFG.infoPollInterval / 1000);
 
-        // Right-side display toggle states
-        const rightItems = [
-            { id: 'ro-row-statusmsg', label: 'Map Status', visible: true },
-            { id: 'ro-row-nodestatus', label: 'Node Info', visible: true },
-            { id: 'ro-row-geodb', label: 'MBCore DB', visible: true },
+        // Visibility toggle items — the sections on the map
+        const visItems = [
+            { id: 'as-diversity-container', label: 'Diversity Score', visible: true },
+            { id: 'btc-price-bar', label: 'Bitcoin Price', visible: true },
+            { id: 'map-overlay', label: 'System Stats', visible: true },
         ];
         // Check actual visibility
-        rightItems.forEach(item => {
+        visItems.forEach(item => {
             const el = document.getElementById(item.id);
             if (el) item.visible = el.style.display !== 'none';
         });
 
-        let html = '<div class="dsp-title">Display Settings</div>';
+        let html = '<div class="dsp-title">Map Settings</div>';
         html += '<div class="dsp-section">Update Frequency</div>';
         html += `<div class="dsp-row"><span class="dsp-label" title="How often peer list is fetched from Bitcoin Core">Peer list</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-poll-sec" value="${pollSec}" min="3" max="120"><span class="dsp-unit">sec</span></div></div>`;
         html += `<div class="dsp-row"><span class="dsp-label" title="How often node info and BTC price are refreshed">Node info &amp; price</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-info-sec" value="${infoSec}" min="5" max="120"><span class="dsp-unit">sec</span></div></div>`;
+        html += '<div class="dsp-section">Peer List</div>';
+        html += `<div class="dsp-row"><span class="dsp-label" title="Maximum peer rows shown before scrolling (0 = unlimited)">Visible rows</span><div class="dsp-input-wrap"><input type="number" class="dsp-input" id="dsp-max-rows" value="${maxPeerRows || ''}" min="0" max="80" placeholder="All"><span class="dsp-unit">rows</span></div></div>`;
         html += '<div class="dsp-section">Show / Hide</div>';
-        rightItems.forEach(item => {
-            html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
+        visItems.forEach(item => {
+            html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
         html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
         popup.innerHTML = html;
@@ -4712,11 +4695,31 @@
             });
         }
 
-        // Bind show/hide toggles
-        popup.querySelectorAll('.dsp-toggle input[type="checkbox"]').forEach(cb => {
+        // Bind max rows input
+        const rowsInput = document.getElementById('dsp-max-rows');
+        if (rowsInput) {
+            rowsInput.addEventListener('change', () => {
+                const v = parseInt(rowsInput.value) || 0;
+                maxPeerRows = clamp(v, 0, 80);
+                rowsInput.value = maxPeerRows || '';
+                applyMaxPeerRows();
+            });
+        }
+
+        // Bind show/hide visibility toggles
+        popup.querySelectorAll('.dsp-toggle input[data-vis-target]').forEach(cb => {
             cb.addEventListener('change', () => {
-                const target = document.getElementById(cb.dataset.target);
-                if (target) target.style.display = cb.checked ? '' : 'none';
+                const target = document.getElementById(cb.dataset.visTarget);
+                if (!target) return;
+                if (cb.checked) {
+                    target.style.display = '';
+                } else {
+                    target.style.display = 'none';
+                    // If hiding diversity donut, deselect any active AS
+                    if (cb.dataset.visTarget === 'as-diversity-container' && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+                        window.ASDiversity.deselect();
+                    }
+                }
             });
         });
 
@@ -4724,6 +4727,18 @@
         setTimeout(() => {
             document.addEventListener('click', closeDisplaySettingsOnOutside);
         }, 0);
+    }
+
+    /** Apply max peer rows setting to the peer table wrap height */
+    function applyMaxPeerRows() {
+        const tableWrap = document.querySelector('.peer-table-wrap');
+        if (!tableWrap) return;
+        if (maxPeerRows > 0) {
+            // Each row is ~24px (11px font + padding + border)
+            tableWrap.style.maxHeight = (maxPeerRows * 24) + 'px';
+        } else {
+            tableWrap.style.maxHeight = '';
+        }
     }
 
     function closeDisplaySettingsOnOutside(e) {
@@ -5643,31 +5658,6 @@
             });
         }
 
-        // [AS-DIVERSITY] Visibility toggle buttons near logo
-        const visBtns = document.querySelectorAll('.vis-btn');
-        visBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const targetId = btn.dataset.target;
-                const targetEl = document.getElementById(targetId);
-                if (!targetEl) return;
-
-                btn.classList.toggle('active');
-                const isActive = btn.classList.contains('active');
-
-                if (isActive) {
-                    targetEl.style.display = '';
-                    targetEl.style.opacity = '';
-                    targetEl.style.pointerEvents = '';
-                } else {
-                    targetEl.style.display = 'none';
-                    // If hiding the diversity donut, also deselect any active AS
-                    if (targetId === 'as-diversity-container' && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
-                        window.ASDiversity.deselect();
-                    }
-                }
-            });
-        });
     }
 
     // ═══════════════════════════════════════════════════════════

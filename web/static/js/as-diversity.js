@@ -449,11 +449,14 @@ window.ASDiversity = (function () {
              + 'Higher = more evenly distributed peers across providers';
     }
 
-    /** Update the donut center label */
+    /** Update the donut center label.
+     *  Layout: SCORE: heading | big number | quality word | peer count
+     *  When AS selected: peer count heading | AS name | percentage */
     function renderCenter() {
         if (!donutCenter) return;
-        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
         var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
         if (!scoreVal || !scoreLbl) return;
 
@@ -462,19 +465,23 @@ window.ASDiversity = (function () {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (seg) {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
-                if (displayName.length > 16) displayName = displayName.substring(0, 15) + '\u2026';
+                if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
-                if (qualityEl) {
-                    qualityEl.textContent = seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '');
-                    qualityEl.className = 'as-score-quality';
-                    qualityEl.style.color = seg.color;
+                if (headingEl) {
+                    headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+                    headingEl.style.color = seg.color;
                 }
                 scoreVal.textContent = displayName;
                 scoreVal.className = 'as-score-value as-selected-mode';
                 scoreVal.style.color = seg.color;
                 scoreVal.title = seg.asNumber + ' \u00b7 ' + (seg.asName || '') + '\n'
                     + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
-                scoreLbl.textContent = seg.percentage.toFixed(1) + '%';
+                if (qualityEl) {
+                    qualityEl.textContent = seg.percentage.toFixed(1) + '%';
+                    qualityEl.className = 'as-score-quality';
+                    qualityEl.style.color = seg.color;
+                }
+                scoreLbl.textContent = seg.asNumber;
                 return;
             }
         }
@@ -482,9 +489,16 @@ window.ASDiversity = (function () {
         // Reset any selected-mode styling
         scoreVal.className = 'as-score-value';
         scoreVal.style.color = '';
+        if (headingEl) {
+            headingEl.style.color = '';
+        }
+        if (qualityEl) {
+            qualityEl.style.color = '';
+        }
 
         // Edge case: no locatable peers (all private/tor/i2p/cjdns)
         if (totalPeers === 0) {
+            if (headingEl) headingEl.textContent = '';
             if (qualityEl) {
                 qualityEl.textContent = '';
                 qualityEl.className = 'as-score-quality q-nodata';
@@ -498,9 +512,8 @@ window.ASDiversity = (function () {
         // Normal: show diversity score
         var q = getQuality(diversityScore);
 
-        if (qualityEl) {
-            qualityEl.textContent = q.word;
-            qualityEl.className = 'as-score-quality ' + q.cls;
+        if (headingEl) {
+            headingEl.textContent = 'SCORE:';
         }
 
         scoreVal.textContent = diversityScore.toFixed(1);
@@ -513,6 +526,11 @@ window.ASDiversity = (function () {
         else if (diversityScore >= 4) scoreVal.classList.add('as-score-moderate');
         else if (diversityScore >= 2) scoreVal.classList.add('as-score-poor');
         else scoreVal.classList.add('as-score-critical');
+
+        if (qualityEl) {
+            qualityEl.textContent = q.word;
+            qualityEl.className = 'as-score-quality ' + q.cls;
+        }
 
         scoreLbl.textContent = totalPeers + ' PEERS';
     }
@@ -854,13 +872,31 @@ window.ASDiversity = (function () {
     function update(peers) {
         if (!isActive) return;
 
+        // Check if >10% of peers are still being geolocated
+        var pendingCount = 0;
+        for (var pi = 0; pi < peers.length; pi++) {
+            if (peers[pi].location_status === 'pending') pendingCount++;
+        }
+        var pendingPct = peers.length > 0 ? (pendingCount / peers.length) * 100 : 0;
+        var isGeoLoading = pendingPct > 10;
+
+        // Show/hide the loading overlay
+        if (loadingEl) {
+            if (isGeoLoading) {
+                loadingEl.textContent = 'Locating ' + pendingCount + ' peer' + (pendingCount !== 1 ? 's' : '') + '\u2026';
+                loadingEl.style.display = '';
+            } else if (hasRenderedOnce) {
+                loadingEl.style.display = 'none';
+            }
+        }
+
         asGroups = aggregatePeers(peers);
         diversityScore = calcDiversityScore(asGroups);
         donutSegments = buildDonutSegments(asGroups);
 
         // Toggle no-data state on the container
         if (containerEl) {
-            if (totalPeers === 0) containerEl.classList.add('no-data');
+            if (totalPeers === 0 && !isGeoLoading) containerEl.classList.add('no-data');
             else containerEl.classList.remove('no-data');
         }
 
