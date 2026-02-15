@@ -5,41 +5,47 @@
    ============================================================ */
 
 /* ==========================================================
-   1. VIEW TOGGLE — Topbar tab switcher
+   1. VIEW TOGGLE — Prominent topbar view switcher
    ========================================================== */
 .as-view-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 0;
-    background: rgba(var(--surface-overlay-rgb), 0.6);
-    border: 1px solid rgba(88, 166, 255, 0.12);
-    border-radius: 5px;
-    padding: 2px;
-    margin-left: 14px;
-    margin-bottom: 2px;
-    vertical-align: bottom;
+    gap: 2px;
+    background: rgba(var(--surface-overlay-rgb), 0.75);
+    border: 1px solid rgba(88, 166, 255, 0.18);
+    border-radius: 8px;
+    padding: 3px;
+    margin-left: 18px;
+    margin-bottom: 1px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .as-vt-btn {
     background: none;
-    border: none;
+    border: 1px solid transparent;
     color: var(--text-muted);
-    font-family: var(--font-data);
-    font-size: 10px;
+    font-family: var(--font-ui);
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    padding: 3px 10px;
-    border-radius: 3px;
+    letter-spacing: 0.3px;
+    padding: 6px 18px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all var(--transition);
+    transition: all 0.2s ease;
     white-space: nowrap;
+    position: relative;
 }
 .as-vt-btn:hover {
-    color: var(--text-secondary);
+    color: var(--text-primary);
+    background: rgba(88, 166, 255, 0.06);
 }
 .as-vt-btn.active {
-    background: rgba(88, 166, 255, 0.15);
+    background: rgba(88, 166, 255, 0.18);
     color: var(--accent);
+    border-color: rgba(88, 166, 255, 0.25);
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.1);
+    text-shadow: 0 0 12px rgba(88, 166, 255, 0.3);
 }
 
 /* ==========================================================

@@ -5510,11 +5510,12 @@
         const btcBar = document.getElementById('btc-price-bar');
 
         btns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const view = btn.dataset.view;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const targetMode = btn.dataset.view;
                 btns.forEach(b => b.classList.toggle('active', b === btn));
 
-                if (view === 'as') {
+                if (targetMode === 'as') {
                     // Switch to AS Diversity
                     if (flightDeck) flightDeck.style.display = 'none';
                     if (btcBar) btcBar.style.display = 'none';
