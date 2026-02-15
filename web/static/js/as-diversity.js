@@ -957,7 +957,6 @@ window.ASDiversity = (function () {
         if (matchedPeers.length > maxShow) {
             html += '<div class="as-sub-tt-more">+' + (matchedPeers.length - maxShow) + ' more</div>';
         }
-        html += '<div class="as-sub-tt-hint">Click to filter</div>';
         return html;
     }
 

@@ -697,44 +697,7 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     color: var(--text-muted);
     padding-top: 2px;
 }
-.as-sub-tt-hint {
-    font-family: var(--font-data);
-    font-size: 8px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 4px;
-    padding-top: 3px;
-    border-top: 1px solid rgba(88, 166, 255, 0.08);
-}
-
-/* ==========================================================
-   12. STYLED CELL TOOLTIP — Replaces native title on peer table cells
-   ========================================================== */
-.cell-tooltip {
-    position: fixed;
-    z-index: 400;
-    background: var(--bg-surface);
-    border: 1px solid rgba(88, 166, 255, 0.2);
-    border-radius: 5px;
-    padding: 6px 10px;
-    pointer-events: none;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    max-width: 320px;
-}
-.cell-tooltip.hidden { display: none; }
-.cell-tip-line {
-    font-family: var(--font-data);
-    font-size: 10px;
-    color: var(--text-secondary);
-    line-height: 1.6;
-    white-space: nowrap;
-}
-
 /* Light theme */
-body.theme-light .as-sub-tooltip,
-body.theme-light .cell-tooltip {
+body.theme-light .as-sub-tooltip {
     border-color: rgba(88, 166, 255, 0.25);
 }
