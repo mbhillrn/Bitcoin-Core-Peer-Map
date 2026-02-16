@@ -4646,8 +4646,17 @@
             if (dragMoved && !groupedNodes) hideTooltip();
         } else {
             // Hover detection for tooltip + table highlight (group-aware)
-            // Skip if mouse is over a UI panel (not the canvas)
-            if (e.target !== canvas) return;
+            // Skip if mouse is over a UI panel (not the canvas),
+            // but first clear any lingering hover state so tooltip/highlight
+            // don't stay stuck when the cursor leaves the canvas.
+            if (e.target !== canvas) {
+                if (hoveredNode && !pinnedNode && !groupedNodes) {
+                    hideTooltip();
+                    highlightTableRow(null);
+                    canvas.style.cursor = 'grab';
+                }
+                return;
+            }
             // A pinned tooltip (single peer or group selection list) blocks hover
             const hasPinned = pinnedNode || groupedNodes;
             const group = findNodesAtScreen(e.clientX, e.clientY);
