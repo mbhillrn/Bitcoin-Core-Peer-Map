@@ -715,6 +715,7 @@
     const clockEl = document.getElementById('clock');
     const tooltipEl = document.getElementById('node-tooltip');
     const antNote = document.getElementById('antarctica-note');
+    const antOverlay = document.getElementById('antarctica-modal-overlay');
     let hoveredNode = null;
     let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
@@ -3107,16 +3108,9 @@
         if (bcCjdns) { bcCjdns.textContent = netCounts.cjdns; pulseOnChange('bc-cjdns', netCounts.cjdns); }
     }
 
-    /** Position the Antarctica annotation on the map landmass */
+    /** Antarctica modal is now CSS-centered; no per-frame repositioning needed */
     function updateAntarcticaNote() {
-        if (!antNote || antNote.classList.contains('hidden')) return;
-        // Place at central Antarctica (~-72°lat, 30°lon — near Novolazarevskaya)
-        const s = worldToScreen(30, -72);
-        // Offset so the note sits centered above the point
-        const noteW = antNote.offsetWidth || 340;
-        const noteH = antNote.offsetHeight || 40;
-        antNote.style.left = Math.max(8, Math.min(W - noteW - 8, s.x - noteW / 2)) + 'px';
-        antNote.style.top = Math.max(48, Math.min(H - noteH - 40, s.y - noteH - 12)) + 'px';
+        // No-op: modal is centered via CSS flexbox on the overlay
     }
 
     /** Update the clock display in the topbar */
@@ -3840,11 +3834,6 @@
         if (antToggle) {
             antToggle.addEventListener('change', () => {
                 showAntarcticaPeers = antToggle.checked;
-                if (showAntarcticaPeers && !antNoteDismissed) {
-                    antNote.classList.remove('hidden');
-                } else if (!showAntarcticaPeers) {
-                    antNote.classList.add('hidden');
-                }
             });
         }
 
@@ -3860,7 +3849,6 @@
                 // Reset Antarctica setting
                 showAntarcticaPeers = true;
                 antNoteDismissed = false;
-                antNote.classList.remove('hidden');
                 // Reset visible rows to default
                 maxPeerRows = 10;
                 applyMaxPeerRows();
@@ -4651,12 +4639,20 @@
         });
     });
 
-    // Close Antarctica annotation (dismisses until network filter changes)
+    // Close Antarctica modal ("Got it" button or click outside)
     if (antCloseBtn) {
         antCloseBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             antNoteDismissed = true;
-            antNote.classList.add('hidden');
+            if (antOverlay) antOverlay.classList.add('hidden');
+        });
+    }
+    if (antOverlay) {
+        antOverlay.addEventListener('click', (e) => {
+            if (e.target === antOverlay) {
+                antNoteDismissed = true;
+                antOverlay.classList.add('hidden');
+            }
         });
     }
 
@@ -4755,7 +4751,7 @@
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
         html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
-        html += '<a class="dsp-feedback-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener">Suggestions &amp; Bug Reports &#8599;</a>';
+        html += '<a class="dsp-feedback-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener" title="Click here to open a browser to the repo discussion">Suggestions &amp; Bug Reports &#8599;</a>';
         popup.innerHTML = html;
         document.body.appendChild(popup);
         displaySettingsEl = popup;
@@ -5837,9 +5833,9 @@
         fetchChanges();
         changesPollTimer = setInterval(fetchChanges, CFG.pollInterval);
 
-        // Show Antarctica annotation at session start (if setting is ON)
-        if (showAntarcticaPeers && !antNoteDismissed) {
-            antNote.classList.remove('hidden');
+        // Show Antarctica modal on every page load (if setting is ON)
+        if (showAntarcticaPeers && antOverlay) {
+            antOverlay.classList.remove('hidden');
         }
 
         // Start the render loop (grid + nodes render immediately,
