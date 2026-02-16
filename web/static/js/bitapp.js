@@ -4496,9 +4496,13 @@
                     hideTooltip();
                     highlightTableRow(null);
                 }
-                // [AS-DIVERSITY] Deselect any selected AS when clicking empty map
-                if (window.ASDiversity && window.ASDiversity.getSelectedAs()) {
-                    window.ASDiversity.deselect();
+                // [AS-DIVERSITY] Clear sub-filter first, or deselect AS if no sub-filter
+                if (window.ASDiversity) {
+                    if (window.ASDiversity.hasSubFilter()) {
+                        window.ASDiversity.clearSubFilter();
+                    } else if (window.ASDiversity.getSelectedAs()) {
+                        window.ASDiversity.deselect();
+                    }
                 }
             }
         }
