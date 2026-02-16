@@ -143,7 +143,7 @@ show_menu() {
     echo ""
     echo -e "  ${T_SECONDARY}g)${RST} Geo/IP Database     ${T_DIM}- Configure IP location database${RST}"
     echo -e "  ${T_SECONDARY}m)${RST} Manual Settings     ${T_DIM}- Manually enter Bitcoin Core settings${RST}"
-    echo -e "  ${T_SECONDARY}p)${RST} Port Settings       ${T_DIM}- Change dashboard port (current: ${MBTC_WEB_PORT:-58333})${RST}"
+    echo -e "  ${T_SECONDARY}n)${RST} Network/Port        ${T_DIM}- Server security and port settings${RST}"
     if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then
         echo -e "  ${T_WARN}u)${RST} Update              ${T_DIM}- Update to v${LATEST_VERSION}${RST}"
     fi
@@ -920,7 +920,7 @@ firewall_helper() {
     echo -e "  Your Subnet:    ${T_SUCCESS}$LOCAL_SUBNET${RST}"
     echo -e "  Dashboard Port: ${T_SUCCESS}$port${RST}"
     echo ""
-    echo -e "${T_DIM}Want to use a different port? Go to ${T_SECONDARY}p) Port Settings${RST}${T_DIM} from the main menu${RST}"
+    echo -e "${T_DIM}Want to use a different port? Go to ${T_SECONDARY}n) Network/Port${RST}${T_DIM} from the main menu${RST}"
     echo -e "${T_DIM}to change the dashboard port, then come back here to configure the firewall.${RST}"
     echo ""
 
@@ -1016,36 +1016,45 @@ firewall_helper() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PORT SETTINGS
+# NETWORK / PORT / SERVER SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-port_settings() {
+network_settings() {
     clear
     show_banner
 
-    echo ""
-    echo -e "${T_SECONDARY}${BOLD}Dashboard Port Settings${RST}"
-    echo ""
-    echo -e "${T_DIM}Configure the port used to access the MBCore Dashboard in your browser.${RST}"
-    echo ""
-
     local current_port="${MBTC_WEB_PORT:-58333}"
-    echo -e "  ${T_INFO}Current port:${RST} ${T_SUCCESS}$current_port${RST}"
+    local current_bind
+    current_bind=$(get_config "MBTC_WEB_BIND" "0.0.0.0")
+    local bind_label
+    if [[ "$current_bind" == "127.0.0.1" ]]; then
+        bind_label="Local only (127.0.0.1)"
+    else
+        bind_label="LAN accessible (0.0.0.0)"
+    fi
+
     echo ""
-    echo -e "${T_DIM}Port numbers can range from 1024 to 65535.${RST}"
-    echo -e "${T_DIM}Higher numbers (49152-65535) are recommended to avoid conflicts.${RST}"
-    echo -e "${T_DIM}Suggested alternatives: 58334, 58335, 49152, 51234, 60000${RST}"
+    echo -e "${T_SECONDARY}${BOLD}Network Server/Security and Port Settings${RST}"
+    echo ""
+    echo -e "  ${T_INFO}Current port:${RST}    ${T_SUCCESS}$current_port${RST}"
+    echo -e "  ${T_INFO}Access mode:${RST}     ${T_SUCCESS}$bind_label${RST}"
     echo ""
     echo -e "  ${T_INFO}1)${RST} Change port"
-    echo -e "  ${T_INFO}2)${RST} Reset to default (58333)"
+    echo -e "  ${T_INFO}2)${RST} Reset port to default (58333)"
+    echo -e "  ${T_INFO}3)${RST} Server Access Mode"
+    echo -e "     ${T_DIM}- Local only vs LAN security settings${RST}"
     echo -e "  ${T_DIM}b)${RST} Back to menu"
     echo ""
 
     echo -en "${T_DIM}Choice:${RST} "
-    read -r port_choice
+    read -r net_choice
 
-    case "$port_choice" in
+    case "$net_choice" in
         1)
+            echo ""
+            echo -e "${T_DIM}Port numbers can range from 1024 to 65535.${RST}"
+            echo -e "${T_DIM}Higher numbers (49152-65535) are recommended to avoid conflicts.${RST}"
+            echo -e "${T_DIM}Suggested alternatives: 58334, 58335, 49152, 51234, 60000${RST}"
             echo ""
             while true; do
                 echo -en "${T_INFO}Enter new port number (1024-65535):${RST} "
@@ -1090,6 +1099,72 @@ port_settings() {
             save_config
             echo ""
             msg_ok "Port reset to default (58333)"
+            ;;
+        3)
+            server_access_mode
+            return
+            ;;
+        b|B)
+            return
+            ;;
+        *)
+            msg_warn "Invalid option"
+            ;;
+    esac
+
+    echo ""
+    echo -en "${T_DIM}Press Enter to continue...${RST}"
+    read -r
+}
+
+server_access_mode() {
+    clear
+    show_banner
+
+    local current_bind
+    current_bind=$(get_config "MBTC_WEB_BIND" "0.0.0.0")
+
+    echo ""
+    echo -e "${T_SECONDARY}${BOLD}Server Access Mode${RST}"
+    echo ""
+    echo -e "${T_DIM}Controls which network interfaces the dashboard listens on.${RST}"
+    echo ""
+
+    # Show current setting
+    if [[ "$current_bind" == "127.0.0.1" ]]; then
+        echo -e "  ${T_INFO}Current:${RST} ${T_SUCCESS}Local only (127.0.0.1)${RST}"
+    else
+        echo -e "  ${T_INFO}Current:${RST} ${T_SUCCESS}LAN accessible (0.0.0.0)${RST}"
+    fi
+    echo ""
+
+    echo -e "  ${T_INFO}1)${RST} Local only (127.0.0.1)"
+    echo -e "     ${T_DIM}- Dashboard is only accessible from a browser on this machine${RST}"
+    echo -e "     ${T_DIM}- Optional extra security measure — no network exposure at all${RST}"
+    echo ""
+    echo -e "  ${T_INFO}2)${RST} LAN accessible (0.0.0.0)"
+    echo -e "     ${T_DIM}- Dashboard is accessible from any device on your local network${RST}"
+    echo -e "     ${T_DIM}- Required for headless nodes — access from another machine's browser${RST}"
+    echo -e "     ${T_DIM}- Use the Firewall Helper (Option 3) to restrict access if needed${RST}"
+    echo ""
+    echo -e "  ${T_DIM}b)${RST} Back"
+    echo ""
+
+    echo -en "${T_DIM}Choice:${RST} "
+    read -r access_choice
+
+    case "$access_choice" in
+        1)
+            set_config "MBTC_WEB_BIND" "127.0.0.1"
+            echo ""
+            msg_ok "Access mode set to Local only (127.0.0.1)"
+            msg_info "Dashboard will only be accessible from this machine"
+            ;;
+        2)
+            set_config "MBTC_WEB_BIND" "0.0.0.0"
+            echo ""
+            msg_ok "Access mode set to LAN accessible (0.0.0.0)"
+            msg_info "Dashboard will be accessible from any device on your network"
             ;;
         b|B)
             return
@@ -1300,8 +1375,8 @@ main() {
             m|M)
                 run_manual_config
                 ;;
-            p|P)
-                port_settings
+            n|N)
+                network_settings
                 ;;
             u|U)
                 if [[ "$UPDATE_AVAILABLE" -eq 1 ]]; then

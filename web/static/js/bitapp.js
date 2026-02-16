@@ -4755,6 +4755,7 @@
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
         html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
+        html += '<a class="dsp-feedback-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener">Suggestions &amp; Bug Reports &#8599;</a>';
         popup.innerHTML = html;
         document.body.appendChild(popup);
         displaySettingsEl = popup;

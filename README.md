@@ -319,7 +319,7 @@ Click the **Disconnect** button on any peer row in the table to open the disconn
 | **3) Firewall Helper** | Detect your network and configure UFW to allow dashboard access from other devices |
 | **g) Geo/IP Database** | Manage the GeoIP cache, toggle auto-updates, check integrity, purge old entries |
 | **m) Manual Settings** | Manually enter Bitcoin Core paths if auto-detection didn't work |
-| **p) Port Settings** | Change the dashboard port (default: 58333, persists across restarts) |
+| **n) Network/Port** | Server security, access mode (local-only vs LAN), and port settings |
 | **u) Update** | Update to the latest version (appears when an update is available) |
 | **q) Quit** | Exit |
 
@@ -329,11 +329,11 @@ Click the **Disconnect** button on any peer row in the table to open the disconn
 
 Manage the local GeoIP cache database. Toggle auto-updates on or off, check database integrity, view stats, download the latest dataset, or purge old entries. The auto-update setting syncs with the web dashboard -- toggling it in one place updates the other.
 
-### Port Settings
+### Network/Port Settings
 
-![Port Settings](docs/images/4.portset.png)
+![Network/Port Settings](docs/images/4.portset.png)
 
-Change the dashboard port if 58333 conflicts with another service. The setting persists across restarts and updates.
+Change the dashboard port if 58333 conflicts with another service, or switch between LAN-accessible (0.0.0.0) and local-only (127.0.0.1) server modes. Local-only mode restricts the dashboard to the machine running Bitcoin Core. LAN mode (default) allows access from any device on your network. All settings persist across restarts and updates.
 
 ### Firewall Helper
 
