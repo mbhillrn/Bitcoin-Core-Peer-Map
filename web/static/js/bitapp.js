@@ -4628,23 +4628,25 @@
             if (dragZoom > 1.001) {
                 targetView.y = dragViewStart.y - dy / dragZoom;
             }
-            if (dragMoved) hideTooltip();
+            if (dragMoved && !groupedNodes) hideTooltip();
         } else {
             // Hover detection for tooltip + table highlight (group-aware)
+            // A pinned tooltip (single peer or group selection list) blocks hover
+            const hasPinned = pinnedNode || groupedNodes;
             const group = findNodesAtScreen(e.clientX, e.clientY);
             if (group.length > 0) {
                 // Don't override a pinned tooltip with hover
-                if (!pinnedNode) {
+                if (!hasPinned) {
                     showGroupHoverTooltip(group, e.clientX, e.clientY);
                 }
                 hoveredNode = group[0];
-                highlightTableRow(group[0].peerId);
+                if (!hasPinned) highlightTableRow(group[0].peerId);
                 canvas.style.cursor = 'pointer';
-            } else if (hoveredNode && !pinnedNode) {
+            } else if (hoveredNode && !hasPinned) {
                 hideTooltip();
                 highlightTableRow(null);
                 canvas.style.cursor = 'grab';
-            } else if (!pinnedNode) {
+            } else if (!hasPinned) {
                 canvas.style.cursor = 'grab';
             }
         }
