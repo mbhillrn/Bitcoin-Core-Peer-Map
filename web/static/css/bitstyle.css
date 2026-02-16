@@ -1102,6 +1102,20 @@ body.theme-light .ro-link:hover {
 .tt-disconnect { color: var(--err); border-color: rgba(248, 81, 73, 0.3); background: rgba(248, 81, 73, 0.06); }
 .tt-disconnect:hover { background: rgba(248, 81, 73, 0.15); border-color: var(--err); }
 
+/* ── Tooltip header: 3-column layout (action | #ID | network) ── */
+.tt-back-link {
+    font-size: 10px; color: var(--text-muted); text-decoration: none; cursor: pointer;
+    min-width: 36px; flex-shrink: 0;
+}
+.tt-back-link:hover { color: var(--accent); }
+.tt-back-link:empty { pointer-events: none; }
+
+/* ── Multi-peer group list in tooltip ── */
+.tt-group-list { max-height: 200px; overflow-y: auto; }
+.tt-group-row { gap: 6px; }
+.tt-group-clickable { cursor: pointer; padding: 3px 0; border-radius: 3px; transition: background 0.1s ease; }
+.tt-group-clickable:hover { background: rgba(88, 166, 255, 0.1); }
+
 /* ==========================================================
    11. PEER PANEL — Bottom panel, open by default
    ========================================================== */
