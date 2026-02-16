@@ -4216,6 +4216,74 @@
         }
     }
 
+    /**
+     * Smoothly zoom the map to center on a node and show its pinned tooltip.
+     * Used by table row clicks and the selectPeerById hook.
+     */
+    function zoomToPeer(node) {
+        const p = project(node.lon, node.lat);
+
+        // For southern peers (lat < -30), auto-collapse the panel so they're visible
+        if (node.lat < -30 && !panelEl.classList.contains('collapsed')) {
+            panelEl.classList.add('collapsed');
+        }
+
+        // Calculate visible map area
+        const topbarH = 40;
+        const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
+        const visibleTop = topbarH;
+        const visibleBot = H - panelH;
+        const visibleH = visibleBot - visibleTop;
+        const targetScreenY = visibleTop + visibleH * 0.30;
+
+        // Mercator world bounds for vertical clamping
+        const yTop = project(0, 85).y;
+        const yBot = project(0, -85).y;
+
+        // Find minimum zoom that allows correct peer positioning
+        let z = 3;
+        for (; z <= CFG.maxZoom; z += 0.2) {
+            const offsetFromCenter = (H / 2 - targetScreenY) / z;
+            const candidateY = (p.y - 0.5) * H - offsetFromCenter;
+            const minPanY = (yTop - 0.5) * H + H / (2 * z);
+            const maxPanY = (yBot - 0.5) * H - H / (2 * z);
+            if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
+                break;
+            }
+        }
+        z = Math.min(z, CFG.maxZoom);
+
+        const offsetFromCenter = (H / 2 - targetScreenY) / z;
+        const finalX = (p.x - 0.5) * W;
+        const finalY = (p.y - 0.5) * H - offsetFromCenter;
+
+        // Reset view state to world baseline first (zoom 1, centered on peer longitude)
+        view.x = finalX;
+        view.y = 0;
+        view.zoom = 1;
+        // Then set the target to animate smoothly into the peer
+        targetView.x = finalX;
+        targetView.y = finalY;
+        targetView.zoom = z;
+
+        // Set selection state
+        highlightedPeerId = node.peerId;
+        pinnedNode = node;
+
+        // Open pinned tooltip at the node's screen position (once view settles)
+        setTimeout(() => {
+            const offsets = getWrapOffsets();
+            for (const off of offsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+                if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
+                    showPinnedPeerDetail(node, s.x, s.y, false);
+                    hoveredNode = node;
+                    break;
+                }
+            }
+        }, 500);
+    }
+
     // Table row click → center map on peer + open tooltip
     function handleTbodyClick(e) {
         const btn = e.target.closest('.peer-action-btn');
@@ -4242,74 +4310,12 @@
         if (node) {
             // Clear any active map dot filter (table row click = direct navigation)
             clearMapDotFilter();
+            groupedNodes = null;
+            mapFilterPeerIds = new Set([node.peerId]);
+            renderPeerTable();
 
-            // Select this peer: reset map to world view, then zoom into the peer.
-            // Peer lands at ~30% from top of visible map area.
-            const p = project(node.lon, node.lat);
-
-            // For southern peers (lat < -30), auto-collapse the panel so they're visible
-            if (node.lat < -30 && !panelEl.classList.contains('collapsed')) {
-                panelEl.classList.add('collapsed');
-            }
-
-            // Calculate visible map area
-            const topbarH = 40;
-            const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
-            const visibleTop = topbarH;
-            const visibleBot = H - panelH;
-            const visibleH = visibleBot - visibleTop;
-            const targetScreenY = visibleTop + visibleH * 0.30;
-
-            // Mercator world bounds for vertical clamping
-            const yTop = project(0, 85).y;
-            const yBot = project(0, -85).y;
-
-            // Find minimum zoom that allows correct peer positioning.
-            // Start at zoom 3 (standard); escalate for edge-case peers
-            // near world bounds (e.g. Australia, Antarctica).
-            let z = 3;
-            for (; z <= CFG.maxZoom; z += 0.2) {
-                const offsetFromCenter = (H / 2 - targetScreenY) / z;
-                const candidateY = (p.y - 0.5) * H - offsetFromCenter;
-                const minPanY = (yTop - 0.5) * H + H / (2 * z);
-                const maxPanY = (yBot - 0.5) * H - H / (2 * z);
-                if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
-                    break;
-                }
-            }
-            z = Math.min(z, CFG.maxZoom);
-
-            const offsetFromCenter = (H / 2 - targetScreenY) / z;
-            const finalX = (p.x - 0.5) * W;
-            const finalY = (p.y - 0.5) * H - offsetFromCenter;
-
-            // Reset view state to world baseline first (zoom 1, centered on peer longitude)
-            // so we always zoom IN fresh, never pan from a previous peer's position.
-            view.x = finalX;
-            view.y = 0;
-            view.zoom = 1;
-            // Then set the target to animate smoothly into the peer
-            targetView.x = finalX;
-            targetView.y = finalY;
-            targetView.zoom = z;
-
-            // Set selection state + highlight row
-            highlightedPeerId = peerId;
-            pinnedNode = node;
+            zoomToPeer(node);
             highlightTableRow(peerId, true);  // scroll into view on click
-
-            // Open pinned tooltip at the node's screen position (once view settles)
-            setTimeout(() => {
-                const offsets = getWrapOffsets();
-                for (const off of offsets) {
-                    const s = worldToScreen(node.lon + off, node.lat);
-                    if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
-                        showTooltip(node, s.x, s.y, true);
-                        hoveredNode = node;
-                        break;
-                    }
-                }
-            }, 500);
 
             row.classList.add('row-selected');
             setTimeout(() => row.classList.remove('row-selected'), 1500);
@@ -4446,9 +4452,9 @@
     /** Draw a highlight ring around a node when it's highlighted via table hover.
      *  When pinned (selected), draws a brighter pulsing halo so it's
      *  unambiguous which peer is selected even in dense clusters. */
-    function drawHighlightRing(node, now, wrapOffsets) {
+    function drawHighlightRing(node, now, wrapOffsets, forcePinned) {
         if (!node.alive) return;
-        const isPinned = pinnedNode && pinnedNode.peerId === node.peerId;
+        const isPinned = forcePinned || (pinnedNode && pinnedNode.peerId === node.peerId);
         const pulse = 0.7 + 0.3 * Math.sin(now * 0.005);
         const r = CFG.nodeRadius * 2.5;
         for (const off of wrapOffsets) {
@@ -4586,6 +4592,10 @@
         //     Draw for pinned node (selection) and/or hovered node
         if (pinnedNode && pinnedNode.alive) {
             drawHighlightRing(pinnedNode, now, wrapOffsets);
+        }
+        // Group selection (multi-peer dot): draw glow ring on the shared location
+        if (groupedNodes && groupedNodes.length > 1 && !pinnedNode) {
+            drawHighlightRing(groupedNodes[0], now, wrapOffsets, true);
         }
         if (highlightedPeerId !== null && (!pinnedNode || highlightedPeerId !== pinnedNode.peerId)) {
             const hlNode = nodes.find(n => n.peerId === highlightedPeerId && n.alive);
@@ -5933,15 +5943,11 @@
                 if (window.ASDiversity) {
                     window.ASDiversity.deselect();
                 }
-                // Pin this peer on the map
-                pinnedNode = node;
-                highlightedPeerId = node.peerId;
+                // Set selection state and zoom to the peer
                 groupedNodes = null;
                 mapFilterPeerIds = new Set([node.peerId]);
                 renderPeerTable();
-                // Show tooltip at the node's screen position
-                const sp = worldToScreen(node.lon, node.lat);
-                showPinnedPeerDetail(node, sp.x, sp.y, false);
+                zoomToPeer(node);
                 highlightTableRow(node.peerId);
             },
         });
