@@ -656,6 +656,10 @@
     let lastPeers = [];      // raw API response for table rendering
     let highlightedPeerId = null;  // peer ID highlighted via map↔table interaction
 
+    // [MAP DOT FILTER] State for multi-peer dot grouping
+    let mapFilterPeerIds = null;   // Set of peer IDs to show when a map dot is clicked (null = no filter)
+    let groupedNodes = null;       // Array of nodes at clicked dot (for back navigation from drill-down)
+
     // [AS-DIVERSITY] State for AS Diversity integration
     let asFilterPeerIds = null;    // Set of peer IDs to show when AS is selected (null = no filter)
     let asLinePeerIds = null;      // Array of peer IDs to draw lines to (hover/selection)
@@ -715,6 +719,7 @@
     const clockEl = document.getElementById('clock');
     const tooltipEl = document.getElementById('node-tooltip');
     const antNote = document.getElementById('antarctica-note');
+    const antOverlay = document.getElementById('antarctica-modal-overlay');
     let hoveredNode = null;
     let pinnedNode = null;  // Tooltip pins when user clicks a node or table row
 
@@ -3107,16 +3112,9 @@
         if (bcCjdns) { bcCjdns.textContent = netCounts.cjdns; pulseOnChange('bc-cjdns', netCounts.cjdns); }
     }
 
-    /** Position the Antarctica annotation on the map landmass */
+    /** Antarctica modal is now CSS-centered; no per-frame repositioning needed */
     function updateAntarcticaNote() {
-        if (!antNote || antNote.classList.contains('hidden')) return;
-        // Place at central Antarctica (~-72°lat, 30°lon — near Novolazarevskaya)
-        const s = worldToScreen(30, -72);
-        // Offset so the note sits centered above the point
-        const noteW = antNote.offsetWidth || 340;
-        const noteH = antNote.offsetHeight || 40;
-        antNote.style.left = Math.max(8, Math.min(W - noteW - 8, s.x - noteW / 2)) + 'px';
-        antNote.style.top = Math.max(48, Math.min(H - noteH - 40, s.y - noteH - 12)) + 'px';
+        // No-op: modal is centered via CSS flexbox on the overlay
     }
 
     /** Update the clock display in the topbar */
@@ -3132,22 +3130,33 @@
     // TOOLTIP — Rich peer inspection on hover
     // ═══════════════════════════════════════════════════════════
 
-    /** Find the nearest alive node within hit radius of screen coords. */
-    function findNodeAtScreen(sx, sy) {
+    /** Find ALL alive nodes within hit radius of screen coords. */
+    function findNodesAtScreen(sx, sy) {
         const hitRadius = 12;
         const offsets = getWrapOffsets();
+        const result = [];
+        const seen = new Set();
         for (let i = nodes.length - 1; i >= 0; i--) {
             if (!nodes[i].alive) continue;
+            if (seen.has(nodes[i].peerId)) continue;
             for (const off of offsets) {
                 const s = worldToScreen(nodes[i].lon + off, nodes[i].lat);
                 const dx = s.x - sx;
                 const dy = s.y - sy;
                 if (dx * dx + dy * dy < hitRadius * hitRadius) {
-                    return nodes[i];
+                    result.push(nodes[i]);
+                    seen.add(nodes[i].peerId);
+                    break;
                 }
             }
         }
-        return null;
+        return result;
+    }
+
+    /** Find the nearest alive node within hit radius (legacy convenience). */
+    function findNodeAtScreen(sx, sy) {
+        const group = findNodesAtScreen(sx, sy);
+        return group.length > 0 ? group[0] : null;
     }
 
     /** Build a tooltip row: label + value, skipping empty values */
@@ -3156,9 +3165,109 @@
         return `<div class="tt-row"><span class="tt-label">${label}</span><span class="tt-val">${value}</span></div>`;
     }
 
-    /** Display comprehensive tooltip near cursor with peer details.
-     *  When pinned=true, tooltip gets pointer-events and a disconnect button. */
-    function showTooltip(node, mx, my, pinned) {
+    /** Shorten an address for compact display (e.g. group list) */
+    function shortenAddr(node) {
+        const full = node.addr || (node.ip && node.port ? `${node.ip}:${node.port}` : '—');
+        if (full.length <= 28) return full;
+        // Tor/I2P: show first 12 chars + ...
+        if (full.includes('.onion') || full.includes('.b32.i2p')) {
+            return full.substring(0, 12) + '...' + full.substring(full.lastIndexOf('.'));
+        }
+        return full.substring(0, 25) + '...';
+    }
+
+    /** Position the tooltip near cursor coordinates */
+    function positionTooltip(mx, my) {
+        const ttWidth = 260;
+        const ttPad = 16;
+        let tx = mx + ttPad;
+        if (tx + ttWidth > W - 10) {
+            tx = mx - ttPad - ttWidth;
+        }
+        let ty = my - 10;
+        tooltipEl.style.left = Math.max(10, tx) + 'px';
+        tooltipEl.style.top = Math.max(48, ty) + 'px';
+    }
+
+    /** Display hover tooltip for a group of nodes at one map dot.
+     *  Single node: shows peer details. Multiple: shows compact numbered list. */
+    function showGroupHoverTooltip(group, mx, my) {
+        let html = '';
+        if (group.length === 1) {
+            // Single peer: show normal detail tooltip (non-interactive)
+            html = buildPeerDetailHtml(group[0], false, false);
+        } else {
+            // Multi-peer: compact numbered list
+            html += `<div class="tt-header"><span class="tt-peer-id" style="text-align:center;flex:1">${group.length} peers at this location</span></div>`;
+            html += `<div class="tt-section tt-group-list">`;
+            group.forEach((node, i) => {
+                const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
+                const netColor = rgba(node.color, 0.9);
+                const addr = shortenAddr(node);
+                html += `<div class="tt-row tt-group-row">`;
+                html += `<span class="tt-label" style="min-width:16px">${i + 1}.</span>`;
+                html += `<span class="tt-net" style="color:${netColor};min-width:36px">${netLabel}</span>`;
+                html += `<span class="tt-val" style="flex:1">${addr}</span>`;
+                html += `</div>`;
+            });
+            html += `</div>`;
+        }
+        tooltipEl.innerHTML = html;
+        tooltipEl.classList.remove('hidden');
+        tooltipEl.classList.remove('pinned');
+        tooltipEl.style.pointerEvents = 'none';
+        positionTooltip(mx, my);
+    }
+
+    /** Display pinned selection list for a multi-peer dot (clickable rows). */
+    function showGroupSelectionList(group, mx, my) {
+        let html = '';
+        html += `<div class="tt-header"><span class="tt-peer-id" style="text-align:center;flex:1">${group.length} peers at this location</span></div>`;
+        html += `<div class="tt-section tt-group-list">`;
+        group.forEach((node, i) => {
+            const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
+            const netColor = rgba(node.color, 0.9);
+            const addr = shortenAddr(node);
+            html += `<div class="tt-row tt-group-row tt-group-clickable" data-peer-id="${node.peerId}">`;
+            html += `<span class="tt-label" style="min-width:16px">${i + 1}.</span>`;
+            html += `<span class="tt-net" style="color:${netColor};min-width:36px">${netLabel}</span>`;
+            html += `<span class="tt-val" style="flex:1">${addr}</span>`;
+            html += `</div>`;
+        });
+        html += `</div>`;
+
+        tooltipEl.innerHTML = html;
+        tooltipEl.classList.remove('hidden');
+        tooltipEl.classList.add('pinned');
+        tooltipEl.style.pointerEvents = 'auto';
+        positionTooltip(mx, my);
+
+        // Bind click on each row to drill into that peer
+        tooltipEl.querySelectorAll('.tt-group-clickable').forEach(row => {
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const peerId = parseInt(row.dataset.peerId);
+                const node = group.find(n => n.peerId === peerId);
+                if (node) {
+                    pinnedNode = node;
+                    highlightedPeerId = peerId;
+                    // Filter table to just this one peer
+                    mapFilterPeerIds = new Set([peerId]);
+                    renderPeerTable();
+                    // Show single-peer detail with back navigation
+                    showPinnedPeerDetail(node, mx, my, true);
+                    if (!panelEl.classList.contains('collapsed')) {
+                        highlightTableRow(peerId, true);
+                    }
+                }
+            });
+        });
+    }
+
+    /** Build the HTML for a single peer detail tooltip.
+     *  @param {boolean} hasBackNav - show "← List" link in header
+     *  @param {boolean} pinned - show disconnect button */
+    function buildPeerDetailHtml(node, pinned, hasBackNav) {
         const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
         const netColor = rgba(node.color, 0.9);
 
@@ -3190,9 +3299,16 @@
         // Build tooltip HTML — grouped sections
         let html = '';
 
-        // ── Header: Peer ID with network color accent ──
+        // ── Header: left action | center #ID | right network ──
         html += `<div class="tt-header">`;
-        html += `<span class="tt-peer-id">Peer ${node.peerId}</span>`;
+        if (hasBackNav) {
+            html += `<a class="tt-back-link" href="#">&#8592; List</a>`;
+        } else if (pinned) {
+            html += `<a class="tt-back-link tt-exit-link" href="#">Exit</a>`;
+        } else {
+            html += `<span class="tt-back-link"></span>`;
+        }
+        html += `<span class="tt-peer-id">#${node.peerId}</span>`;
         html += `<span class="tt-net" style="color:${netColor}">${netLabel}</span>`;
         html += `</div>`;
 
@@ -3223,7 +3339,56 @@
             html += `</div>`;
         }
 
-        tooltipEl.innerHTML = html;
+        return html;
+    }
+
+    /** Show a pinned single-peer detail tooltip with optional back navigation.
+     *  @param {boolean} hasBackNav - if true, header shows "← List" */
+    function showPinnedPeerDetail(node, mx, my, hasBackNav) {
+        tooltipEl.innerHTML = buildPeerDetailHtml(node, true, hasBackNav);
+        tooltipEl.classList.remove('hidden');
+        tooltipEl.classList.add('pinned');
+        tooltipEl.style.pointerEvents = 'auto';
+        positionTooltip(mx, my);
+
+        // Bind disconnect button
+        const dcBtn = tooltipEl.querySelector('.tt-disconnect');
+        if (dcBtn) {
+            dcBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showDisconnectDialog(parseInt(dcBtn.dataset.id), dcBtn.dataset.net);
+            });
+        }
+
+        // Bind back/exit link
+        const backLink = tooltipEl.querySelector('.tt-back-link');
+        if (backLink) {
+            backLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (hasBackNav && groupedNodes && groupedNodes.length > 1) {
+                    // Go back to group selection list
+                    pinnedNode = null;
+                    mapFilterPeerIds = new Set(groupedNodes.map(n => n.peerId));
+                    renderPeerTable();
+                    showGroupSelectionList(groupedNodes, mx, my);
+                } else {
+                    // Exit: clear everything
+                    pinnedNode = null;
+                    highlightedPeerId = null;
+                    hoveredNode = null;
+                    clearMapDotFilter();
+                    hideTooltip();
+                    highlightTableRow(null);
+                }
+            });
+        }
+    }
+
+    /** Display comprehensive tooltip near cursor with peer details.
+     *  When pinned=true, tooltip gets pointer-events and a disconnect button. */
+    function showTooltip(node, mx, my, pinned) {
+        tooltipEl.innerHTML = buildPeerDetailHtml(node, pinned, false);
         tooltipEl.classList.remove('hidden');
 
         // Pinned tooltips are interactive (clickable buttons)
@@ -3238,21 +3403,25 @@
                     showDisconnectDialog(parseInt(dcBtn.dataset.id), dcBtn.dataset.net);
                 });
             }
+            // Bind exit link
+            const exitLink = tooltipEl.querySelector('.tt-exit-link');
+            if (exitLink) {
+                exitLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    pinnedNode = null;
+                    highlightedPeerId = null;
+                    clearMapDotFilter();
+                    hideTooltip();
+                    highlightTableRow(null);
+                });
+            }
         } else {
             tooltipEl.classList.remove('pinned');
             tooltipEl.style.pointerEvents = 'none';
         }
 
-        // Position: prefer right of cursor, flip left if near right edge
-        const ttWidth = 260;
-        const ttPad = 16;
-        let tx = mx + ttPad;
-        if (tx + ttWidth > W - 10) {
-            tx = mx - ttPad - ttWidth;
-        }
-        let ty = my - 10;
-        tooltipEl.style.left = Math.max(10, tx) + 'px';
-        tooltipEl.style.top = Math.max(48, ty) + 'px';
+        positionTooltip(mx, my);
     }
 
     function hideTooltip() {
@@ -3261,6 +3430,13 @@
         tooltipEl.style.pointerEvents = 'none';
         hoveredNode = null;
         pinnedNode = null;
+    }
+
+    /** Clear map dot filter and restore full peer table */
+    function clearMapDotFilter() {
+        mapFilterPeerIds = null;
+        groupedNodes = null;
+        renderPeerTable();
     }
 
     /** Highlight a table row by peer ID (map node hover → table row).
@@ -3549,6 +3725,11 @@
         // [AS-DIVERSITY] Apply AS filter when an AS is selected
         if (asFilterPeerIds) {
             sorted = sorted.filter(p => asFilterPeerIds.has(p.id));
+        }
+
+        // [MAP DOT FILTER] Apply map dot filter when a dot is clicked
+        if (mapFilterPeerIds) {
+            sorted = sorted.filter(p => mapFilterPeerIds.has(p.id));
         }
 
         handleCountEl.textContent = sorted.length;
@@ -3840,11 +4021,6 @@
         if (antToggle) {
             antToggle.addEventListener('change', () => {
                 showAntarcticaPeers = antToggle.checked;
-                if (showAntarcticaPeers && !antNoteDismissed) {
-                    antNote.classList.remove('hidden');
-                } else if (!showAntarcticaPeers) {
-                    antNote.classList.add('hidden');
-                }
             });
         }
 
@@ -3860,7 +4036,6 @@
                 // Reset Antarctica setting
                 showAntarcticaPeers = true;
                 antNoteDismissed = false;
-                antNote.classList.remove('hidden');
                 // Reset visible rows to default
                 maxPeerRows = 10;
                 applyMaxPeerRows();
@@ -4046,6 +4221,74 @@
         }
     }
 
+    /**
+     * Smoothly zoom the map to center on a node and show its pinned tooltip.
+     * Used by table row clicks and the selectPeerById hook.
+     */
+    function zoomToPeer(node) {
+        const p = project(node.lon, node.lat);
+
+        // For southern peers (lat < -30), auto-collapse the panel so they're visible
+        if (node.lat < -30 && !panelEl.classList.contains('collapsed')) {
+            panelEl.classList.add('collapsed');
+        }
+
+        // Calculate visible map area
+        const topbarH = 40;
+        const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
+        const visibleTop = topbarH;
+        const visibleBot = H - panelH;
+        const visibleH = visibleBot - visibleTop;
+        const targetScreenY = visibleTop + visibleH * 0.30;
+
+        // Mercator world bounds for vertical clamping
+        const yTop = project(0, 85).y;
+        const yBot = project(0, -85).y;
+
+        // Find minimum zoom that allows correct peer positioning
+        let z = 3;
+        for (; z <= CFG.maxZoom; z += 0.2) {
+            const offsetFromCenter = (H / 2 - targetScreenY) / z;
+            const candidateY = (p.y - 0.5) * H - offsetFromCenter;
+            const minPanY = (yTop - 0.5) * H + H / (2 * z);
+            const maxPanY = (yBot - 0.5) * H - H / (2 * z);
+            if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
+                break;
+            }
+        }
+        z = Math.min(z, CFG.maxZoom);
+
+        const offsetFromCenter = (H / 2 - targetScreenY) / z;
+        const finalX = (p.x - 0.5) * W;
+        const finalY = (p.y - 0.5) * H - offsetFromCenter;
+
+        // Reset view state to world baseline first (zoom 1, centered on peer longitude)
+        view.x = finalX;
+        view.y = 0;
+        view.zoom = 1;
+        // Then set the target to animate smoothly into the peer
+        targetView.x = finalX;
+        targetView.y = finalY;
+        targetView.zoom = z;
+
+        // Set selection state
+        highlightedPeerId = node.peerId;
+        pinnedNode = node;
+
+        // Open pinned tooltip at the node's screen position (once view settles)
+        setTimeout(() => {
+            const offsets = getWrapOffsets();
+            for (const off of offsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+                if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
+                    showPinnedPeerDetail(node, s.x, s.y, false);
+                    hoveredNode = node;
+                    break;
+                }
+            }
+        }, 500);
+    }
+
     // Table row click → center map on peer + open tooltip
     function handleTbodyClick(e) {
         const btn = e.target.closest('.peer-action-btn');
@@ -4070,73 +4313,14 @@
 
         const node = nodes.find(n => n.peerId === peerId && n.alive);
         if (node) {
-            // Select this peer: reset map to world view, then zoom into the peer.
-            // Peer lands at ~30% from top of visible map area.
-            const p = project(node.lon, node.lat);
+            // Clear any active map dot filter (table row click = direct navigation)
+            clearMapDotFilter();
+            groupedNodes = null;
+            mapFilterPeerIds = new Set([node.peerId]);
+            renderPeerTable();
 
-            // For southern peers (lat < -30), auto-collapse the panel so they're visible
-            if (node.lat < -30 && !panelEl.classList.contains('collapsed')) {
-                panelEl.classList.add('collapsed');
-            }
-
-            // Calculate visible map area
-            const topbarH = 40;
-            const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
-            const visibleTop = topbarH;
-            const visibleBot = H - panelH;
-            const visibleH = visibleBot - visibleTop;
-            const targetScreenY = visibleTop + visibleH * 0.30;
-
-            // Mercator world bounds for vertical clamping
-            const yTop = project(0, 85).y;
-            const yBot = project(0, -85).y;
-
-            // Find minimum zoom that allows correct peer positioning.
-            // Start at zoom 3 (standard); escalate for edge-case peers
-            // near world bounds (e.g. Australia, Antarctica).
-            let z = 3;
-            for (; z <= CFG.maxZoom; z += 0.2) {
-                const offsetFromCenter = (H / 2 - targetScreenY) / z;
-                const candidateY = (p.y - 0.5) * H - offsetFromCenter;
-                const minPanY = (yTop - 0.5) * H + H / (2 * z);
-                const maxPanY = (yBot - 0.5) * H - H / (2 * z);
-                if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) {
-                    break;
-                }
-            }
-            z = Math.min(z, CFG.maxZoom);
-
-            const offsetFromCenter = (H / 2 - targetScreenY) / z;
-            const finalX = (p.x - 0.5) * W;
-            const finalY = (p.y - 0.5) * H - offsetFromCenter;
-
-            // Reset view state to world baseline first (zoom 1, centered on peer longitude)
-            // so we always zoom IN fresh, never pan from a previous peer's position.
-            view.x = finalX;
-            view.y = 0;
-            view.zoom = 1;
-            // Then set the target to animate smoothly into the peer
-            targetView.x = finalX;
-            targetView.y = finalY;
-            targetView.zoom = z;
-
-            // Set selection state + highlight row
-            highlightedPeerId = peerId;
-            pinnedNode = node;
+            zoomToPeer(node);
             highlightTableRow(peerId, true);  // scroll into view on click
-
-            // Open pinned tooltip at the node's screen position (once view settles)
-            setTimeout(() => {
-                const offsets = getWrapOffsets();
-                for (const off of offsets) {
-                    const s = worldToScreen(node.lon + off, node.lat);
-                    if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
-                        showTooltip(node, s.x, s.y, true);
-                        hoveredNode = node;
-                        break;
-                    }
-                }
-            }, 500);
 
             row.classList.add('row-selected');
             setTimeout(() => row.classList.remove('row-selected'), 1500);
@@ -4273,9 +4457,9 @@
     /** Draw a highlight ring around a node when it's highlighted via table hover.
      *  When pinned (selected), draws a brighter pulsing halo so it's
      *  unambiguous which peer is selected even in dense clusters. */
-    function drawHighlightRing(node, now, wrapOffsets) {
+    function drawHighlightRing(node, now, wrapOffsets, forcePinned) {
         if (!node.alive) return;
-        const isPinned = pinnedNode && pinnedNode.peerId === node.peerId;
+        const isPinned = forcePinned || (pinnedNode && pinnedNode.peerId === node.peerId);
         const pulse = 0.7 + 0.3 * Math.sin(now * 0.005);
         const r = CFG.nodeRadius * 2.5;
         for (const off of wrapOffsets) {
@@ -4414,6 +4598,10 @@
         if (pinnedNode && pinnedNode.alive) {
             drawHighlightRing(pinnedNode, now, wrapOffsets);
         }
+        // Group selection (multi-peer dot): draw glow ring on the shared location
+        if (groupedNodes && groupedNodes.length > 1 && !pinnedNode) {
+            drawHighlightRing(groupedNodes[0], now, wrapOffsets, true);
+        }
         if (highlightedPeerId !== null && (!pinnedNode || highlightedPeerId !== pinnedNode.peerId)) {
             const hlNode = nodes.find(n => n.peerId === highlightedPeerId && n.alive);
             if (hlNode) drawHighlightRing(hlNode, now, wrapOffsets);
@@ -4455,23 +4643,27 @@
             if (dragZoom > 1.001) {
                 targetView.y = dragViewStart.y - dy / dragZoom;
             }
-            if (dragMoved) hideTooltip();
+            if (dragMoved && !groupedNodes) hideTooltip();
         } else {
-            // Hover detection for tooltip + table highlight
-            const node = findNodeAtScreen(e.clientX, e.clientY);
-            if (node) {
+            // Hover detection for tooltip + table highlight (group-aware)
+            // Skip if mouse is over a UI panel (not the canvas)
+            if (e.target !== canvas) return;
+            // A pinned tooltip (single peer or group selection list) blocks hover
+            const hasPinned = pinnedNode || groupedNodes;
+            const group = findNodesAtScreen(e.clientX, e.clientY);
+            if (group.length > 0) {
                 // Don't override a pinned tooltip with hover
-                if (!pinnedNode) {
-                    showTooltip(node, e.clientX, e.clientY, false);
+                if (!hasPinned) {
+                    showGroupHoverTooltip(group, e.clientX, e.clientY);
                 }
-                hoveredNode = node;
-                highlightTableRow(node.peerId);
+                hoveredNode = group[0];
+                if (!hasPinned) highlightTableRow(group[0].peerId);
                 canvas.style.cursor = 'pointer';
-            } else if (hoveredNode && !pinnedNode) {
+            } else if (hoveredNode && !hasPinned) {
                 hideTooltip();
                 highlightTableRow(null);
                 canvas.style.cursor = 'grab';
-            } else if (!pinnedNode) {
+            } else if (!hasPinned) {
                 canvas.style.cursor = 'grab';
             }
         }
@@ -4480,21 +4672,37 @@
     window.addEventListener('mouseup', (e) => {
         if (dragging && !dragMoved) {
             // This was a click, not a drag
-            const node = findNodeAtScreen(e.clientX, e.clientY);
-            if (node) {
-                // Pin tooltip on this node
-                pinnedNode = node;
-                highlightedPeerId = node.peerId;
-                showTooltip(node, e.clientX, e.clientY, true);
-                // Only scroll to peer row if panel is already open — never reopen a minimized panel
-                if (!panelEl.classList.contains('collapsed')) {
-                    highlightTableRow(node.peerId, true);
+            const group = findNodesAtScreen(e.clientX, e.clientY);
+            if (group.length > 0) {
+                if (group.length === 1) {
+                    // Single peer: pin tooltip + filter table to this peer
+                    const node = group[0];
+                    pinnedNode = node;
+                    highlightedPeerId = node.peerId;
+                    groupedNodes = null;
+                    mapFilterPeerIds = new Set([node.peerId]);
+                    renderPeerTable();
+                    showPinnedPeerDetail(node, e.clientX, e.clientY, false);
+                    if (!panelEl.classList.contains('collapsed')) {
+                        highlightTableRow(node.peerId, true);
+                    }
+                } else {
+                    // Multi-peer dot: show selection list + filter table to all
+                    pinnedNode = null;  // no single peer pinned yet
+                    groupedNodes = group;
+                    mapFilterPeerIds = new Set(group.map(n => n.peerId));
+                    renderPeerTable();
+                    showGroupSelectionList(group, e.clientX, e.clientY);
                 }
             } else {
-                // Clicked empty space — unpin tooltip
-                if (pinnedNode) {
+                // Clicked empty space — unpin tooltip + clear map filter
+                if (pinnedNode || mapFilterPeerIds) {
+                    pinnedNode = null;
+                    highlightedPeerId = null;
+                    hoveredNode = null;
                     hideTooltip();
                     highlightTableRow(null);
+                    clearMapDotFilter();
                 }
                 // [AS-DIVERSITY] Clear sub-filter first, or deselect AS if no sub-filter
                 if (window.ASDiversity) {
@@ -4651,12 +4859,20 @@
         });
     });
 
-    // Close Antarctica annotation (dismisses until network filter changes)
+    // Close Antarctica modal ("Got it" button or click outside)
     if (antCloseBtn) {
         antCloseBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             antNoteDismissed = true;
-            antNote.classList.add('hidden');
+            if (antOverlay) antOverlay.classList.add('hidden');
+        });
+    }
+    if (antOverlay) {
+        antOverlay.addEventListener('click', (e) => {
+            if (e.target === antOverlay) {
+                antNoteDismissed = true;
+                antOverlay.classList.add('hidden');
+            }
         });
     }
 
@@ -4755,7 +4971,7 @@
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
         html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
-        html += '<a class="dsp-feedback-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener">Suggestions &amp; Bug Reports &#8599;</a>';
+        html += '<a class="dsp-feedback-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener" title="Click here to open a browser to the repo discussion">Suggestions &amp; Bug Reports &#8599;</a>';
         popup.innerHTML = html;
         document.body.appendChild(popup);
         displaySettingsEl = popup;
@@ -5727,6 +5943,21 @@
                 asFilterPeerIds = peerIds ? new Set(peerIds) : null;
             },
             getWorldToScreen: worldToScreen,
+            selectPeerById: function (peerId) {
+                // Find the node on the map by peer ID
+                const node = nodes.find(n => n.peerId === peerId && n.alive);
+                if (!node) return;
+                // Clear AS selection and sub-filter
+                if (window.ASDiversity) {
+                    window.ASDiversity.deselect();
+                }
+                // Set selection state and zoom to the peer
+                groupedNodes = null;
+                mapFilterPeerIds = new Set([node.peerId]);
+                renderPeerTable();
+                zoomToPeer(node);
+                highlightTableRow(node.peerId);
+            },
         });
 
         // Donut is always active — feed it initial data if available
@@ -5837,9 +6068,9 @@
         fetchChanges();
         changesPollTimer = setInterval(fetchChanges, CFG.pollInterval);
 
-        // Show Antarctica annotation at session start (if setting is ON)
-        if (showAntarcticaPeers && !antNoteDismissed) {
-            antNote.classList.remove('hidden');
+        // Show Antarctica modal on every page load (if setting is ON)
+        if (showAntarcticaPeers && antOverlay) {
+            antOverlay.classList.remove('hidden');
         }
 
         // Start the render loop (grid + nodes render immediately,

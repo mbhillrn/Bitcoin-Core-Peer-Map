@@ -122,11 +122,16 @@
     <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
 
-    <!-- Antarctica annotation -->
-    <div id="antarctica-note" class="antarctica-note hidden">
-        <span class="ant-icon">&#9432;</span>
-        <span class="ant-text">Tor, I2P &amp; CJDNS peers are placed at Antarctic research stations for visualization &mdash; their real locations are hidden by design.<br><span class="ant-community">Have ideas or found a bug? <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener">Join the discussion</a> &mdash; click the logo anytime to visit the repo.</span></span>
-        <button id="ant-close" class="ant-close" title="Hide this message">&times;</button>
+    <!-- Antarctica modal (shown on every page load) -->
+    <div id="antarctica-modal-overlay" class="ant-modal-overlay hidden">
+        <div id="antarctica-note" class="ant-modal">
+            <span class="ant-modal-icon">&#9432;</span>
+            <div class="ant-modal-body">
+                <div class="ant-modal-text">Tor, I2P &amp; CJDNS peers are placed at Antarctic research stations for visualization &mdash; their real locations are hidden by design.</div>
+                <div class="ant-modal-community">Have ideas or found a bug? <a href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener">Join the discussion</a> &mdash; click the logo anytime to visit the repo.</div>
+            </div>
+            <button id="ant-close" class="ant-modal-btn">Got it</button>
+        </div>
     </div>
 
     <!-- Full-screen canvas map -->

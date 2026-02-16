@@ -66,7 +66,13 @@ trap handle_ctrl_c SIGINT
 # ═══════════════════════════════════════════════════════════════════════════════
 
 show_banner() {
-    clear
+    # First call during startup skips clear so user can scroll up through
+    # prereqs/update check. All subsequent calls (returning from submenus) clear.
+    if [[ "${FIRST_MENU_DISPLAY:-0}" -eq 1 ]]; then
+        FIRST_MENU_DISPLAY=0
+    else
+        clear
+    fi
     echo ""
     echo -e "${T_PRIMARY}"
     cat << 'EOF'
@@ -1260,25 +1266,40 @@ run_update() {
         git stash || true
     fi
 
-    # Pull the latest changes
-    echo -e "${T_INFO}Pulling latest changes from GitHub...${RST}"
-    if git pull origin main; then
-        msg_ok "Update successful!"
-        echo ""
-        msg_info "Automatically restarting with new version..."
-        sleep 1
-        # Restart the script with the new version using absolute path
-        exec "$MBTC_DIR/da.sh"
-    else
-        msg_err "Update failed. Please try manually:"
-        echo ""
-        echo -e "  ${T_DIM}cd $MBTC_DIR${RST}"
-        echo -e "  ${T_DIM}git pull origin main${RST}"
-        echo ""
-        echo -en "${T_DIM}Press Enter to continue...${RST}"
-        read -r
-        return 0
-    fi
+    # Pull the latest changes (with retry on failure)
+    while true; do
+        echo -e "${T_INFO}Pulling latest changes from GitHub...${RST}"
+        if git pull origin main; then
+            msg_ok "Update successful!"
+            echo ""
+            msg_info "Automatically restarting with new version..."
+            sleep 1
+            # Restart the script with the new version using absolute path
+            exec "$MBTC_DIR/da.sh"
+        else
+            echo ""
+            msg_err "Update failed! (git pull returned an error)"
+            echo ""
+            echo -e "  ${T_INFO}1)${RST} Retry update"
+            echo -e "  ${T_INFO}2)${RST} Continue to main menu without updating"
+            echo ""
+            echo -en "${T_DIM}Choice:${RST} "
+            read -r retry_choice
+            case "$retry_choice" in
+                1)
+                    echo ""
+                    msg_info "Retrying..."
+                    echo ""
+                    continue
+                    ;;
+                *)
+                    msg_info "You can update later by pressing 'u' in the menu"
+                    sleep 1
+                    return 0
+                    ;;
+            esac
+        fi
+    done
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1286,7 +1307,8 @@ run_update() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 main() {
-    show_banner
+    # No banner/clear here — prereqs and update check print naturally below
+    # the user's command. The logo appears when the main menu loop starts.
 
     # Check prerequisites
     if ! run_prereq_check; then
@@ -1349,7 +1371,8 @@ main() {
     # First-run database setup prompt (only shown once)
     show_first_run_db_setup
 
-    # Main loop
+    # Main loop (first iteration preserves startup scrollback)
+    FIRST_MENU_DISPLAY=1
     while true; do
         show_banner
         show_update_banner
