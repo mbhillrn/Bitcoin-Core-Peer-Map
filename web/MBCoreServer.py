@@ -88,6 +88,22 @@ def get_configured_port():
     return DEFAULT_WEB_PORT
 
 
+def get_configured_bind():
+    """Read configured bind address from config file, default to 0.0.0.0"""
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('MBTC_WEB_BIND='):
+                        value = line.split('=', 1)[1].strip('"').strip("'")
+                        if value in ('127.0.0.1', '0.0.0.0'):
+                            return value
+    except Exception:
+        pass
+    return "0.0.0.0"
+
+
 def save_port_to_config(port: int):
     """Save the port to the config file (for port busy scenarios)"""
     try:
@@ -2328,6 +2344,10 @@ def main():
                 else:
                     print(f"{C_RED}Invalid choice. Enter 1 or q{C_RESET}")
 
+    # Get configured bind address (127.0.0.1 = local only, 0.0.0.0 = LAN)
+    bind_host = get_configured_bind()
+    local_only = (bind_host == "127.0.0.1")
+
     # Get local IPs and subnets
     local_ips, subnets = get_local_ips()
 
@@ -2397,7 +2417,16 @@ def main():
         print(f"{' ' * detect_pad}{C_BOLD}{C_YELLOW}**Detected: {C_RED}local{C_RESET}{C_DIM}/remote(ssh/headless){C_RESET}{C_BOLD}{C_YELLOW}**{C_RESET}")
     print("")
 
-    if is_remote:
+    if local_only:
+        # --- Local only mode (127.0.0.1) ---
+        print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_local}{C_RESET} {C_WHITE}on your local browser{C_RESET}")
+        print(f"      {C_DIM}Server is bound to 127.0.0.1 (local only — not accessible from LAN){C_RESET}")
+        if is_remote:
+            print("")
+            print(f"      {C_YELLOW}Note: You are connected via SSH but the dashboard is in local-only mode.{C_RESET}")
+            print(f"      {C_DIM}To access remotely, change to LAN mode in Network/Port settings,{C_RESET}")
+            print(f"      {C_DIM}or use an SSH tunnel: ssh -L {port}:127.0.0.1:{port} user@host{C_RESET}")
+    elif is_remote:
         # --- SSH / headless: primary = LAN URL ---
         print(f"      {C_WHITE}Open (any LAN machine):{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
         if firewall_active and firewall_name:
@@ -2444,7 +2473,7 @@ def main():
 
     # Run server
     try:
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+        uvicorn.run(app, host=bind_host, port=port, log_level="warning")
     except KeyboardInterrupt:
         pass
     except SystemExit:
