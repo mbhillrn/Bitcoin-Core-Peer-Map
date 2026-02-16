@@ -1010,6 +1010,9 @@ body.theme-light .ro-link:hover {
     flex-shrink: 0; line-height: 1;
 }
 .ant-close:hover { color: var(--text-secondary); }
+.ant-community { display: block; margin-top: 4px; color: var(--text-muted); font-size: 9px; }
+.ant-community a { color: var(--accent); text-decoration: none; }
+.ant-community a:hover { text-decoration: underline; }
 
 /* ==========================================================
    9. ZOOM CONTROLS (inside right overlay)
@@ -1882,6 +1885,15 @@ body.theme-light .ro-link:hover {
     background: rgba(88, 166, 255, 0.18);
     border-color: var(--accent);
 }
+.dsp-feedback-link {
+    display: block;
+    margin-top: 6px;
+    font-size: 9px;
+    text-align: center;
+    color: var(--text-muted);
+    text-decoration: none;
+}
+.dsp-feedback-link:hover { color: var(--accent); }
 
 /* ==========================================================
    14b-adv. ADVANCED DISPLAY SETTINGS PANEL
