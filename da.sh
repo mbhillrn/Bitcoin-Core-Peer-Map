@@ -920,7 +920,7 @@ firewall_helper() {
     echo -e "  Your Subnet:    ${T_SUCCESS}$LOCAL_SUBNET${RST}"
     echo -e "  Dashboard Port: ${T_SUCCESS}$port${RST}"
     echo ""
-    echo -e "${T_DIM}Want to use a different port? Go to ${T_SECONDARY}p) Port Settings${RST}${T_DIM} from the main menu${RST}"
+    echo -e "${T_DIM}Want to use a different port? Go to ${T_SECONDARY}n) Network/Port${RST}${T_DIM} from the main menu${RST}"
     echo -e "${T_DIM}to change the dashboard port, then come back here to configure the firewall.${RST}"
     echo ""
 
