@@ -1251,7 +1251,10 @@ window.ASDiversity = (function () {
         renderLegend();
 
         // If a selection is active, refresh the panel + filter + keep lines
+        // Clear stale sub-filter state since update() resets to the full AS peer set
         if (selectedAs) {
+            subFilterPeerIds = null;
+            subFilterLabel = null;
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (seg) {
                 openPanel(selectedAs);
