@@ -1,1 +1,1 @@
-Improved security and network documentation.
+Network bind security: local-only (127.0.0.1) vs LAN (0.0.0.0) server access mode. Menu renamed p) Port Settings → n) Network/Port with submenu. README: Network & Security section, GeoIP dataset docs, firewall helper rewrite. Antarctica note: community participation link to Discussions. Map Settings: Suggestions & Bug Reports link. SQLite validation noted for GeoIP updates.
