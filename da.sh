@@ -1140,8 +1140,7 @@ server_access_mode() {
 
     echo -e "  ${T_INFO}1)${RST} Local only (127.0.0.1)"
     echo -e "     ${T_DIM}- Dashboard is only accessible from a browser on this machine${RST}"
-    echo -e "     ${T_DIM}- Most secure — no network exposure at all${RST}"
-    echo -e "     ${T_DIM}- Not suitable for headless/remote nodes (no local browser)${RST}"
+    echo -e "     ${T_DIM}- Optional extra security measure — no network exposure at all${RST}"
     echo ""
     echo -e "  ${T_INFO}2)${RST} LAN accessible (0.0.0.0)"
     echo -e "     ${T_DIM}- Dashboard is accessible from any device on your local network${RST}"
@@ -1160,8 +1159,6 @@ server_access_mode() {
             echo ""
             msg_ok "Access mode set to Local only (127.0.0.1)"
             msg_info "Dashboard will only be accessible from this machine"
-            echo -e "  ${T_DIM}Tip: For remote access, use an SSH tunnel:${RST}"
-            echo -e "  ${T_DIM}ssh -L ${MBTC_WEB_PORT:-58333}:127.0.0.1:${MBTC_WEB_PORT:-58333} user@host${RST}"
             ;;
         2)
             set_config "MBTC_WEB_BIND" "0.0.0.0"

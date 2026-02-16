@@ -2421,11 +2421,6 @@ def main():
         # --- Local only mode (127.0.0.1) ---
         print(f"      {C_WHITE}Open:{C_RESET} {C_BOLD}{C_CYAN}{url_local}{C_RESET} {C_WHITE}on your local browser{C_RESET}")
         print(f"      {C_DIM}Server is bound to 127.0.0.1 (local only — not accessible from LAN){C_RESET}")
-        if is_remote:
-            print("")
-            print(f"      {C_YELLOW}Note: You are connected via SSH but the dashboard is in local-only mode.{C_RESET}")
-            print(f"      {C_DIM}To access remotely, change to LAN mode in Network/Port settings,{C_RESET}")
-            print(f"      {C_DIM}or use an SSH tunnel: ssh -L {port}:127.0.0.1:{port} user@host{C_RESET}")
     elif is_remote:
         # --- SSH / headless: primary = LAN URL ---
         print(f"      {C_WHITE}Open (any LAN machine):{C_RESET} {C_BOLD}{C_CYAN}{url_lan}{C_RESET}  {C_YELLOW}(auto-detected IP){C_RESET}")
