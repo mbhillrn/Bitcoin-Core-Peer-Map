@@ -58,8 +58,6 @@ The dashboard starts and shows access URLs tailored to your detected environment
 
 Open the URL in your browser and you're in.
 
-For detailed access scenarios (headless servers, SSH tunnels, firewall setup), see the [QUICKSTART.md](QUICKSTART.md).
-
 ---
 
 ## Dashboard Overview
