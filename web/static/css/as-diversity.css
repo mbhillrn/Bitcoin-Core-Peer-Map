@@ -678,12 +678,14 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-sub-tt-id {
     color: var(--accent);
     font-weight: 700;
-    min-width: 32px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .as-sub-tt-type {
     color: var(--text-primary);
     font-weight: 600;
-    min-width: 42px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .as-sub-tt-loc {
     color: var(--text-secondary);
@@ -691,11 +693,45 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.as-sub-tt-scroll {
+    max-height: none;
+}
+.as-sub-tt-scroll.as-sub-tt-expanded {
+    max-height: 180px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(88,166,255,0.3) transparent;
+}
+.as-sub-tt-scroll.as-sub-tt-expanded::-webkit-scrollbar {
+    width: 4px;
+}
+.as-sub-tt-scroll.as-sub-tt-expanded::-webkit-scrollbar-thumb {
+    background: rgba(88,166,255,0.3);
+    border-radius: 2px;
+}
+.as-sub-tt-scroll.as-sub-tt-expanded::-webkit-scrollbar-track {
+    background: transparent;
+}
 .as-sub-tt-more {
     font-family: var(--font-data);
     font-size: 9px;
     color: var(--text-muted);
     padding-top: 2px;
+}
+.as-sub-tt-toggle {
+    color: var(--accent);
+    cursor: pointer;
+}
+.as-sub-tt-toggle:hover {
+    text-decoration: underline;
+}
+.as-sub-tt-show-more,
+.as-sub-tt-show-less {
+    cursor: pointer;
+}
+.as-sub-tt-show-more:hover,
+.as-sub-tt-show-less:hover {
+    color: var(--text-secondary);
 }
 /* Light theme */
 body.theme-light .as-sub-tooltip {

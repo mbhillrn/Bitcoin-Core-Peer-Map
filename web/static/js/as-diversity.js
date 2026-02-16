@@ -943,23 +943,71 @@ window.ASDiversity = (function () {
             html += '</div>';
         }
 
-        // Show up to 6 peers
-        var maxShow = Math.min(matchedPeers.length, 6);
-        for (var pi = 0; pi < maxShow; pi++) {
+        // Show first 6 peers, rest hidden behind expandable "+N more (show)"
+        var initialShow = 6;
+        var hasMore = matchedPeers.length > initialShow;
+
+        html += '<div class="as-sub-tt-scroll">';
+        for (var pi = 0; pi < matchedPeers.length; pi++) {
             var p = matchedPeers[pi];
             var ct = p.connection_type || 'unknown';
             var ctLabel = CONN_TYPE_LABELS[ct] || ct;
             var loc = (p.city || '') + (p.city && p.country ? ', ' : '') + (p.country || '');
-            html += '<div class="as-sub-tt-peer">';
-            html += '<span class="as-sub-tt-id">ID ' + p.id + '</span>';
+            // Truncate location to keep layout tight
+            if (loc.length > 16) loc = loc.substring(0, 15) + '\u2026';
+            var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-id">ID\u00a0' + p.id + '</span>';
             html += '<span class="as-sub-tt-type">' + ctLabel + '</span>';
             if (loc) html += '<span class="as-sub-tt-loc">' + loc + '</span>';
             html += '</div>';
         }
-        if (matchedPeers.length > maxShow) {
-            html += '<div class="as-sub-tt-more">+' + (matchedPeers.length - maxShow) + ' more</div>';
+        html += '</div>';
+        if (hasMore) {
+            var remaining = matchedPeers.length - initialShow;
+            html += '<div class="as-sub-tt-more as-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
         }
         return html;
+    }
+
+    /** Attach expand/collapse handlers to the sub-tooltip after rendering */
+    function attachSubTooltipHandlers() {
+        var tip = document.getElementById('as-sub-tooltip');
+        if (!tip) return;
+
+        var showMore = tip.querySelector('.as-sub-tt-show-more');
+        var showLess = tip.querySelector('.as-sub-tt-show-less');
+        if (!showMore || !showLess) return;
+
+        showMore.addEventListener('click', function (e) {
+            e.stopPropagation();
+            // Show all extra peers
+            var extras = tip.querySelectorAll('.as-sub-tt-peer-extra');
+            for (var i = 0; i < extras.length; i++) {
+                extras[i].style.display = '';
+            }
+            showMore.style.display = 'none';
+            showLess.style.display = '';
+
+            // Add scroll container class if many peers
+            var peerList = tip.querySelector('.as-sub-tt-scroll');
+            if (peerList) peerList.classList.add('as-sub-tt-expanded');
+        });
+
+        showLess.addEventListener('click', function (e) {
+            e.stopPropagation();
+            // Hide extra peers
+            var extras = tip.querySelectorAll('.as-sub-tt-peer-extra');
+            for (var i = 0; i < extras.length; i++) {
+                extras[i].style.display = 'none';
+            }
+            showLess.style.display = 'none';
+            showMore.style.display = '';
+
+            var peerList = tip.querySelector('.as-sub-tt-scroll');
+            if (peerList) peerList.classList.remove('as-sub-tt-expanded');
+        });
     }
 
     /** Attach hover and click handlers to interactive rows in the detail panel */
@@ -1015,6 +1063,7 @@ window.ASDiversity = (function () {
         tip.classList.remove('hidden');
         tip.style.display = '';
         positionSubTooltip(event);
+        attachSubTooltipHandlers();
     }
 
     function positionSubTooltip(event) {
@@ -1364,6 +1413,7 @@ window.ASDiversity = (function () {
                             if (tip) {
                                 tip.innerHTML = html;
                                 tip.style.pointerEvents = 'auto';
+                                attachSubTooltipHandlers();
                             }
                         }
                     } else {
