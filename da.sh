@@ -1307,7 +1307,8 @@ run_update() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 main() {
-    show_banner
+    # No banner/clear here — prereqs and update check print naturally below
+    # the user's command. The logo appears when the main menu loop starts.
 
     # Check prerequisites
     if ! run_prereq_check; then
