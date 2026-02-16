@@ -68,6 +68,7 @@ window.ASDiversity = (function () {
     let _filterPeerTable = null;   // fn(peerIds | null) — filter peer table
     let _dimMapPeers = null;       // fn(peerIds | null) — dim non-matching peers
     let _getWorldToScreen = null;  // fn(lon, lat) => {x, y}
+    let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID
 
     // Service flag definitions (mirrored from bitapp.js for hover expansion)
     var SERVICE_FLAGS = {
@@ -957,7 +958,7 @@ window.ASDiversity = (function () {
             if (loc.length > 16) loc = loc.substring(0, 15) + '\u2026';
             var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
             html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
-            html += '<span class="as-sub-tt-id">ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
             html += '<span class="as-sub-tt-type">' + ctLabel + '</span>';
             if (loc) html += '<span class="as-sub-tt-loc">' + loc + '</span>';
             html += '</div>';
@@ -971,10 +972,25 @@ window.ASDiversity = (function () {
         return html;
     }
 
-    /** Attach expand/collapse handlers to the sub-tooltip after rendering */
+    /** Attach expand/collapse and peer-click handlers to the sub-tooltip after rendering */
     function attachSubTooltipHandlers() {
         var tip = document.getElementById('as-sub-tooltip');
         if (!tip) return;
+
+        // Peer ID click → select that peer on the map
+        var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
+        for (var li = 0; li < idLinks.length; li++) {
+            (function (link) {
+                link.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var peerId = parseInt(link.dataset.peerId);
+                    if (_selectPeerById && !isNaN(peerId)) {
+                        hideSubTooltip();
+                        _selectPeerById(peerId);
+                    }
+                });
+            })(idLinks[li]);
+        }
 
         var showMore = tip.querySelector('.as-sub-tt-show-more');
         var showLess = tip.querySelector('.as-sub-tt-show-less');
@@ -1231,6 +1247,8 @@ window.ASDiversity = (function () {
     function onSegmentHover(e) {
         var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
+        // Don't show AS hover tooltip when a sub-tooltip is pinned
+        if (subTooltipPinned) return;
         hoveredAs = asNum;
         showTooltip(asNum, e);
 
@@ -1244,6 +1262,7 @@ window.ASDiversity = (function () {
     }
 
     function onSegmentLeave() {
+        if (subTooltipPinned) return;
         hoveredAs = null;
         hideTooltip();
 
@@ -1347,6 +1366,7 @@ window.ASDiversity = (function () {
         _filterPeerTable = hooks.filterPeerTable || null;
         _dimMapPeers = hooks.dimMapPeers || null;
         _getWorldToScreen = hooks.getWorldToScreen || null;
+        _selectPeerById = hooks.selectPeerById || null;
     }
 
     /** Update with new peer data. Called after each fetchPeers(). */

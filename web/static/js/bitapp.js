@@ -4631,6 +4631,8 @@
             if (dragMoved && !groupedNodes) hideTooltip();
         } else {
             // Hover detection for tooltip + table highlight (group-aware)
+            // Skip if mouse is over a UI panel (not the canvas)
+            if (e.target !== canvas) return;
             // A pinned tooltip (single peer or group selection list) blocks hover
             const hasPinned = pinnedNode || groupedNodes;
             const group = findNodesAtScreen(e.clientX, e.clientY);
@@ -5923,6 +5925,25 @@
                 asFilterPeerIds = peerIds ? new Set(peerIds) : null;
             },
             getWorldToScreen: worldToScreen,
+            selectPeerById: function (peerId) {
+                // Find the node on the map by peer ID
+                const node = nodes.find(n => n.peerId === peerId && n.alive);
+                if (!node) return;
+                // Clear AS selection and sub-filter
+                if (window.ASDiversity) {
+                    window.ASDiversity.deselect();
+                }
+                // Pin this peer on the map
+                pinnedNode = node;
+                highlightedPeerId = node.peerId;
+                groupedNodes = null;
+                mapFilterPeerIds = new Set([node.peerId]);
+                renderPeerTable();
+                // Show tooltip at the node's screen position
+                const sp = worldToScreen(node.lon, node.lat);
+                showPinnedPeerDetail(node, sp.x, sp.y, false);
+                highlightTableRow(node.peerId);
+            },
         });
 
         // Donut is always active — feed it initial data if available

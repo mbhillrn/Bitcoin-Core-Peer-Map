@@ -681,6 +681,15 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     white-space: nowrap;
     flex-shrink: 0;
 }
+.as-sub-tt-id-link {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.15s;
+}
+.as-sub-tt-id-link:hover {
+    text-decoration-color: var(--accent);
+}
 .as-sub-tt-type {
     color: var(--text-primary);
     font-weight: 600;
