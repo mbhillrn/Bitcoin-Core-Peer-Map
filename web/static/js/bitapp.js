@@ -3374,6 +3374,9 @@
                     showGroupSelectionList(groupedNodes, mx, my);
                 } else {
                     // Exit: clear everything
+                    pinnedNode = null;
+                    highlightedPeerId = null;
+                    hoveredNode = null;
                     clearMapDotFilter();
                     hideTooltip();
                     highlightTableRow(null);
@@ -3406,6 +3409,8 @@
                 exitLink.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    pinnedNode = null;
+                    highlightedPeerId = null;
                     clearMapDotFilter();
                     hideTooltip();
                     highlightTableRow(null);
@@ -4692,6 +4697,9 @@
             } else {
                 // Clicked empty space — unpin tooltip + clear map filter
                 if (pinnedNode || mapFilterPeerIds) {
+                    pinnedNode = null;
+                    highlightedPeerId = null;
+                    hoveredNode = null;
                     hideTooltip();
                     highlightTableRow(null);
                     clearMapDotFilter();
