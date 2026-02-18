@@ -595,7 +595,9 @@ window.ASDiversity = (function () {
                     icon: '\u23f3',
                     asNumber: bestGroup.asNumber,
                     provName: bestGroup.asShort || bestGroup.asNumber,
-                    durText: fmtDuration(bestAvg)
+                    durText: fmtDuration(bestAvg),
+                    peerIds: bestGroup.peers.map(function (p) { return p.id; }),
+                    peers: bestGroup.peers
                 });
             }
         }
@@ -1337,40 +1339,49 @@ window.ASDiversity = (function () {
         // Dynamic insights
         for (var ii = 0; ii < data.insights.length; ii++) {
             var ins = data.insights[ii];
+            html += '<div class="as-insight-wrapper">';
             html += '<div class="as-summary-insight">';
             html += '<span class="as-insight-icon">' + ins.icon + '</span>';
             if (ins.type === 'stable') {
-                html += '<span class="as-insight-text">Most stable: <span class="as-panel-link as-navigate-provider" data-as="' + ins.asNumber + '">' + ins.provName + '</span> (avg ' + ins.durText + ')</span>';
+                var stablePeerJson = JSON.stringify(ins.peerIds).replace(/"/g, '&quot;');
+                html += '<span class="as-insight-text as-panel-link as-stable-link" data-as="' + ins.asNumber + '" data-peer-ids="' + stablePeerJson + '">Most stable: ' + ins.provName + ' (avg ' + ins.durText + ')</span>';
             } else if (ins.type === 'longest') {
                 html += '<span class="as-insight-text as-panel-link as-longest-peers-link" title="View top 50 longest connected peers">Longest Peers <span style="color:var(--text-muted)">(top 50)</span></span>';
-                html += '<div class="as-insight-expand">';
-                for (var ei = 0; ei < ins.topPeers.length; ei++) {
-                    var ep = ins.topPeers[ei];
-                    html += '<div class="as-insight-expand-row">';
-                    html += '<span class="as-sub-tt-id as-sub-tt-id-link as-peer-select" data-peer-id="' + ep.peer.id + '" title="Select peer on map">#' + (ei + 1) + ' ID ' + ep.peer.id + '</span>';
-                    html += '<span class="as-insight-expand-dur">' + fmtDuration(ep.duration) + '</span>';
-                    html += '</div>';
-                }
-                html += '</div>';
             } else if (ins.type === 'data-providers') {
                 html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="View top providers by total bytes">' + ins.label + '</span>';
-                html += '<div class="as-insight-expand">';
-                for (var ei = 0; ei < ins.topProviders.length; ei++) {
-                    var dp = ins.topProviders[ei];
-                    var dpName = dp.provName.length > 16 ? dp.provName.substring(0, 15) + '\u2026' : dp.provName;
-                    html += '<div class="as-insight-expand-row">';
-                    html += '<span class="as-grid-dot" style="background:' + dp.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:middle"></span>';
-                    html += '<span style="flex:1" title="' + dp.provName + '">#' + (ei + 1) + ' ' + dpName + '</span>';
-                    html += '<span class="as-insight-expand-dur">' + fmtBytes(dp.totalBytes) + '</span>';
-                    html += '</div>';
-                }
-                html += '</div>';
             } else if (ins.type === 'data') {
                 html += '<span class="as-insight-text">' + ins.label + ': ' + ins.amount + '</span>';
             } else {
                 html += '<span class="as-insight-text">' + ins.text + '</span>';
             }
-            html += '</div>';
+            html += '</div>'; // close .as-summary-insight flex row
+
+            // Expand section OUTSIDE the flex row so it takes full width
+            if (ins.type === 'longest') {
+                html += '<div class="as-insight-expand">';
+                for (var ei = 0; ei < ins.topPeers.length; ei++) {
+                    var ep = ins.topPeers[ei];
+                    html += '<div class="as-insight-expand-row as-peer-select" data-peer-id="' + ep.peer.id + '" title="Select peer on map">';
+                    html += '<span class="as-sub-tt-id as-sub-tt-id-link">#' + (ei + 1) + ' ID\u00a0' + ep.peer.id + '</span>';
+                    html += '<span class="as-insight-expand-dur">' + fmtDuration(ep.duration) + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            } else if (ins.type === 'data-providers') {
+                html += '<div class="as-insight-expand">';
+                for (var ei = 0; ei < ins.topProviders.length; ei++) {
+                    var dp = ins.topProviders[ei];
+                    var dpName = dp.provName.length > 16 ? dp.provName.substring(0, 15) + '\u2026' : dp.provName;
+                    html += '<div class="as-insight-expand-row">';
+                    html += '<span class="as-insight-expand-rank">#' + (ei + 1) + '</span>';
+                    html += '<span class="as-grid-dot" style="background:' + dp.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:middle"></span>';
+                    html += '<span style="flex:1" title="' + dp.provName + '">' + dpName + '</span>';
+                    html += '<span class="as-insight-expand-dur">' + fmtBytes(dp.totalBytes) + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+            html += '</div>'; // close .as-insight-wrapper
         }
 
         // ── Section 2: Connections by Provider (3 rows per provider) ──
@@ -2410,6 +2421,87 @@ window.ASDiversity = (function () {
             });
         }
 
+        // "Most stable" link — hover shows peer list for that provider, click pins sub-panel
+        var stableLink = bodyEl.querySelector('.as-stable-link');
+        if (stableLink) {
+            function buildStablePeersHtml() {
+                var data = computeSummaryData();
+                var stableInsight = null;
+                for (var j = 0; j < data.insights.length; j++) {
+                    if (data.insights[j].type === 'stable') { stableInsight = data.insights[j]; break; }
+                }
+                if (!stableInsight) return null;
+                var peerIds = stableInsight.peerIds;
+                var idSet = {};
+                for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                var matchedPeers = [];
+                for (var i = 0; i < lastPeersRaw.length; i++) {
+                    if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                }
+                var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + stableInsight.provName + ' Peers</div>';
+                html += '<div class="as-sub-tt-nav as-grid-provider-click" data-as="' + stableInsight.asNumber + '" style="font-size:9px; color:var(--accent); cursor:pointer; margin-top:2px">\u25B6 Open provider panel</div>';
+                html += '</div>';
+                html += buildPeerListHtmlForSubSub(matchedPeers);
+                return { html: html, peerIds: peerIds, asNum: stableInsight.asNumber };
+            }
+            stableLink.addEventListener('mouseenter', function (e) {
+                if (subTooltipPinned) {
+                    var result = buildStablePeersHtml();
+                    if (result) showHoverPreview(result.html, e);
+                    return;
+                }
+                var result = buildStablePeersHtml();
+                if (result) showSubTooltip(result.html, e);
+                // Preview lines for this provider
+                var asNum = stableLink.dataset.as;
+                if (asNum) {
+                    var peerIds = getPeerIdsForAnyAs(asNum);
+                    var color = getColorForAsNum(asNum);
+                    if (peerIds.length > 0 && _drawLinesForAs) {
+                        _drawLinesForAs(asNum, peerIds, color);
+                    }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                }
+            });
+            stableLink.addEventListener('mouseleave', function () {
+                if (subTooltipPinned) {
+                    restorePinnedSubTooltip();
+                    return;
+                }
+                hideSubTooltip();
+                if (summarySelected) {
+                    if (_dimMapPeers) _dimMapPeers(null);
+                    activateHoverAll();
+                }
+            });
+            stableLink.addEventListener('click', function (e) {
+                e.stopPropagation();
+                // Toggle
+                if (subTooltipPinned && pinnedSubTooltipSrc === stableLink) {
+                    hideSubTooltip();
+                    stableLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    if (_filterPeerTable) _filterPeerTable(null);
+                    if (_dimMapPeers) _dimMapPeers(null);
+                    if (summarySelected) activateHoverAll();
+                    return;
+                }
+                var result = buildStablePeersHtml();
+                if (!result) return;
+                showSubTooltip(result.html, e);
+                pinSubTooltip(result.html, stableLink, function (tip) {
+                    attachSubTooltipHandlers();
+                    attachProviderNavHandlers(tip);
+                });
+                attachSubTooltipHandlers();
+                var tip = document.getElementById('as-sub-tooltip');
+                if (tip) attachProviderNavHandlers(tip);
+                stableLink.closest('.as-summary-insight').classList.add('sub-filter-active');
+                if (_filterPeerTable) _filterPeerTable(result.peerIds);
+                if (_dimMapPeers) _dimMapPeers(result.peerIds);
+            });
+        }
+
         // Peer select links (in insights section) — zoom to peer, collapse subs, keep main panel
         var peerLinks = bodyEl.querySelectorAll('.as-peer-select');
         for (var i = 0; i < peerLinks.length; i++) {
@@ -2450,6 +2542,7 @@ window.ASDiversity = (function () {
                         var prov = insight.topProviders[pi];
                         var peerIdsJson = JSON.stringify(prov.peers.slice(0, 20).map(function (p) { return p.id; })).replace(/"/g, '&quot;');
                         html += '<div class="as-sub-tt-peer as-provider-row as-data-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '" data-field="' + field + '">';
+                        html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
                         html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
                         var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
                         html += '<span class="as-sub-tt-loc" title="' + prov.provName + '">' + name + '</span>';
@@ -2603,6 +2696,20 @@ window.ASDiversity = (function () {
                     });
                 }
             })(provRows[i]);
+        }
+        // Also handle standalone provider-click links (e.g. "Open provider panel" in sub-tooltips)
+        var provClicks = tip.querySelectorAll('.as-grid-provider-click');
+        for (var i = 0; i < provClicks.length; i++) {
+            (function (el) {
+                el.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var asNum = el.dataset.as;
+                    if (asNum) {
+                        hideSubTooltip();
+                        navigateToProvider(asNum);
+                    }
+                });
+            })(provClicks[i]);
         }
     }
 
@@ -3236,13 +3343,11 @@ window.ASDiversity = (function () {
             titleEl.addEventListener('mouseleave', onTitleLeave);
             titleEl.addEventListener('click', onSummaryClick);
         }
-        var scoreLblEl = document.getElementById('as-score-label');
-        if (scoreLblEl) {
-            scoreLblEl.addEventListener('mouseenter', onTitleEnter);
-            scoreLblEl.addEventListener('mouseleave', onTitleLeave);
-            scoreLblEl.addEventListener('click', onSummaryClick);
-        }
         // Donut center: hover previews all lines, click opens summary
+        // NOTE: We intentionally do NOT add separate mouseenter/mouseleave on as-score-label,
+        // because donutCenter already covers it. Adding handlers on the child causes
+        // lines to disappear when the mouse moves from the label to the score value
+        // (child mouseleave fires while still inside the parent).
         if (donutCenter) {
             donutCenter.addEventListener('mouseenter', onTitleEnter);
             donutCenter.addEventListener('mouseleave', onTitleLeave);

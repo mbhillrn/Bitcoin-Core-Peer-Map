@@ -6068,18 +6068,19 @@
                 // Zoom to peer without touching sub-panels or lines — just zoom + highlight
                 const node = nodes.find(n => n.peerId === peerId && n.alive);
                 if (!node) return;
-                // Draw line to just this one peer
+                // Draw line from the peer's AS legend dot to this peer
                 const ASD = window.ASDiversity;
                 if (ASD && node.peerId !== undefined) {
-                    // Find the AS for this peer to get the right color
                     const peer = lastPeers.find(p => p.id === peerId);
                     if (peer && peer.as) {
-                        const asNum = ASD.getSelectedAs ? ASD.getSelectedAs() : null;
-                        const color = asNum ? (ASD.getColorForAs(asNum) || '#58a6ff') : '#58a6ff';
+                        // Use the peer's own AS number for line origin (not selectedAs)
+                        // so the line comes from the correct legend dot
+                        const peerAsNum = peer.as.number || peer.as;
+                        const color = ASD.getColorForAs(peerAsNum) || '#58a6ff';
                         asLineGroups = null;
                         asLinePeerIds = [peerId];
                         asLineColor = color;
-                        asLineAsNum = asNum || 'single';
+                        asLineAsNum = peerAsNum;
                     }
                 }
                 zoomToPeer(node);
