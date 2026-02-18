@@ -41,6 +41,7 @@ window.ASDiversity = (function () {
     let asGroups = [];             // Aggregated AS data (sorted by count desc)
     let donutSegments = [];        // Top N + Others for donut rendering
     let hoveredAs = null;          // AS number string currently hovered
+    let hoveredAll = false;        // True when title or SUMMARY ANALYSIS is hovered
     let selectedAs = null;         // AS number string currently selected (clicked)
     let diversityScore = 0;        // 0-10 score
     let totalPeers = 0;
@@ -48,6 +49,7 @@ window.ASDiversity = (function () {
 
     // DOM refs (cached on init)
     let containerEl = null;
+    let titleEl = null;
     let donutWrapEl = null;
     let donutSvg = null;
     let donutCenter = null;
@@ -64,6 +66,7 @@ window.ASDiversity = (function () {
 
     // Integration hooks (set by bitapp.js)
     let _drawLinesForAs = null;    // fn(asNumber, peerIds, color) — draw lines on canvas
+    let _drawLinesForAllAs = null; // fn(groups) — draw lines for all AS groups at once
     let _clearAsLines = null;      // fn() — clear AS lines from canvas
     let _filterPeerTable = null;   // fn(peerIds | null) — filter peer table
     let _dimMapPeers = null;       // fn(peerIds | null) — dim non-matching peers
@@ -540,6 +543,7 @@ window.ASDiversity = (function () {
                     qualityEl.style.color = seg.color;
                 }
                 scoreLbl.textContent = seg.asNumber;
+                scoreLbl.classList.remove('as-summary-link');
                 return;
             }
         }
@@ -564,6 +568,7 @@ window.ASDiversity = (function () {
             scoreVal.textContent = '\u2014';
             scoreVal.title = 'No AS data available \u2014 all peers are on private or anonymous networks';
             scoreLbl.textContent = 'NO DATA';
+            scoreLbl.classList.remove('as-summary-link');
             return;
         }
 
@@ -590,7 +595,8 @@ window.ASDiversity = (function () {
             qualityEl.className = 'as-score-quality ' + q.cls;
         }
 
-        scoreLbl.textContent = totalPeers + ' (PUBLIC) PEERS';
+        scoreLbl.textContent = 'SUMMARY ANALYSIS';
+        scoreLbl.classList.add('as-summary-link');
     }
 
     /** Render the legend */
@@ -1252,6 +1258,11 @@ window.ASDiversity = (function () {
         hoveredAs = asNum;
         showTooltip(asNum, e);
 
+        // Temporarily remove all-hovered highlight so only this segment is bright
+        if (hoveredAll && containerEl) {
+            containerEl.classList.remove('as-all-hovered');
+        }
+
         // Only draw hover lines if nothing is selected
         if (!selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
@@ -1266,10 +1277,52 @@ window.ASDiversity = (function () {
         hoveredAs = null;
         hideTooltip();
 
+        // If hoveredAll is active, restore all-lines state instead of clearing
+        if (hoveredAll && !selectedAs) {
+            activateHoverAll();
+            return;
+        }
+
         // ONLY clear lines if nothing is selected — selection keeps its lines
         if (!selectedAs) {
             if (_clearAsLines) _clearAsLines();
         }
+    }
+
+    /** Activate hover-all visual state: highlight all segments + draw all lines */
+    function activateHoverAll() {
+        if (containerEl) containerEl.classList.add('as-all-hovered');
+        if (containerEl) containerEl.classList.add('as-legend-visible');
+        // Build groups array and draw all lines
+        if (_drawLinesForAllAs && donutSegments.length > 0) {
+            var groups = [];
+            for (var i = 0; i < donutSegments.length; i++) {
+                var seg = donutSegments[i];
+                if (seg.peerIds && seg.peerIds.length > 0) {
+                    groups.push({ asNum: seg.asNumber, peerIds: seg.peerIds, color: seg.color });
+                }
+            }
+            _drawLinesForAllAs(groups);
+        }
+    }
+
+    /** Deactivate hover-all visual state */
+    function deactivateHoverAll() {
+        if (containerEl) containerEl.classList.remove('as-all-hovered');
+        if (containerEl) containerEl.classList.remove('as-legend-visible');
+        if (_clearAsLines) _clearAsLines();
+    }
+
+    function onTitleEnter() {
+        if (selectedAs) return; // Don't override an active selection
+        hoveredAll = true;
+        activateHoverAll();
+    }
+
+    function onTitleLeave() {
+        if (!hoveredAll) return;
+        hoveredAll = false;
+        deactivateHoverAll();
     }
 
     function onSegmentClick(e) {
@@ -1330,6 +1383,7 @@ window.ASDiversity = (function () {
     /** Initialize — cache DOM refs and attach events. Call once on page load. */
     function init() {
         containerEl = document.getElementById('as-diversity-container');
+        titleEl = document.getElementById('as-donut-title');
         donutWrapEl = document.getElementById('as-donut-wrap');
         donutSvg = document.getElementById('as-donut');
         donutCenter = document.getElementById('as-donut-center');
@@ -1337,6 +1391,17 @@ window.ASDiversity = (function () {
         tooltipEl = document.getElementById('as-tooltip');
         panelEl = document.getElementById('as-detail-panel');
         loadingEl = containerEl ? containerEl.querySelector('.as-loading') : null;
+
+        // Hover-all: title and SUMMARY ANALYSIS label trigger all-segments highlight
+        if (titleEl) {
+            titleEl.addEventListener('mouseenter', onTitleEnter);
+            titleEl.addEventListener('mouseleave', onTitleLeave);
+        }
+        var scoreLblEl = document.getElementById('as-score-label');
+        if (scoreLblEl) {
+            scoreLblEl.addEventListener('mouseenter', onTitleEnter);
+            scoreLblEl.addEventListener('mouseleave', onTitleLeave);
+        }
 
         // Close button on detail panel
         var closeBtn = panelEl ? panelEl.querySelector('.as-detail-close') : null;
@@ -1362,6 +1427,7 @@ window.ASDiversity = (function () {
     /** Register integration callbacks from bitapp.js */
     function setHooks(hooks) {
         _drawLinesForAs = hooks.drawLinesForAs || null;
+        _drawLinesForAllAs = hooks.drawLinesForAllAs || null;
         _clearAsLines = hooks.clearAsLines || null;
         _filterPeerTable = hooks.filterPeerTable || null;
         _dimMapPeers = hooks.dimMapPeers || null;
@@ -1541,6 +1607,7 @@ window.ASDiversity = (function () {
         getDonutCenter: getDonutCenter,
         getLegendDotPosition: getLegendDotPosition,
         getHoveredAs: getHoveredAs,
+        getHoveredAll: function () { return hoveredAll; },
         getSelectedAs: getSelectedAs,
         getPeerIdsForAs: getPeerIdsForAs,
         getColorForAs: getColorForAs,
