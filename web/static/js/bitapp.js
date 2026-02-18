@@ -4815,13 +4815,9 @@
                     highlightTableRow(null);
                     clearMapDotFilter();
                 }
-                // [AS-DIVERSITY] Clear sub-filter first, or deselect AS if no sub-filter
+                // [AS-DIVERSITY] Two-stage collapse: first close sub-panels, then main panel
                 if (window.ASDiversity) {
-                    if (window.ASDiversity.hasSubFilter()) {
-                        window.ASDiversity.clearSubFilter();
-                    } else if (window.ASDiversity.getSelectedAs()) {
-                        window.ASDiversity.deselect();
-                    }
+                    window.ASDiversity.onMapClick();
                 }
             }
         }
