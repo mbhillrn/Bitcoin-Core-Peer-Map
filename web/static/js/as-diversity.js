@@ -22,7 +22,7 @@ window.ASDiversity = (function () {
 
     // Curated colour palette — 9 colours (8 AS + Others), distinct and accessible
     const PALETTE = [
-        '#58a6ff',   // blue
+        '#f472b6',   // pink
         '#3fb950',   // green
         '#e3b341',   // gold
         '#f07178',   // coral
@@ -30,7 +30,7 @@ window.ASDiversity = (function () {
         '#d2a8ff',   // lavender
         '#79c0ff',   // light blue
         '#f0883e',   // orange
-        '#f472b6',   // pink (Others)
+        '#58a6ff',   // blue (Others)
     ];
 
     // ═══════════════════════════════════════════════════════════
