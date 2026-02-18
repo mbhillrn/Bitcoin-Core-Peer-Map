@@ -852,6 +852,10 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     border-left: 2px solid transparent;
     transition: background 0.15s ease, border-left-color 0.15s ease;
 }
+/* Hover state for insight rows */
+.as-summary-insight:hover {
+    background: rgba(88, 166, 255, 0.06);
+}
 /* Selected/active state for insight rows */
 .as-summary-insight.sub-filter-active {
     background: rgba(88, 166, 255, 0.16);
@@ -971,6 +975,29 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-grid-clickable:hover {
     background: rgba(88, 166, 255, 0.15);
     color: var(--accent);
+}
+
+/* Connection provider rows (3-row layout per provider) */
+.as-conn-prov-row {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    font-weight: 600;
+}
+.as-conn-prov-row:hover {
+    background: rgba(88, 166, 255, 0.06);
+}
+.as-conn-dir-row,
+.as-conn-out-row {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.as-conn-dir-row:hover,
+.as-conn-out-row:hover {
+    background: rgba(88, 166, 255, 0.06);
 }
 
 /* Summary interactive rows (sections 3-7) — clickable with provider drill-down */

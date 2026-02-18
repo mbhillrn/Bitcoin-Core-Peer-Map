@@ -520,7 +520,7 @@ window.ASDiversity = (function () {
         );
     }
 
-    /** Build connection grid: each donut segment with IN/OUT counts */
+    /** Build connection grid: each donut segment with IN/OUT counts and outbound subtypes */
     function buildConnectionGrid() {
         var grid = [];
         for (var i = 0; i < donutSegments.length; i++) {
@@ -530,6 +530,23 @@ window.ASDiversity = (function () {
             for (var j = 0; j < peers.length; j++) {
                 if (peers[j].connection_type === 'inbound') inPeers.push(peers[j]);
                 else outPeers.push(peers[j]);
+            }
+            // Break out outbound by connection subtype
+            var outSubtypes = {};
+            for (var oj = 0; oj < outPeers.length; oj++) {
+                var ct = outPeers[oj].connection_type || 'unknown';
+                if (!outSubtypes[ct]) outSubtypes[ct] = [];
+                outSubtypes[ct].push(outPeers[oj]);
+            }
+            var outSubList = [];
+            for (var oKey in outSubtypes) {
+                if (!outSubtypes.hasOwnProperty(oKey)) continue;
+                outSubList.push({
+                    type: oKey,
+                    label: CONN_TYPE_LABELS[oKey] || oKey,
+                    count: outSubtypes[oKey].length,
+                    peerIds: outSubtypes[oKey].map(function (p) { return p.id; })
+                });
             }
             var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
             if (displayName.length > 16) displayName = displayName.substring(0, 15) + '\u2026';
@@ -542,8 +559,10 @@ window.ASDiversity = (function () {
                 outCount: outPeers.length,
                 inPeerIds: inPeers.map(function (p) { return p.id; }),
                 outPeerIds: outPeers.map(function (p) { return p.id; }),
+                totalPeerIds: peers.map(function (p) { return p.id; }),
                 inPeers: inPeers,
                 outPeers: outPeers,
+                outSubtypes: outSubList,
                 totalCount: peers.length
             });
         }
@@ -1179,7 +1198,7 @@ window.ASDiversity = (function () {
         } else {
             // ── Individual AS: connection types only (no duplicate inbound/outbound) ──
             html += '<div class="modal-section-title">Peers</div>';
-            html += row('Total', fullGroup.peerCount);
+            html += interactiveRow('Total', fullGroup.peerCount, fullGroup.peerIds, 'conntype');
 
             // Show only connection types that exist, with short labels
             if (fullGroup.connTypesList && fullGroup.connTypesList.length > 0) {
@@ -1354,27 +1373,35 @@ window.ASDiversity = (function () {
             html += '</div>';
         }
 
-        // ── Section 2: Connections by Provider (grid) ──
-        html += '<div class="modal-section-title" title="Inbound and outbound peer connections grouped by AS provider. Click provider name to view its panel, click IN/OUT numbers to see peer lists.">Connections by Provider</div>';
-        html += '<div class="as-summary-grid">';
-        html += '<div class="as-grid-header">';
-        html += '<span class="as-grid-h-name">Provider</span>';
-        html += '<span class="as-grid-h-val">IN</span>';
-        html += '<span class="as-grid-h-val">OUT</span>';
-        html += '</div>';
+        // ── Section 2: Connections by Provider (3 rows per provider) ──
+        html += '<div class="modal-section-title" title="Inbound and outbound peer connections grouped by AS provider. Click provider name to view its panel, click IN/OUT to see peer lists.">Connections by Provider</div>';
         for (var gi = 0; gi < data.connectionGrid.length; gi++) {
             var gItem = data.connectionGrid[gi];
+            var totalJson = JSON.stringify(gItem.totalPeerIds).replace(/"/g, '&quot;');
             var inJson = JSON.stringify(gItem.inPeerIds).replace(/"/g, '&quot;');
             var outJson = JSON.stringify(gItem.outPeerIds).replace(/"/g, '&quot;');
-            html += '<div class="as-grid-row">';
-            html += '<span class="as-grid-name as-grid-provider-click" data-as="' + gItem.asNumber + '" style="color:' + gItem.color + '" title="View ' + gItem.name + ' panel">';
-            html += '<span class="as-grid-dot" style="background:' + gItem.color + '"></span>' + gItem.name;
-            html += '</span>';
-            html += '<span class="as-grid-val as-grid-clickable" data-peer-ids="' + inJson + '" data-direction="in">' + gItem.inCount + '</span>';
-            html += '<span class="as-grid-val as-grid-clickable" data-peer-ids="' + outJson + '" data-direction="out">' + gItem.outCount + '</span>';
+            var outSubJson = JSON.stringify(gItem.outSubtypes).replace(/"/g, '&quot;');
+            // Provider name row (total) — clickable name navigates, row is interactive
+            html += '<div class="as-detail-sub-row as-conn-prov-row" data-peer-ids="' + totalJson + '" data-as="' + gItem.asNumber + '" style="cursor:pointer">';
+            html += '<span class="as-detail-sub-label"><span class="as-grid-dot" style="background:' + gItem.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle"></span>';
+            html += '<span class="as-grid-provider-click" data-as="' + gItem.asNumber + '" style="color:' + gItem.color + '" title="View ' + gItem.name + ' panel">' + gItem.name + '</span></span>';
+            html += '<span class="as-detail-sub-val">' + gItem.totalCount + '</span>';
             html += '</div>';
+            // In row
+            if (gItem.inCount > 0) {
+                html += '<div class="as-detail-sub-row as-interactive-row as-conn-dir-row" data-peer-ids="' + inJson + '" data-category="conntype" style="padding-left:22px">';
+                html += '<span class="as-detail-sub-label">In</span>';
+                html += '<span class="as-detail-sub-val">' + gItem.inCount + '</span>';
+                html += '</div>';
+            }
+            // Out row
+            if (gItem.outCount > 0) {
+                html += '<div class="as-detail-sub-row as-conn-out-row" data-peer-ids="' + outJson + '" data-out-subtypes="' + outSubJson + '" data-category="conntype" style="padding-left:22px; cursor:pointer">';
+                html += '<span class="as-detail-sub-label">Out</span>';
+                html += '<span class="as-detail-sub-val">' + gItem.outCount + '</span>';
+                html += '</div>';
+            }
         }
-        html += '</div>';
 
         // ── Section 3: Networks ──
         html += '<div class="modal-section-title" title="Peer connections grouped by network protocol. IPv4/IPv6 are clearnet, Tor/I2P/CJDNS are anonymous overlay networks.">Networks</div>';
@@ -2049,7 +2076,7 @@ window.ASDiversity = (function () {
         }
     }
 
-    /** Attach handlers for the connection grid (Section 2 of summary panel) */
+    /** Attach handlers for the Connections by Provider section (Section 2 of summary panel) */
     function attachGridHandlers(bodyEl) {
         // Provider name clicks → navigate to that provider's panel (with back button)
         var provClicks = bodyEl.querySelectorAll('.as-grid-provider-click');
@@ -2064,12 +2091,12 @@ window.ASDiversity = (function () {
             })(provClicks[i]);
         }
 
-        // IN/OUT number clicks → show peer list in sub-tooltip
-        var gridClickables = bodyEl.querySelectorAll('.as-grid-clickable');
-        for (var gc = 0; gc < gridClickables.length; gc++) {
-            (function (el) {
-                function buildGridPeerHtml() {
-                    var peerIds = JSON.parse(el.dataset.peerIds);
+        // Provider total rows — hover/click shows all peers for this provider
+        var connProvRows = bodyEl.querySelectorAll('.as-conn-prov-row');
+        for (var cpi = 0; cpi < connProvRows.length; cpi++) {
+            (function (rowEl) {
+                function buildProvPeerHtml() {
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     if (peerIds.length === 0) return null;
                     var idSet = {};
                     for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
@@ -2077,54 +2104,166 @@ window.ASDiversity = (function () {
                     for (var i = 0; i < lastPeersRaw.length; i++) {
                         if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
                     }
-                    var dir = el.dataset.direction === 'in' ? 'Inbound' : 'Outbound';
                     var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + dir + ' Peers</div>';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">All Peers</div>';
                     html += '</div>';
                     html += buildPeerListHtmlForSubSub(matchedPeers);
                     return html;
                 }
-                el.addEventListener('mouseenter', function (e) {
+                rowEl.addEventListener('mouseenter', function (e) {
                     if (subTooltipPinned) {
-                        var html = buildGridPeerHtml();
+                        var html = buildProvPeerHtml();
                         if (html) showHoverPreview(html, e);
                         return;
                     }
-                    var html = buildGridPeerHtml();
+                    var html = buildProvPeerHtml();
                     if (html) showSubTooltip(html, e);
                 });
-                el.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        return;
-                    }
+                rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) { restorePinnedSubTooltip(); return; }
                     hideSubTooltip();
                 });
-                el.addEventListener('click', function (e) {
+                rowEl.addEventListener('click', function (e) {
+                    // Don't intercept provider name clicks (they navigate)
+                    if (e.target.classList.contains('as-grid-provider-click') || e.target.closest('.as-grid-provider-click')) return;
                     e.stopPropagation();
-                    // Toggle: clicking same element unpins
-                    if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
                         return;
                     }
-                    var peerIds = JSON.parse(el.dataset.peerIds);
-                    if (peerIds.length === 0) return;
-                    var html = buildGridPeerHtml();
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    var html = buildProvPeerHtml();
                     if (!html) return;
                     showSubTooltip(html, e);
-                    pinSubTooltip(html, el, function (tip) {
-                        attachSubTooltipHandlers();
-                    });
+                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
                     attachSubTooltipHandlers();
-
-                    // Filter map to these peers
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
-            })(gridClickables[gc]);
+            })(connProvRows[cpi]);
+        }
+
+        // Out rows — hover/click shows outbound subtypes breakdown
+        var connOutRows = bodyEl.querySelectorAll('.as-conn-out-row');
+        for (var coi = 0; coi < connOutRows.length; coi++) {
+            (function (rowEl) {
+                function buildOutSubHtml() {
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    if (peerIds.length === 0) return null;
+                    var subtypes = JSON.parse(rowEl.dataset.outSubtypes);
+                    var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Outbound Peers</div>';
+                    html += '</div>';
+                    html += '<div class="as-sub-tt-scroll">';
+                    for (var si = 0; si < subtypes.length; si++) {
+                        var st = subtypes[si];
+                        html += '<div class="as-sub-tt-peer">';
+                        html += '<span class="as-sub-tt-id" style="font-weight:600; min-width:60px">' + st.label + '</span>';
+                        html += '<span class="as-sub-tt-type">' + st.count + ' peer' + (st.count !== 1 ? 's' : '') + '</span>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    // Also include full peer list below subtypes
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    html += '<div style="border-top:1px solid rgba(88,166,255,0.1); margin-top:4px; padding-top:4px">';
+                    html += buildPeerListHtmlForSubSub(matchedPeers);
+                    html += '</div>';
+                    return html;
+                }
+                rowEl.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var html = buildOutSubHtml();
+                        if (html) showHoverPreview(html, e);
+                        return;
+                    }
+                    var html = buildOutSubHtml();
+                    if (html) showSubTooltip(html, e);
+                });
+                rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) { restorePinnedSubTooltip(); return; }
+                    hideSubTooltip();
+                });
+                rowEl.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
+                        return;
+                    }
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    var html = buildOutSubHtml();
+                    if (!html) return;
+                    showSubTooltip(html, e);
+                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
+                    attachSubTooltipHandlers();
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(connOutRows[coi]);
+        }
+
+        // In rows already have .as-interactive-row class — handled by attachInteractiveRowHandlers if in provider panel,
+        // but here in summary we need explicit handling. The .as-conn-dir-row In rows:
+        var connDirRows = bodyEl.querySelectorAll('.as-conn-dir-row');
+        for (var cdi = 0; cdi < connDirRows.length; cdi++) {
+            (function (rowEl) {
+                function buildDirPeerHtml() {
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    if (peerIds.length === 0) return null;
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Inbound Peers</div>';
+                    html += '</div>';
+                    html += buildPeerListHtmlForSubSub(matchedPeers);
+                    return html;
+                }
+                rowEl.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var html = buildDirPeerHtml();
+                        if (html) showHoverPreview(html, e);
+                        return;
+                    }
+                    var html = buildDirPeerHtml();
+                    if (html) showSubTooltip(html, e);
+                });
+                rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) { restorePinnedSubTooltip(); return; }
+                    hideSubTooltip();
+                });
+                rowEl.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
+                        return;
+                    }
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    var html = buildDirPeerHtml();
+                    if (!html) return;
+                    showSubTooltip(html, e);
+                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
+                    attachSubTooltipHandlers();
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(connDirRows[cdi]);
         }
     }
 
