@@ -569,12 +569,12 @@ window.ASDiversity = (function () {
         return grid;
     }
 
-    /** Compute 3 dynamic insights for the summary panel */
+    /** Compute 4 dynamic insights for the summary panel */
     function computeInsights() {
         var insights = [];
         var nowSec = Math.floor(Date.now() / 1000);
 
-        // Insight 1: Stable peer dominance — provider with highest avg connection duration
+        // Insight 1: Most stable — provider with highest avg connection duration
         if (asGroups.length > 0) {
             var bestAvg = 0, bestGroup = null;
             for (var i = 0; i < asGroups.length; i++) {
@@ -602,22 +602,40 @@ window.ASDiversity = (function () {
             }
         }
 
-        // Insight 2: Longest standing peers (top 5 shown, top 50 available via sub-panel)
-        var allPeersByDur = [];
-        for (var i = 0; i < lastPeersRaw.length; i++) {
-            var p = lastPeersRaw[i];
-            if (p.conntime > 0 && parseAsNumber(p.as)) {
-                allPeersByDur.push({ peer: p, duration: nowSec - p.conntime });
+        // Insight 2: Fastest connection — providers ranked by avg ping time (lowest first)
+        if (asGroups.length > 0) {
+            var pingProvList = [];
+            for (var i = 0; i < asGroups.length; i++) {
+                var g = asGroups[i];
+                var totalPing = 0, pingCount = 0;
+                for (var j = 0; j < g.peers.length; j++) {
+                    if (g.peers[j].ping_ms > 0) {
+                        totalPing += g.peers[j].ping_ms;
+                        pingCount++;
+                    }
+                }
+                if (pingCount > 0) {
+                    var avgPing = totalPing / pingCount;
+                    var peersSorted = g.peers.slice().sort(function (a, b) { return (a.ping_ms || 9999) - (b.ping_ms || 9999); });
+                    pingProvList.push({
+                        asNumber: g.asNumber,
+                        provName: g.asShort || g.asName || g.asNumber,
+                        color: getColorForAsNum(g.asNumber),
+                        avgPing: avgPing,
+                        peers: peersSorted,
+                        peerIds: g.peerIds
+                    });
+                }
             }
-        }
-        allPeersByDur.sort(function (a, b) { return b.duration - a.duration; });
-        if (allPeersByDur.length > 0) {
-            insights.push({
-                type: 'longest',
-                icon: '\ud83c\udfc6',
-                topPeers: allPeersByDur.slice(0, 5),
-                allPeers: allPeersByDur.slice(0, 50)
-            });
+            pingProvList.sort(function (a, b) { return a.avgPing - b.avgPing; });
+            if (pingProvList.length > 0) {
+                insights.push({
+                    type: 'fastest',
+                    icon: '\u26a1',
+                    topProviders: pingProvList,
+                    field: 'ping'
+                });
+            }
         }
 
         // Insight 3: Providers with most total bytes sent
@@ -645,8 +663,8 @@ window.ASDiversity = (function () {
             insights.push({
                 type: 'data-providers',
                 icon: '\u2b06\ufe0f',
-                label: 'Most data sent',
-                topProviders: sentProvList.slice(0, 5),
+                label: 'Most data sent to',
+                topProviders: sentProvList,
                 field: 'bytessent'
             });
         }
@@ -676,8 +694,8 @@ window.ASDiversity = (function () {
             insights.push({
                 type: 'data-providers',
                 icon: '\u2b07\ufe0f',
-                label: 'Most data recv',
-                topProviders: recvProvList.slice(0, 5),
+                label: 'Most data recv by',
+                topProviders: recvProvList,
                 field: 'bytesrecv'
             });
         }
@@ -1336,52 +1354,22 @@ window.ASDiversity = (function () {
                  + topName + ' (' + data.topProvider.peerCount + ')</span></div>';
         }
 
-        // Dynamic insights
+        // Dynamic insights — each is a simple label row with hover/click sub-panel
         for (var ii = 0; ii < data.insights.length; ii++) {
             var ins = data.insights[ii];
-            html += '<div class="as-insight-wrapper">';
             html += '<div class="as-summary-insight">';
             html += '<span class="as-insight-icon">' + ins.icon + '</span>';
             if (ins.type === 'stable') {
                 var stablePeerJson = JSON.stringify(ins.peerIds).replace(/"/g, '&quot;');
                 html += '<span class="as-insight-text as-panel-link as-stable-link" data-as="' + ins.asNumber + '" data-peer-ids="' + stablePeerJson + '">Most stable: ' + ins.provName + ' (avg ' + ins.durText + ')</span>';
-            } else if (ins.type === 'longest') {
-                html += '<span class="as-insight-text as-panel-link as-longest-peers-link" title="View top 50 longest connected peers">Longest Peers <span style="color:var(--text-muted)">(top 50)</span></span>';
+            } else if (ins.type === 'fastest') {
+                html += '<span class="as-insight-text as-panel-link as-fastest-link" title="Providers ranked by average ping time">Fastest connection</span>';
             } else if (ins.type === 'data-providers') {
-                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="View top providers by total bytes">' + ins.label + '</span>';
-            } else if (ins.type === 'data') {
-                html += '<span class="as-insight-text">' + ins.label + ': ' + ins.amount + '</span>';
+                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="Providers ranked by total bytes">' + ins.label + '</span>';
             } else {
                 html += '<span class="as-insight-text">' + ins.text + '</span>';
             }
-            html += '</div>'; // close .as-summary-insight flex row
-
-            // Expand section OUTSIDE the flex row so it takes full width
-            if (ins.type === 'longest') {
-                html += '<div class="as-insight-expand">';
-                for (var ei = 0; ei < ins.topPeers.length; ei++) {
-                    var ep = ins.topPeers[ei];
-                    html += '<div class="as-insight-expand-row as-peer-select" data-peer-id="' + ep.peer.id + '" title="Select peer on map">';
-                    html += '<span class="as-sub-tt-id as-sub-tt-id-link">#' + (ei + 1) + ' ID\u00a0' + ep.peer.id + '</span>';
-                    html += '<span class="as-insight-expand-dur">' + fmtDuration(ep.duration) + '</span>';
-                    html += '</div>';
-                }
-                html += '</div>';
-            } else if (ins.type === 'data-providers') {
-                html += '<div class="as-insight-expand">';
-                for (var ei = 0; ei < ins.topProviders.length; ei++) {
-                    var dp = ins.topProviders[ei];
-                    var dpName = dp.provName.length > 16 ? dp.provName.substring(0, 15) + '\u2026' : dp.provName;
-                    html += '<div class="as-insight-expand-row">';
-                    html += '<span class="as-insight-expand-rank">#' + (ei + 1) + '</span>';
-                    html += '<span class="as-grid-dot" style="background:' + dp.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:middle"></span>';
-                    html += '<span style="flex:1" title="' + dp.provName + '">' + dpName + '</span>';
-                    html += '<span class="as-insight-expand-dur">' + fmtBytes(dp.totalBytes) + '</span>';
-                    html += '</div>';
-                }
-                html += '</div>';
-            }
-            html += '</div>'; // close .as-insight-wrapper
+            html += '</div>';
         }
 
         // ── Section 2: Connections by Provider (3 rows per provider) ──
@@ -2370,54 +2358,65 @@ window.ASDiversity = (function () {
             }
         }
 
-        // "Longest peers" link — hover shows submenu, click pins it
-        var longestLink = bodyEl.querySelector('.as-longest-peers-link');
-        if (longestLink) {
-            function buildLongestPeersHtml() {
+        // "Fastest connection" link — hover shows providers ranked by avg ping, click pins
+        var fastestLink = bodyEl.querySelector('.as-fastest-link');
+        if (fastestLink) {
+            function buildFastestProvHtml() {
                 var data = computeSummaryData();
-                var longestInsight = null;
+                var fastInsight = null;
                 for (var j = 0; j < data.insights.length; j++) {
-                    if (data.insights[j].type === 'longest') { longestInsight = data.insights[j]; break; }
+                    if (data.insights[j].type === 'fastest') { fastInsight = data.insights[j]; break; }
                 }
-                if (!longestInsight) return null;
+                if (!fastInsight || !fastInsight.topProviders) return null;
                 var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Top 50 Longest Connected Peers</div>';
+                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Fastest Connection \u2014 Avg Ping</div>';
                 html += '</div>';
-                html += buildRankedPeerListHtml(longestInsight.allPeers);
+                html += '<div class="as-sub-tt-scroll">';
+                for (var pi = 0; pi < fastInsight.topProviders.length; pi++) {
+                    var prov = fastInsight.topProviders[pi];
+                    var peerIdsJson = JSON.stringify(prov.peerIds.slice(0, 20)).replace(/"/g, '&quot;');
+                    html += '<div class="as-sub-tt-peer as-provider-row as-fastest-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '">';
+                    html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
+                    html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
+                    var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
+                    html += '<span class="as-sub-tt-loc" title="' + prov.provName + '">' + name + '</span>';
+                    html += '<span class="as-sub-tt-type">' + Math.round(prov.avgPing) + 'ms</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
                 return html;
             }
-            longestLink.addEventListener('mouseenter', function (e) {
+            fastestLink.addEventListener('mouseenter', function (e) {
                 if (subTooltipPinned) {
-                    var html = buildLongestPeersHtml();
+                    var html = buildFastestProvHtml();
                     if (html) showHoverPreview(html, e);
                     return;
                 }
-                var html = buildLongestPeersHtml();
+                var html = buildFastestProvHtml();
                 if (html) showSubTooltip(html, e);
             });
-            longestLink.addEventListener('mouseleave', function () {
+            fastestLink.addEventListener('mouseleave', function () {
                 if (subTooltipPinned) {
                     restorePinnedSubTooltip();
                     return;
                 }
                 hideSubTooltip();
             });
-            longestLink.addEventListener('click', function (e) {
+            fastestLink.addEventListener('click', function (e) {
                 e.stopPropagation();
-                // Toggle: clicking same link unpins
-                if (subTooltipPinned && pinnedSubTooltipSrc === longestLink) {
+                if (subTooltipPinned && pinnedSubTooltipSrc === fastestLink) {
                     hideSubTooltip();
-                    longestLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    fastestLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
                     return;
                 }
-                var html = buildLongestPeersHtml();
+                var html = buildFastestProvHtml();
                 if (!html) return;
                 showSubTooltip(html, e);
-                pinSubTooltip(html, longestLink, function (tip) {
-                    attachSubTooltipHandlers();
+                pinSubTooltip(html, fastestLink, function (tip) {
+                    attachFastestProvRowHandlers(tip);
                 });
-                attachSubTooltipHandlers();
-                longestLink.closest('.as-summary-insight').classList.add('sub-filter-active');
+                attachFastestProvRowHandlers(document.getElementById('as-sub-tooltip'));
+                fastestLink.closest('.as-summary-insight').classList.add('sub-filter-active');
             });
         }
 
@@ -2502,21 +2501,7 @@ window.ASDiversity = (function () {
             });
         }
 
-        // Peer select links (in insights section) — zoom to peer, collapse subs, keep main panel
-        var peerLinks = bodyEl.querySelectorAll('.as-peer-select');
-        for (var i = 0; i < peerLinks.length; i++) {
-            (function (el) {
-                el.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var peerId = parseInt(el.dataset.peerId);
-                    if (_zoomToPeerOnly && !isNaN(peerId)) {
-                        _zoomToPeerOnly(peerId);
-                    }
-                });
-            })(peerLinks[i]);
-        }
-
-        // Data insight provider sub-panels (Most sent/recv per peer — hover shows top 5 providers)
+        // Data insight provider sub-panels (Most sent/recv — hover shows providers ranked by bytes)
         var dataProvLinks = bodyEl.querySelectorAll('.as-data-providers-link');
         for (var i = 0; i < dataProvLinks.length; i++) {
             (function (el) {
@@ -2592,6 +2577,85 @@ window.ASDiversity = (function () {
         }
     }
 
+    /** Attach handlers for fastest connection provider rows.
+     *  Clicking a provider shows sub-sub-tooltip with its peers ranked by ping. */
+    function attachFastestProvRowHandlers(tip) {
+        var provRows = tip.querySelectorAll('.as-fastest-prov-row');
+        for (var pi = 0; pi < provRows.length; pi++) {
+            (function (provRow) {
+                provRow.style.cursor = 'pointer';
+                provRow.addEventListener('mouseenter', function () {
+                    var asNum = provRow.dataset.as;
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    if (peerIds.length > 0 && _drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+                provRow.addEventListener('mouseleave', function () {
+                    if (summarySelected) {
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
+                    }
+                });
+                provRow.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    var asNum = provRow.dataset.as;
+
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    matchedPeers.sort(function (a, b) { return (a.ping_ms || 9999) - (b.ping_ms || 9999); });
+
+                    // Build sub-sub-tooltip with peers ranked by ping
+                    var html = buildPingPeerListHtml(matchedPeers.slice(0, 20));
+                    showSubSubTooltip(html, e);
+                    subSubTooltipPinned = true;
+
+                    if (_drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(provRows[pi]);
+        }
+    }
+
+    /** Build peer list HTML for ping sub-sub-tooltip. */
+    function buildPingPeerListHtml(peers) {
+        var html = '';
+        var initialShow = 8;
+        var hasMore = peers.length > initialShow;
+
+        html += '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+        html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Peers \u2014 By Ping</div>';
+        html += '</div>';
+        html += '<div class="as-sub-tt-scroll">';
+        for (var pi = 0; pi < peers.length; pi++) {
+            var p = peers[pi];
+            var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
+            html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-type">' + (p.ping_ms > 0 ? Math.round(p.ping_ms) + 'ms' : '\u2014') + '</span>';
+            var ct = p.connection_type || 'unknown';
+            html += '<span class="as-sub-tt-loc">' + (CONN_TYPE_LABELS[ct] || ct) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        if (hasMore) {
+            var remaining = peers.length - initialShow;
+            html += '<div class="as-sub-tt-more as-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
+        }
+        return html;
+    }
+
     /** Attach click handlers for data provider rows in the sub-tooltip.
      *  Clicking a provider shows sub-sub-tooltip with that provider's top 20 peers. */
     function attachDataProviderRowHandlers(tip, field) {
@@ -2664,6 +2728,7 @@ window.ASDiversity = (function () {
             var p = peers[pi];
             var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
             html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
             html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
             html += '<span class="as-sub-tt-type">' + fmtBytes(p[field]) + '</span>';
             var ct = p.connection_type || 'unknown';
@@ -3426,124 +3491,162 @@ window.ASDiversity = (function () {
 
         // If a selection is active, refresh the panel + filter + keep lines
         if (selectedAs) {
-            // Save sub-filter identity so we can re-apply after panel rebuild
             var savedCategory = subFilterCategory;
             var savedLabel = subFilterLabel;
 
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (seg) {
-                openPanel(selectedAs);
-
-                // Try to re-apply sub-filter by matching category+label in fresh data
-                if (savedCategory && savedLabel) {
-                    var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
-                    if (freshPeerIds && freshPeerIds.length > 0) {
-                        subFilterPeerIds = freshPeerIds;
-                        subFilterCategory = savedCategory;
-                        subFilterLabel = savedLabel;
-                        if (_filterPeerTable) _filterPeerTable(freshPeerIds);
-                        if (_dimMapPeers) _dimMapPeers(freshPeerIds);
-                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, freshPeerIds, seg.color);
-                        highlightActiveSubRow();
-                        // Re-pin the sub-tooltip with fresh data if it was pinned
-                        if (subTooltipPinned) {
-                            var html = buildPeerSummaryHtml(freshPeerIds, savedCategory, savedLabel);
-                            var tip = document.getElementById('as-sub-tooltip');
-                            if (tip) {
-                                tip.innerHTML = html;
-                                tip.style.pointerEvents = 'auto';
-                                attachSubTooltipHandlers();
-                            }
+                if (subTooltipPinned || subSubTooltipPinned) {
+                    // Sub-tooltip is open — DON'T rebuild panel DOM, just refresh data
+                    if (savedCategory && savedLabel) {
+                        var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
+                        if (freshPeerIds && freshPeerIds.length > 0) {
+                            subFilterPeerIds = freshPeerIds;
+                            subFilterCategory = savedCategory;
+                            subFilterLabel = savedLabel;
+                            if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                            if (_drawLinesForAs) _drawLinesForAs(selectedAs, freshPeerIds, seg.color);
                         }
                     } else {
-                        // Sub-filter no longer matches (all peers in that category disconnected)
-                        subFilterPeerIds = null;
-                        subFilterCategory = null;
-                        subFilterLabel = null;
-                        hideSubTooltip();
                         if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                         if (_dimMapPeers) _dimMapPeers(seg.peerIds);
                         if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
                     }
                 } else {
-                    // No sub-filter active, show full AS
-                    if (_filterPeerTable) _filterPeerTable(seg.peerIds);
-                    if (_dimMapPeers) _dimMapPeers(seg.peerIds);
-                    if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
+                    // No sub-tooltip pinned — safe to rebuild panel
+                    openPanel(selectedAs);
+
+                    if (savedCategory && savedLabel) {
+                        var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
+                        if (freshPeerIds && freshPeerIds.length > 0) {
+                            subFilterPeerIds = freshPeerIds;
+                            subFilterCategory = savedCategory;
+                            subFilterLabel = savedLabel;
+                            if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                            if (_drawLinesForAs) _drawLinesForAs(selectedAs, freshPeerIds, seg.color);
+                            highlightActiveSubRow();
+                        } else {
+                            subFilterPeerIds = null;
+                            subFilterCategory = null;
+                            subFilterLabel = null;
+                            hideSubTooltip();
+                            if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                            if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                            if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
+                        }
+                    } else {
+                        if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                        if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
+                    }
                 }
             } else {
                 deselect();
             }
         }
 
-        // If summary is active, refresh the summary panel + keep all lines
-        // Preserve pinned sub-tooltips and sub-filter state across updates
+        // If summary is active, refresh — but DON'T rebuild the panel DOM if a
+        // sub-tooltip is pinned (that destroys pinnedSubTooltipSrc and resets state).
+        // Instead, just refresh lines/filters with fresh peer data.
         if (summarySelected) {
-            var savedSumCategory = subFilterCategory;
-            var savedSumLabel = subFilterLabel;
-            var wasSumSubPinned = subTooltipPinned;
-            var wasSumSubSubPinned = subSubTooltipPinned;
-
-            openSummaryPanel();
-
-            // Re-apply summary sub-filter if one was active
-            if (savedSumCategory && savedSumLabel) {
-                // Re-compute the peer IDs for this category+label from fresh data
-                var freshSumData = computeSummaryData();
-                var freshPeerIds = null;
-                // Look through all summary categories for matching label
-                var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
-                for (var ci = 0; ci < allCats.length; ci++) {
-                    if (!allCats[ci]) continue;
-                    for (var ri = 0; ri < allCats[ci].length; ri++) {
-                        if (allCats[ci][ri].label === savedSumLabel) {
-                            freshPeerIds = allCats[ci][ri].peerIds;
-                            break;
-                        }
-                    }
-                    if (freshPeerIds) break;
-                }
-                if (freshPeerIds && freshPeerIds.length > 0) {
-                    subFilterPeerIds = freshPeerIds;
-                    subFilterCategory = savedSumCategory;
-                    subFilterLabel = savedSumLabel;
-                    if (_filterPeerTable) _filterPeerTable(freshPeerIds);
-                    if (_dimMapPeers) _dimMapPeers(freshPeerIds);
-                    highlightActiveSummaryRow();
-                    // Keep sub-tooltip pinned with fresh data if it was pinned
-                    if (wasSumSubPinned) {
-                        subTooltipPinned = true;
-                        var tip = document.getElementById('as-sub-tooltip');
-                        if (tip) tip.style.pointerEvents = 'auto';
-                    }
-                    // Draw lines for the filtered subset
-                    if (_drawLinesForAllAs && donutSegments.length > 0) {
-                        var idSet = {};
-                        for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
-                        var groups = [];
-                        for (var si = 0; si < donutSegments.length; si++) {
-                            var seg = donutSegments[si];
-                            var filteredIds = [];
-                            for (var pi = 0; pi < seg.peerIds.length; pi++) {
-                                if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
-                            }
-                            if (filteredIds.length > 0) {
-                                groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+            if (subTooltipPinned || subSubTooltipPinned) {
+                // Sub-tooltip is open — preserve DOM, just refresh data behind the scenes
+                if (subFilterPeerIds && subFilterCategory && subFilterLabel) {
+                    var freshSumData = computeSummaryData();
+                    var freshPeerIds = null;
+                    var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
+                    for (var ci = 0; ci < allCats.length; ci++) {
+                        if (!allCats[ci]) continue;
+                        for (var ri = 0; ri < allCats[ci].length; ri++) {
+                            if (allCats[ci][ri].label === subFilterLabel) {
+                                freshPeerIds = allCats[ci][ri].peerIds;
+                                break;
                             }
                         }
-                        _drawLinesForAllAs(groups);
+                        if (freshPeerIds) break;
+                    }
+                    if (freshPeerIds && freshPeerIds.length > 0) {
+                        subFilterPeerIds = freshPeerIds;
+                        if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                        if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                        if (_drawLinesForAllAs && donutSegments.length > 0) {
+                            var idSet = {};
+                            for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
+                            var groups = [];
+                            for (var si = 0; si < donutSegments.length; si++) {
+                                var seg = donutSegments[si];
+                                var filteredIds = [];
+                                for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                    if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                                }
+                                if (filteredIds.length > 0) {
+                                    groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                }
+                            }
+                            _drawLinesForAllAs(groups);
+                        }
                     }
                 } else {
-                    // Sub-filter no longer matches — clear it
-                    subFilterPeerIds = null;
-                    subFilterCategory = null;
-                    subFilterLabel = null;
-                    hideSubTooltip();
-                    hideSubSubTooltip();
+                    // No sub-filter, just keep all-lines going
                     activateHoverAll();
                 }
             } else {
-                activateHoverAll();
+                // No sub-tooltip pinned — safe to rebuild the panel
+                var savedSumCategory = subFilterCategory;
+                var savedSumLabel = subFilterLabel;
+
+                openSummaryPanel();
+
+                if (savedSumCategory && savedSumLabel) {
+                    var freshSumData = computeSummaryData();
+                    var freshPeerIds = null;
+                    var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
+                    for (var ci = 0; ci < allCats.length; ci++) {
+                        if (!allCats[ci]) continue;
+                        for (var ri = 0; ri < allCats[ci].length; ri++) {
+                            if (allCats[ci][ri].label === savedSumLabel) {
+                                freshPeerIds = allCats[ci][ri].peerIds;
+                                break;
+                            }
+                        }
+                        if (freshPeerIds) break;
+                    }
+                    if (freshPeerIds && freshPeerIds.length > 0) {
+                        subFilterPeerIds = freshPeerIds;
+                        subFilterCategory = savedSumCategory;
+                        subFilterLabel = savedSumLabel;
+                        if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                        if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                        highlightActiveSummaryRow();
+                        if (_drawLinesForAllAs && donutSegments.length > 0) {
+                            var idSet = {};
+                            for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
+                            var groups = [];
+                            for (var si = 0; si < donutSegments.length; si++) {
+                                var seg = donutSegments[si];
+                                var filteredIds = [];
+                                for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                    if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                                }
+                                if (filteredIds.length > 0) {
+                                    groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                }
+                            }
+                            _drawLinesForAllAs(groups);
+                        }
+                    } else {
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
+                        hideSubTooltip();
+                        hideSubSubTooltip();
+                        activateHoverAll();
+                    }
+                } else {
+                    activateHoverAll();
+                }
             }
         }
     }

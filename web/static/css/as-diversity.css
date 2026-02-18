@@ -879,39 +879,6 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-insight-text {
     flex: 1;
 }
-/* Insight wrapper for proper layout (flex row + expand below) */
-.as-insight-wrapper {
-    margin-bottom: 2px;
-}
-.as-insight-expand {
-    margin-top: 2px;
-    padding-left: 20px; /* align with text after icon */
-}
-.as-insight-expand-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 4px;
-    font-size: 10px;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-.as-insight-expand-row:hover {
-    background: rgba(88, 166, 255, 0.08);
-}
-.as-insight-expand-rank {
-    color: var(--text-muted);
-    font-weight: 600;
-    min-width: 18px;
-    flex-shrink: 0;
-}
-.as-insight-expand-dur {
-    color: var(--text-muted);
-    font-weight: 600;
-    flex-shrink: 0;
-    margin-left: auto;
-}
 
 /* Connection grid (Section 2) */
 .as-summary-grid {

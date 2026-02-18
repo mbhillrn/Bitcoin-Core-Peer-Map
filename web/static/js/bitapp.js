@@ -2925,7 +2925,9 @@
             let bestDist = Infinity;
             for (const off of wrapOffsets) {
                 const s = worldToScreen(node.lon + off, node.lat);
-                if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                // Wide margin: lines can extend well off-screen when zoomed in
+                const M = Math.max(W, H);
+                if (s.x < -M || s.x > W + M || s.y < -M || s.y > H + M) continue;
                 const dx = s.x - originX;
                 const dy = s.y - originY;
                 const d2 = dx * dx + dy * dy;
@@ -3040,7 +3042,8 @@
                 let bestDist = Infinity;
                 for (const off of wrapOffsets) {
                     const s = worldToScreen(node.lon + off, node.lat);
-                    if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                    const M = Math.max(W, H);
+                    if (s.x < -M || s.x > W + M || s.y < -M || s.y > H + M) continue;
                     const dx = s.x - originX;
                     const dy = s.y - originY;
                     const d2 = dx * dx + dy * dy;
@@ -6073,9 +6076,9 @@
                 if (ASD && node.peerId !== undefined) {
                     const peer = lastPeers.find(p => p.id === peerId);
                     if (peer && peer.as) {
-                        // Use the peer's own AS number for line origin (not selectedAs)
-                        // so the line comes from the correct legend dot
-                        const peerAsNum = peer.as.number || peer.as;
+                        // peer.as is "AS12345 Org Name" string — extract just "AS12345"
+                        const asMatch = peer.as.match(/^(AS\d+)/);
+                        const peerAsNum = asMatch ? asMatch[1] : peer.as;
                         const color = ASD.getColorForAs(peerAsNum) || '#58a6ff';
                         asLineGroups = null;
                         asLinePeerIds = [peerId];
