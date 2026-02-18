@@ -2902,10 +2902,10 @@
         const ASD = window.ASDiversity;
         if (!ASD) return;
 
-        // Lines always originate from legend dots, never the donut center
+        // Lines originate from legend dots (top-8 direct, Others for non-top-8, donut center fallback)
         let lineOrigin = null;
         if (asLineAsNum) {
-            lineOrigin = ASD.getLegendDotPosition(asLineAsNum);
+            lineOrigin = ASD.getLineOriginForAs(asLineAsNum);
         }
         if (!lineOrigin) return;
 
@@ -3022,8 +3022,8 @@
         ctx.lineWidth = lineW;
 
         for (const grp of asLineGroups) {
-            // Lines always originate from legend dots
-            let lineOrigin = ASD.getLegendDotPosition(grp.asNum);
+            // Lines originate from legend dots (top-8 direct, Others for non-top-8, donut center fallback)
+            let lineOrigin = ASD.getLineOriginForAs(grp.asNum);
             if (!lineOrigin) continue;
 
             const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
@@ -6055,14 +6055,22 @@
             },
             getWorldToScreen: worldToScreen,
             selectPeerById: function (peerId) {
-                // Find the node on the map by peer ID
+                // Find the node on the map by peer ID — full deselect (closes AS panel)
                 const node = nodes.find(n => n.peerId === peerId && n.alive);
                 if (!node) return;
-                // Collapse sub-tooltips but keep main panel open
+                if (window.ASDiversity) {
+                    window.ASDiversity.deselect();
+                }
+                zoomToPeer(node);
+                highlightTableRow(node.peerId);
+            },
+            zoomToPeerOnly: function (peerId) {
+                // Zoom to peer without deselecting the AS panel — keeps main panel open
+                const node = nodes.find(n => n.peerId === peerId && n.alive);
+                if (!node) return;
                 if (window.ASDiversity) {
                     window.ASDiversity.collapseToMainPanel();
                 }
-                // Zoom to the peer
                 zoomToPeer(node);
                 highlightTableRow(node.peerId);
             },

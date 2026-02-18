@@ -75,7 +75,8 @@ window.ASDiversity = (function () {
     let _filterPeerTable = null;   // fn(peerIds | null) — filter peer table
     let _dimMapPeers = null;       // fn(peerIds | null) — dim non-matching peers
     let _getWorldToScreen = null;  // fn(lon, lat) => {x, y}
-    let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID
+    let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID (full deselect)
+    let _zoomToPeerOnly = null;    // fn(peerId) — zoom to peer without deselecting AS panel
 
     // Service flag definitions (mirrored from bitapp.js for hover expansion)
     var SERVICE_FLAGS = {
@@ -595,7 +596,7 @@ window.ASDiversity = (function () {
             });
         }
 
-        // Insight 3: Providers with most bytes sent per peer
+        // Insight 3: Providers with most total bytes sent
         var sentByProvider = {};
         for (var i = 0; i < lastPeersRaw.length; i++) {
             var p = lastPeersRaw[i];
@@ -609,25 +610,24 @@ window.ASDiversity = (function () {
         for (var k in sentByProvider) {
             if (!sentByProvider.hasOwnProperty(k)) continue;
             var sp = sentByProvider[k];
-            sp.avgBytesPerPeer = sp.peers.length > 0 ? sp.totalBytes / sp.peers.length : 0;
             sp.peers.sort(function (a, b) { return (b.bytessent || 0) - (a.bytessent || 0); });
             var grp = asGroups.find(function (g) { return g.asNumber === sp.asNumber; });
             sp.provName = grp ? (grp.asShort || grp.asName || grp.asNumber) : sp.asNumber;
             sp.color = getColorForAsNum(sp.asNumber);
             sentProvList.push(sp);
         }
-        sentProvList.sort(function (a, b) { return b.avgBytesPerPeer - a.avgBytesPerPeer; });
+        sentProvList.sort(function (a, b) { return b.totalBytes - a.totalBytes; });
         if (sentProvList.length > 0) {
             insights.push({
                 type: 'data-providers',
                 icon: '\u2b06\ufe0f',
-                label: 'Most sent/peer',
+                label: 'Most data sent',
                 topProviders: sentProvList.slice(0, 5),
                 field: 'bytessent'
             });
         }
 
-        // Insight 4: Providers with most bytes received per peer
+        // Insight 4: Providers with most total bytes received
         var recvByProvider = {};
         for (var i = 0; i < lastPeersRaw.length; i++) {
             var p = lastPeersRaw[i];
@@ -641,19 +641,18 @@ window.ASDiversity = (function () {
         for (var k in recvByProvider) {
             if (!recvByProvider.hasOwnProperty(k)) continue;
             var rp = recvByProvider[k];
-            rp.avgBytesPerPeer = rp.peers.length > 0 ? rp.totalBytes / rp.peers.length : 0;
             rp.peers.sort(function (a, b) { return (b.bytesrecv || 0) - (a.bytesrecv || 0); });
             var grp = asGroups.find(function (g) { return g.asNumber === rp.asNumber; });
             rp.provName = grp ? (grp.asShort || grp.asName || grp.asNumber) : rp.asNumber;
             rp.color = getColorForAsNum(rp.asNumber);
             recvProvList.push(rp);
         }
-        recvProvList.sort(function (a, b) { return b.avgBytesPerPeer - a.avgBytesPerPeer; });
+        recvProvList.sort(function (a, b) { return b.totalBytes - a.totalBytes; });
         if (recvProvList.length > 0) {
             insights.push({
                 type: 'data-providers',
                 icon: '\u2b07\ufe0f',
-                label: 'Most recv/peer',
+                label: 'Most data recv',
                 topProviders: recvProvList.slice(0, 5),
                 field: 'bytesrecv'
             });
@@ -1331,7 +1330,7 @@ window.ASDiversity = (function () {
                 }
                 html += '</div>';
             } else if (ins.type === 'data-providers') {
-                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="View top providers by bytes per peer">' + ins.label + ': ' + ins.topProviders[0].provName + ' (' + fmtBytes(ins.topProviders[0].avgBytesPerPeer) + '/peer)</span>';
+                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="View top providers by total bytes">' + ins.label + ': ' + ins.topProviders[0].provName + ' (' + fmtBytes(ins.topProviders[0].totalBytes) + ' total)</span>';
             } else if (ins.type === 'data') {
                 html += '<span class="as-insight-text">' + ins.label + ': ' + ins.amount + '</span>';
             } else {
@@ -1530,8 +1529,8 @@ window.ASDiversity = (function () {
                 link.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
-                    if (_selectPeerById && !isNaN(peerId)) {
-                        _selectPeerById(peerId);
+                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                        _zoomToPeerOnly(peerId);
                     }
                 });
             })(idLinks[li]);
@@ -1714,8 +1713,8 @@ window.ASDiversity = (function () {
                 link.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
-                    if (_selectPeerById && !isNaN(peerId)) {
-                        _selectPeerById(peerId);
+                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                        _zoomToPeerOnly(peerId);
                     }
                 });
             })(idLinks[li]);
@@ -2120,8 +2119,8 @@ window.ASDiversity = (function () {
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(el.dataset.peerId);
-                    if (_selectPeerById && !isNaN(peerId)) {
-                        _selectPeerById(peerId);
+                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                        _zoomToPeerOnly(peerId);
                     }
                 });
             })(peerLinks[i]);
@@ -2144,7 +2143,7 @@ window.ASDiversity = (function () {
                     }
                     if (!insight || !insight.topProviders) return null;
 
-                    var title = isRecv ? 'Top Providers \u2014 Recv/Peer' : 'Top Providers \u2014 Sent/Peer';
+                    var title = isRecv ? 'Top Providers \u2014 Total Recv' : 'Top Providers \u2014 Total Sent';
                     var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
                     html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + title + '</div>';
                     html += '</div>';
@@ -2156,7 +2155,7 @@ window.ASDiversity = (function () {
                         html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
                         var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
                         html += '<span class="as-sub-tt-loc" title="' + prov.provName + '">' + name + '</span>';
-                        html += '<span class="as-sub-tt-type">' + fmtBytes(prov.avgBytesPerPeer) + '/p</span>';
+                        html += '<span class="as-sub-tt-type">' + fmtBytes(prov.totalBytes) + '</span>';
                         html += '</div>';
                     }
                     html += '</div>';
@@ -2948,6 +2947,7 @@ window.ASDiversity = (function () {
         _dimMapPeers = hooks.dimMapPeers || null;
         _getWorldToScreen = hooks.getWorldToScreen || null;
         _selectPeerById = hooks.selectPeerById || null;
+        _zoomToPeerOnly = hooks.zoomToPeerOnly || null;
     }
 
     /** Update with new peer data. Called after each fetchPeers(). */
@@ -3154,6 +3154,34 @@ window.ASDiversity = (function () {
         return null;
     }
 
+    /** Get the line origin position for a given AS number.
+     *  - If asNum is a top-8 segment, returns that segment's legend dot.
+     *  - If asNum is in the "Others" group, returns the "Others" legend dot.
+     *  - Final fallback: donut center (only when legend genuinely not rendered). */
+    function getLineOriginForAs(asNum) {
+        // First: direct legend dot match (works for top-8 and selected AS)
+        var direct = getLegendDotPosition(asNum);
+        if (direct) return direct;
+
+        // Second: check if this AS is inside the "Others" bucket
+        if (donutSegments) {
+            for (var i = 0; i < donutSegments.length; i++) {
+                var seg = donutSegments[i];
+                if (seg.isOthers && seg._othersGroups) {
+                    for (var j = 0; j < seg._othersGroups.length; j++) {
+                        if (seg._othersGroups[j].asNumber === asNum) {
+                            // Found in Others — use the Others legend dot
+                            return getLegendDotPosition('Others');
+                        }
+                    }
+                }
+            }
+        }
+
+        // Final fallback: donut center (only when legend genuinely not rendered)
+        return getDonutCenter();
+    }
+
     /** Get the currently selected AS number */
     function getSelectedAs() {
         return selectedAs;
@@ -3195,6 +3223,7 @@ window.ASDiversity = (function () {
         isViewActive: isViewActive,
         getDonutCenter: getDonutCenter,
         getLegendDotPosition: getLegendDotPosition,
+        getLineOriginForAs: getLineOriginForAs,
         getHoveredAs: getHoveredAs,
         getHoveredAll: function () { return hoveredAll || summarySelected; },
         getSelectedAs: getSelectedAs,
