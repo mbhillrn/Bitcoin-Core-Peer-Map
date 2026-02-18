@@ -2918,22 +2918,32 @@
         const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
         const originY = (lineOrigin.y - canvasRect.top) * (H / canvasRect.height);
 
-        // Resolve screen positions for each matching node
+        // Resolve screen positions for each matching node.
+        // Two-pass: prefer copies near the viewport, fall back to wider margin for zoomed views.
         const resolved = [];
+        const MARGIN_TIGHT = 300;   // First pass: viewport + 300px
+        const MARGIN_WIDE = Math.max(W, 800);  // Second pass: wider for zoomed-in views
         for (const node of matchingNodes) {
             let bestS = null;
             let bestDist = Infinity;
+            // Pass 1: prefer copies near the viewport
             for (const off of wrapOffsets) {
                 const s = worldToScreen(node.lon + off, node.lat);
-                // Wide margin: lines can extend well off-screen when zoomed in
-                const M = Math.max(W, H);
-                if (s.x < -M || s.x > W + M || s.y < -M || s.y > H + M) continue;
+                if (s.x < -MARGIN_TIGHT || s.x > W + MARGIN_TIGHT || s.y < -MARGIN_TIGHT || s.y > H + MARGIN_TIGHT) continue;
                 const dx = s.x - originX;
                 const dy = s.y - originY;
                 const d2 = dx * dx + dy * dy;
-                if (d2 < bestDist) {
-                    bestDist = d2;
-                    bestS = s;
+                if (d2 < bestDist) { bestDist = d2; bestS = s; }
+            }
+            // Pass 2: wider margin only if nothing found near viewport
+            if (!bestS) {
+                for (const off of wrapOffsets) {
+                    const s = worldToScreen(node.lon + off, node.lat);
+                    if (s.x < -MARGIN_WIDE || s.x > W + MARGIN_WIDE || s.y < -MARGIN_WIDE || s.y > H + MARGIN_WIDE) continue;
+                    const dx = s.x - originX;
+                    const dy = s.y - originY;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < bestDist) { bestDist = d2; bestS = s; }
                 }
             }
             if (bestS) resolved.push({ node: node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
@@ -3035,19 +3045,29 @@
             const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
             if (matchingNodes.length === 0) continue;
 
-            // Resolve screen positions
+            // Resolve screen positions (two-pass: prefer near-viewport, then wider)
             const resolved = [];
+            const MT = 300, MW = Math.max(W, 800);
             for (const node of matchingNodes) {
                 let bestS = null;
                 let bestDist = Infinity;
                 for (const off of wrapOffsets) {
                     const s = worldToScreen(node.lon + off, node.lat);
-                    const M = Math.max(W, H);
-                    if (s.x < -M || s.x > W + M || s.y < -M || s.y > H + M) continue;
+                    if (s.x < -MT || s.x > W + MT || s.y < -MT || s.y > H + MT) continue;
                     const dx = s.x - originX;
                     const dy = s.y - originY;
                     const d2 = dx * dx + dy * dy;
                     if (d2 < bestDist) { bestDist = d2; bestS = s; }
+                }
+                if (!bestS) {
+                    for (const off of wrapOffsets) {
+                        const s = worldToScreen(node.lon + off, node.lat);
+                        if (s.x < -MW || s.x > W + MW || s.y < -MW || s.y > H + MW) continue;
+                        const dx = s.x - originX;
+                        const dy = s.y - originY;
+                        const d2 = dx * dx + dy * dy;
+                        if (d2 < bestDist) { bestDist = d2; bestS = s; }
+                    }
                 }
                 if (bestS) resolved.push({ node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
             }

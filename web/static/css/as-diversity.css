@@ -442,6 +442,14 @@ body.as-panel-open .footer {
     color: var(--accent);
     margin-bottom: 2px;
 }
+.as-detail-asn.as-summary-title {
+    text-align: center;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.15);
+    margin-bottom: 6px;
+}
 .as-detail-org {
     font-family: var(--font-data);
     font-size: 12px;

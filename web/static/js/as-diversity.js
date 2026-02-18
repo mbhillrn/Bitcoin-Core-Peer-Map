@@ -663,7 +663,7 @@ window.ASDiversity = (function () {
             insights.push({
                 type: 'data-providers',
                 icon: '\u2b06\ufe0f',
-                label: 'Most data sent to',
+                label: 'Most data sent to <span style="color:var(--text-muted)">(by rank)</span>',
                 topProviders: sentProvList,
                 field: 'bytessent'
             });
@@ -694,7 +694,7 @@ window.ASDiversity = (function () {
             insights.push({
                 type: 'data-providers',
                 icon: '\u2b07\ufe0f',
-                label: 'Most data recv by',
+                label: 'Most data recv by <span style="color:var(--text-muted)">(by rank)</span>',
                 topProviders: recvProvList,
                 field: 'bytesrecv'
             });
@@ -941,7 +941,7 @@ window.ASDiversity = (function () {
             qualityEl.className = 'as-score-quality ' + q.cls;
         }
 
-        scoreLbl.textContent = 'SUMMARY ANALYSIS';
+        scoreLbl.textContent = 'DIVERSITY SUMMARY';
         scoreLbl.classList.add('as-summary-link');
         if (summarySelected) {
             scoreLbl.classList.add('as-summary-active');
@@ -1112,7 +1112,10 @@ window.ASDiversity = (function () {
         var pctEl = panelEl.querySelector('.as-detail-pct');
         var riskEl = panelEl.querySelector('.as-detail-risk');
 
-        if (asnEl) asnEl.textContent = seg.isOthers ? 'Others' : seg.asNumber;
+        if (asnEl) {
+            asnEl.textContent = seg.isOthers ? 'Others' : seg.asNumber;
+            asnEl.classList.remove('as-summary-title');
+        }
         if (orgEl) orgEl.textContent = seg.isOthers ? seg.asName : (fullGroup.asName || seg.asNumber);
 
         // Meta badges
@@ -1309,13 +1312,14 @@ window.ASDiversity = (function () {
         var pctEl = panelEl.querySelector('.as-detail-pct');
         var riskEl = panelEl.querySelector('.as-detail-risk');
 
-        if (asnEl) asnEl.textContent = 'SUMMARY ANALYSIS';
-        // Clickable provider count and peer count in header
+        if (asnEl) {
+            asnEl.innerHTML = '<span style="color:var(--accent, #58a6ff)">Diversity</span> <span style="color:#79c0ff">Summary</span>';
+            asnEl.classList.add('as-summary-title');
+        }
+        // Clickable provider count in header (no peer count)
         if (orgEl) {
             orgEl.innerHTML = '<span class="as-panel-link as-all-providers-link" title="View all providers">'
-                + data.uniqueProviders + ' unique providers</span> \u00b7 '
-                + '<span class="as-panel-link as-all-providers-link" title="View all providers">'
-                + totalPeers + ' peers</span>';
+                + data.uniqueProviders + ' unique providers</span>';
         }
 
         if (metaEl) {
@@ -1363,7 +1367,7 @@ window.ASDiversity = (function () {
                 var stablePeerJson = JSON.stringify(ins.peerIds).replace(/"/g, '&quot;');
                 html += '<span class="as-insight-text as-panel-link as-stable-link" data-as="' + ins.asNumber + '" data-peer-ids="' + stablePeerJson + '">Most stable: ' + ins.provName + ' (avg ' + ins.durText + ')</span>';
             } else if (ins.type === 'fastest') {
-                html += '<span class="as-insight-text as-panel-link as-fastest-link" title="Providers ranked by average ping time">Fastest connection</span>';
+                html += '<span class="as-insight-text as-panel-link as-fastest-link" title="Providers ranked by average ping time">Fastest connection <span style="color:var(--text-muted)">(by rank)</span></span>';
             } else if (ins.type === 'data-providers') {
                 html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="Providers ranked by total bytes">' + ins.label + '</span>';
             } else {
@@ -3497,21 +3501,17 @@ window.ASDiversity = (function () {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (seg) {
                 if (subTooltipPinned || subSubTooltipPinned) {
-                    // Sub-tooltip is open — DON'T rebuild panel DOM, just refresh data
+                    // Sub-tooltip is open — DON'T rebuild panel DOM or change filters.
+                    // Keep current peer table filter and dim state intact so drill-down
+                    // (e.g. Country > Provider > Peer) isn't disrupted by data refresh.
+                    // Just keep lines drawing for the current selection.
                     if (savedCategory && savedLabel) {
                         var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
                         if (freshPeerIds && freshPeerIds.length > 0) {
                             subFilterPeerIds = freshPeerIds;
                             subFilterCategory = savedCategory;
                             subFilterLabel = savedLabel;
-                            if (_filterPeerTable) _filterPeerTable(freshPeerIds);
-                            if (_dimMapPeers) _dimMapPeers(freshPeerIds);
-                            if (_drawLinesForAs) _drawLinesForAs(selectedAs, freshPeerIds, seg.color);
                         }
-                    } else {
-                        if (_filterPeerTable) _filterPeerTable(seg.peerIds);
-                        if (_dimMapPeers) _dimMapPeers(seg.peerIds);
-                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
                     }
                 } else {
                     // No sub-tooltip pinned — safe to rebuild panel
@@ -3552,7 +3552,8 @@ window.ASDiversity = (function () {
         // Instead, just refresh lines/filters with fresh peer data.
         if (summarySelected) {
             if (subTooltipPinned || subSubTooltipPinned) {
-                // Sub-tooltip is open — preserve DOM, just refresh data behind the scenes
+                // Sub-tooltip is open — preserve DOM, don't change filters/dim.
+                // Just silently refresh the underlying peer ID data.
                 if (subFilterPeerIds && subFilterCategory && subFilterLabel) {
                     var freshSumData = computeSummaryData();
                     var freshPeerIds = null;
@@ -3569,8 +3570,6 @@ window.ASDiversity = (function () {
                     }
                     if (freshPeerIds && freshPeerIds.length > 0) {
                         subFilterPeerIds = freshPeerIds;
-                        if (_filterPeerTable) _filterPeerTable(freshPeerIds);
-                        if (_dimMapPeers) _dimMapPeers(freshPeerIds);
                         if (_drawLinesForAllAs && donutSegments.length > 0) {
                             var idSet = {};
                             for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
