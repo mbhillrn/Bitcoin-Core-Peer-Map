@@ -665,6 +665,7 @@
     let asLinePeerIds = null;      // Array of peer IDs to draw lines to (hover/selection)
     let asLineColor = null;        // Color string for AS lines
     let asLineAsNum = null;        // AS number for legend dot lookup
+    let asLineGroups = null;       // Array of {asNum, peerIds, color} for hover-all mode
 
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
     const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
@@ -3007,6 +3008,105 @@
         ctx.restore();
     }
 
+    /** Draw lines for ALL AS groups simultaneously (hover-all mode).
+     *  Each group draws from its own legend dot in its own color. */
+    function drawAsLinesAll(wrapOffsets) {
+        if (!asLineGroups || asLineGroups.length === 0) return;
+        const ASD = window.ASDiversity;
+        if (!ASD) return;
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const lwSlider = advSettings.asLineWidth;
+        const lineW = 0.3 + (lwSlider / 100) * 3.7;
+        const fanSlider = advSettings.asLineFan;
+        const fanPct = (fanSlider / 100) * 0.7;
+        const fanMax = 40 + (fanSlider / 100) * 120;
+
+        ctx.save();
+        ctx.lineWidth = lineW;
+
+        for (const grp of asLineGroups) {
+            // Find this group's line origin (legend dot, fallback to donut center)
+            let lineOrigin = ASD.getLegendDotPosition(grp.asNum);
+            if (!lineOrigin) lineOrigin = ASD.getDonutCenter();
+            if (!lineOrigin) continue;
+
+            const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
+            const originY = (lineOrigin.y - canvasRect.top) * (H / canvasRect.height);
+
+            const peerIdSet = new Set(grp.peerIds);
+            const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
+            if (matchingNodes.length === 0) continue;
+
+            // Resolve screen positions
+            const resolved = [];
+            for (const node of matchingNodes) {
+                let bestS = null;
+                let bestDist = Infinity;
+                for (const off of wrapOffsets) {
+                    const s = worldToScreen(node.lon + off, node.lat);
+                    if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                    const dx = s.x - originX;
+                    const dy = s.y - originY;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < bestDist) { bestDist = d2; bestS = s; }
+                }
+                if (bestS) resolved.push({ node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
+            }
+            if (resolved.length === 0) continue;
+
+            // Group by approximate screen position (within 8px = same dot)
+            const SNAP = 8;
+            const groups = [];
+            for (const r of resolved) {
+                let found = false;
+                for (const g of groups) {
+                    if (Math.abs(g.cx - r.sx) < SNAP && Math.abs(g.cy - r.sy) < SNAP) {
+                        g.items.push(r);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) groups.push({ cx: r.sx, cy: r.sy, items: [r] });
+            }
+
+            ctx.strokeStyle = grp.color;
+
+            for (const g of groups) {
+                const count = g.items.length;
+                const destX = g.cx;
+                const destY = g.cy;
+
+                for (let i = 0; i < count; i++) {
+                    const r = g.items[i];
+                    const dist = r.dist;
+                    const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
+                    ctx.globalAlpha = alpha;
+                    ctx.beginPath();
+                    ctx.moveTo(originX, originY);
+
+                    if (count > 1) {
+                        const midX = (originX + destX) / 2;
+                        const midY = (originY + destY) / 2;
+                        const dx = destX - originX;
+                        const dy = destY - originY;
+                        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const perpX = -dy / len;
+                        const perpY = dx / len;
+                        const spread = Math.min(len * fanPct, fanMax);
+                        const bulge = (i - (count - 1) / 2) * (spread / Math.max(1, count - 1));
+                        ctx.quadraticCurveTo(midX + perpX * bulge, midY + perpY * bulge, destX, destY);
+                    } else {
+                        ctx.lineTo(destX, destY);
+                    }
+                    ctx.stroke();
+                }
+            }
+        }
+
+        ctx.restore();
+    }
+
     // ═══════════════════════════════════════════════════════════
     // HUD — Peer count, block height, network badges
     // Updated every frame from current node state.
@@ -4584,7 +4684,9 @@
         drawConnectionLines(now, wrapOffsets);
 
         // [AS-DIVERSITY] 9b. Draw lines from map center to AS peers (hover/selection)
-        if (asLinePeerIds && asLinePeerIds.length > 0 && asLineColor) {
+        if (asLineGroups && asLineGroups.length > 0) {
+            drawAsLinesAll(wrapOffsets);
+        } else if (asLinePeerIds && asLinePeerIds.length > 0 && asLineColor) {
             drawAsLines(wrapOffsets);
         }
 
@@ -4713,13 +4815,9 @@
                     highlightTableRow(null);
                     clearMapDotFilter();
                 }
-                // [AS-DIVERSITY] Clear sub-filter first, or deselect AS if no sub-filter
+                // [AS-DIVERSITY] Two-stage collapse: first close sub-panels, then main panel
                 if (window.ASDiversity) {
-                    if (window.ASDiversity.hasSubFilter()) {
-                        window.ASDiversity.clearSubFilter();
-                    } else if (window.ASDiversity.getSelectedAs()) {
-                        window.ASDiversity.deselect();
-                    }
+                    window.ASDiversity.onMapClick();
                 }
             }
         }
@@ -5935,14 +6033,23 @@
         // Provide integration hooks
         ASD.setHooks({
             drawLinesForAs: function (asNum, peerIds, color) {
+                asLineGroups = null; // clear multi-group mode
                 asLinePeerIds = peerIds;
                 asLineColor = color;
                 asLineAsNum = asNum;
+            },
+            drawLinesForAllAs: function (groups) {
+                // groups = [{asNum, peerIds, color}, ...]
+                asLinePeerIds = null;
+                asLineColor = null;
+                asLineAsNum = null;
+                asLineGroups = groups;
             },
             clearAsLines: function () {
                 asLinePeerIds = null;
                 asLineColor = null;
                 asLineAsNum = null;
+                asLineGroups = null;
             },
             filterPeerTable: function (peerIds) {
                 asFilterPeerIds = peerIds ? new Set(peerIds) : null;
