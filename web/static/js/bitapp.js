@@ -2892,8 +2892,8 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // [AS-DIVERSITY] Draw lines from DONUT to peers of a hovered/selected AS
-    // Lines originate from the donut chart position, not map center.
+    // [AS-DIVERSITY] Draw lines from LEGEND DOT to peers of a hovered/selected AS
+    // Lines always originate from the legend dot, never the donut center.
     // Adapts to map pan/zoom since this runs every frame.
     // ═══════════════════════════════════════════════════════════
 
@@ -2902,25 +2902,21 @@
         const ASD = window.ASDiversity;
         if (!ASD) return;
 
-        // Try legend dot position first (when legend is visible), fall back to donut center
+        // Lines always originate from legend dots, never the donut center
         let lineOrigin = null;
         if (asLineAsNum) {
             lineOrigin = ASD.getLegendDotPosition(asLineAsNum);
         }
-        if (!lineOrigin) {
-            lineOrigin = ASD.getDonutCenter();
-        }
         if (!lineOrigin) return;
-        const donutCenter = lineOrigin;
 
         const peerIdSet = new Set(asLinePeerIds);
         const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
         if (matchingNodes.length === 0) return;
 
-        // Convert donut center from page coords to canvas logical coords
+        // Convert legend dot position from page coords to canvas logical coords
         const canvasRect = canvas.getBoundingClientRect();
-        const originX = (donutCenter.x - canvasRect.left) * (W / canvasRect.width);
-        const originY = (donutCenter.y - canvasRect.top) * (H / canvasRect.height);
+        const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
+        const originY = (lineOrigin.y - canvasRect.top) * (H / canvasRect.height);
 
         // Resolve screen positions for each matching node
         const resolved = [];
@@ -3026,9 +3022,8 @@
         ctx.lineWidth = lineW;
 
         for (const grp of asLineGroups) {
-            // Find this group's line origin (legend dot, fallback to donut center)
+            // Lines always originate from legend dots
             let lineOrigin = ASD.getLegendDotPosition(grp.asNum);
-            if (!lineOrigin) lineOrigin = ASD.getDonutCenter();
             if (!lineOrigin) continue;
 
             const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
@@ -6063,14 +6058,11 @@
                 // Find the node on the map by peer ID
                 const node = nodes.find(n => n.peerId === peerId && n.alive);
                 if (!node) return;
-                // Clear AS selection and sub-filter
+                // Collapse sub-tooltips but keep main panel open
                 if (window.ASDiversity) {
-                    window.ASDiversity.deselect();
+                    window.ASDiversity.collapseToMainPanel();
                 }
-                // Set selection state and zoom to the peer
-                groupedNodes = null;
-                mapFilterPeerIds = new Set([node.peerId]);
-                renderPeerTable();
+                // Zoom to the peer
                 zoomToPeer(node);
                 highlightTableRow(node.peerId);
             },
