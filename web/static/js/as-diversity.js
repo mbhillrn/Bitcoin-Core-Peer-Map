@@ -1313,7 +1313,7 @@ window.ASDiversity = (function () {
         var riskEl = panelEl.querySelector('.as-detail-risk');
 
         if (asnEl) {
-            asnEl.innerHTML = '<span style="color:var(--accent, #58a6ff)">Diversity</span> <span style="color:#79c0ff">Summary</span>';
+            asnEl.innerHTML = '<span style="color:var(--logo-accent, #7ec8e3)">Diversity</span> <span style="color:var(--logo-primary, #4a90d9)">Summary</span>';
             asnEl.classList.add('as-summary-title');
         }
         // Clickable provider count in header (no peer count)

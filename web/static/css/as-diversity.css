@@ -443,7 +443,10 @@ body.as-panel-open .footer {
     margin-bottom: 2px;
 }
 .as-detail-asn.as-summary-title {
+    font-family: var(--font-display);
     text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
     font-size: 15px;
     letter-spacing: 0.5px;
     padding-bottom: 4px;
