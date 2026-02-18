@@ -65,6 +65,9 @@ window.ASDiversity = (function () {
     let subFilterCategory = null;  // Category key ('software', 'conntype', 'country', 'services', 'provider')
     let subTooltipPinned = false;  // Whether the sub-tooltip is pinned (clicked vs hovered)
     let subSubTooltipPinned = false; // Whether the sub-sub-tooltip is pinned
+    let pinnedSubTooltipHtml = null; // HTML of the pinned sub-tooltip (for restore after hover preview)
+    let pinnedSubTooltipSrc = null;  // Source element that opened the pinned sub-tooltip
+    let pinnedSubTooltipSetup = null; // fn(tip) — re-attach handlers when restoring pinned tooltip
     let lastPeersRaw = [];         // Raw peers from last update (for summary computation)
     let panelHistory = [];         // Navigation stack [{type:'summary'|'provider', asNumber?, scrollTop?}]
 
@@ -1223,6 +1226,7 @@ window.ASDiversity = (function () {
 
         // Attach hover/click handlers to all interactive rows
         attachInteractiveRowHandlers(bodyEl, seg);
+        attachPanelBlankClickHandler(bodyEl);
 
         // Show panel with animation + push content
         panelEl.classList.remove('hidden');
@@ -1319,7 +1323,7 @@ window.ASDiversity = (function () {
             if (ins.type === 'stable') {
                 html += '<span class="as-insight-text">Most stable: <span class="as-panel-link as-navigate-provider" data-as="' + ins.asNumber + '">' + ins.provName + '</span> (avg ' + ins.durText + ')</span>';
             } else if (ins.type === 'longest') {
-                html += '<span class="as-insight-text as-panel-link as-longest-peers-link" title="View top 50 longest connected peers">Longest Peers:</span>';
+                html += '<span class="as-insight-text as-panel-link as-longest-peers-link" title="View top 50 longest connected peers">Longest Peers <span style="color:var(--text-muted)">(top 50)</span></span>';
                 html += '<div class="as-insight-expand">';
                 for (var ei = 0; ei < ins.topPeers.length; ei++) {
                     var ep = ins.topPeers[ei];
@@ -1330,7 +1334,18 @@ window.ASDiversity = (function () {
                 }
                 html += '</div>';
             } else if (ins.type === 'data-providers') {
-                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="View top providers by total bytes">' + ins.label + ': ' + ins.topProviders[0].provName + ' (' + fmtBytes(ins.topProviders[0].totalBytes) + ' total)</span>';
+                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="View top providers by total bytes">' + ins.label + '</span>';
+                html += '<div class="as-insight-expand">';
+                for (var ei = 0; ei < ins.topProviders.length; ei++) {
+                    var dp = ins.topProviders[ei];
+                    var dpName = dp.provName.length > 16 ? dp.provName.substring(0, 15) + '\u2026' : dp.provName;
+                    html += '<div class="as-insight-expand-row">';
+                    html += '<span class="as-grid-dot" style="background:' + dp.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:middle"></span>';
+                    html += '<span style="flex:1" title="' + dp.provName + '">#' + (ei + 1) + ' ' + dpName + '</span>';
+                    html += '<span class="as-insight-expand-dur">' + fmtBytes(dp.totalBytes) + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
             } else if (ins.type === 'data') {
                 html += '<span class="as-insight-text">' + ins.label + ': ' + ins.amount + '</span>';
             } else {
@@ -1402,6 +1417,7 @@ window.ASDiversity = (function () {
         attachSummaryRowHandlers(bodyEl);
         attachGridHandlers(bodyEl);
         attachSummaryLinkHandlers(bodyEl);
+        attachPanelBlankClickHandler(bodyEl);
 
         // Show panel
         panelEl.classList.remove('hidden');
@@ -1570,14 +1586,47 @@ window.ASDiversity = (function () {
         });
     }
 
+    /** Clicking blank space in the panel body closes any open sub-panels */
+    function attachPanelBlankClickHandler(bodyEl) {
+        bodyEl.addEventListener('click', function (e) {
+            // Only close if clicking on the body itself, not on interactive children
+            if (e.target === bodyEl || e.target.classList.contains('modal-section-title') ||
+                e.target.classList.contains('modal-row') || e.target.classList.contains('modal-label') ||
+                e.target.classList.contains('modal-val')) {
+                if (subTooltipPinned || subSubTooltipPinned) {
+                    hideSubTooltip();
+                    hideSubSubTooltip();
+                    if (summarySelected) {
+                        subFilterPeerIds = null;
+                        subFilterLabel = null;
+                        subFilterCategory = null;
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
+                        var rows = bodyEl.querySelectorAll('.sub-filter-active');
+                        for (var i = 0; i < rows.length; i++) rows[i].classList.remove('sub-filter-active');
+                    } else if (selectedAs) {
+                        clearSubFilter();
+                    }
+                }
+            }
+        });
+    }
+
     /** Attach hover and click handlers to interactive rows in the detail panel */
     function attachInteractiveRowHandlers(bodyEl, seg) {
         var rows = bodyEl.querySelectorAll('.as-interactive-row');
         for (var ri = 0; ri < rows.length; ri++) {
             (function (rowEl) {
                 rowEl.addEventListener('mouseenter', function (e) {
-                    // Don't override a pinned sub-tooltip with hover
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                        var category = rowEl.dataset.category;
+                        var label = rowEl.querySelector('.as-detail-sub-label').textContent;
+                        var html = buildPeerSummaryHtml(peerIds, category, label);
+                        showHoverPreview(html, e);
+                        return;
+                    }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var category = rowEl.dataset.category;
                     var label = rowEl.querySelector('.as-detail-sub-label').textContent;
@@ -1585,12 +1634,13 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                 });
                 rowEl.addEventListener('mousemove', function (e) {
-                    if (subTooltipPinned) return;
-                    positionSubTooltip(e);
+                    if (!subTooltipPinned) positionSubTooltip(e);
                 });
                 rowEl.addEventListener('mouseleave', function () {
-                    // Don't hide a pinned sub-tooltip on mouseleave
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -1598,13 +1648,16 @@ window.ASDiversity = (function () {
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var category = rowEl.dataset.category;
                     var label = rowEl.querySelector('.as-detail-sub-label').textContent;
+                    // Toggle: clicking same row unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        clearSubFilter();
+                        return;
+                    }
                     applySubFilter(peerIds, category, label);
-                    // Pin the sub-tooltip so it stays visible
                     var html = buildPeerSummaryHtml(peerIds, category, label);
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) tip.style.pointerEvents = 'auto';
+                    pinSubTooltip(html, rowEl, null);
                 });
             })(rows[ri]);
         }
@@ -1650,7 +1703,43 @@ window.ASDiversity = (function () {
             tip.style.pointerEvents = 'none';
         }
         subTooltipPinned = false;
+        pinnedSubTooltipHtml = null;
+        pinnedSubTooltipSrc = null;
+        pinnedSubTooltipSetup = null;
         hideSubSubTooltip();
+    }
+
+    /** Pin the sub-tooltip: store HTML and source for hover-preview restore */
+    function pinSubTooltip(html, srcEl, setupFn) {
+        subTooltipPinned = true;
+        pinnedSubTooltipHtml = html;
+        pinnedSubTooltipSrc = srcEl || null;
+        pinnedSubTooltipSetup = setupFn || null;
+        var tip = document.getElementById('as-sub-tooltip');
+        if (tip) tip.style.pointerEvents = 'auto';
+    }
+
+    /** Show a hover preview over a pinned sub-tooltip (temporary replacement) */
+    function showHoverPreview(html, event) {
+        hideSubSubTooltip();
+        var tip = document.getElementById('as-sub-tooltip');
+        if (!tip) return;
+        tip.innerHTML = html;
+        tip.classList.remove('hidden');
+        tip.style.display = '';
+        positionSubTooltip(event);
+        attachSubTooltipHandlers();
+    }
+
+    /** Restore the pinned sub-tooltip after a hover preview ends */
+    function restorePinnedSubTooltip() {
+        if (!subTooltipPinned || !pinnedSubTooltipHtml) return;
+        var tip = document.getElementById('as-sub-tooltip');
+        if (!tip) return;
+        tip.innerHTML = pinnedSubTooltipHtml;
+        tip.style.pointerEvents = 'auto';
+        if (pinnedSubTooltipSetup) pinnedSubTooltipSetup(tip);
+        attachSubTooltipHandlers();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1745,6 +1834,35 @@ window.ASDiversity = (function () {
         });
     }
 
+    /** Build peer list HTML with rank numbers for the sub-tooltip.
+     *  peerEntries: [{peer, duration}] — sorted by duration desc */
+    function buildRankedPeerListHtml(peerEntries) {
+        var html = '';
+        var initialShow = 6;
+        var hasMore = peerEntries.length > initialShow;
+
+        html += '<div class="as-sub-tt-scroll">';
+        for (var pi = 0; pi < peerEntries.length; pi++) {
+            var ep = peerEntries[pi];
+            var p = ep.peer;
+            var ct = p.connection_type || 'unknown';
+            var ctLabel = CONN_TYPE_LABELS[ct] || ct;
+            var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '" style="min-width:70px">#' + (pi + 1) + ' ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-type">' + fmtDuration(ep.duration) + '</span>';
+            html += '<span class="as-sub-tt-loc">' + ctLabel + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        if (hasMore) {
+            var remaining = peerEntries.length - initialShow;
+            html += '<div class="as-sub-tt-more as-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
+        }
+        return html;
+    }
+
     /** Build provider list HTML for the sub-tooltip in summary drill-down mode.
      *  providers: [{asNumber, name, color, peerCount, peerIds, peers}] */
     function buildProviderListHtml(providers, catLabel) {
@@ -1810,18 +1928,27 @@ window.ASDiversity = (function () {
         for (var ri = 0; ri < rows.length; ri++) {
             (function (rowEl) {
                 rowEl.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        // Hover preview over pinned tooltip
+                        var providers = JSON.parse(rowEl.dataset.providers);
+                        var catLabel = rowEl.dataset.catLabel;
+                        var html = buildProviderListHtml(providers, catLabel);
+                        showHoverPreview(html, e);
+                        return;
+                    }
                     var providers = JSON.parse(rowEl.dataset.providers);
                     var catLabel = rowEl.dataset.catLabel;
                     var html = buildProviderListHtml(providers, catLabel);
                     showSubTooltip(html, e);
                 });
                 rowEl.addEventListener('mousemove', function (e) {
-                    if (subTooltipPinned) return;
-                    positionSubTooltip(e);
+                    if (!subTooltipPinned) positionSubTooltip(e);
                 });
                 rowEl.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -1830,18 +1957,23 @@ window.ASDiversity = (function () {
                     var providers = JSON.parse(rowEl.dataset.providers);
                     var catLabel = rowEl.dataset.catLabel;
 
+                    // Toggle: clicking same row unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        clearSummarySubFilter();
+                        return;
+                    }
+
                     // Apply sub-filter for all peers in this category
                     applySummarySubFilter(peerIds, catLabel);
 
                     // Pin the sub-tooltip with provider list
                     var html = buildProviderListHtml(providers, catLabel);
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) {
-                        tip.style.pointerEvents = 'auto';
+                    pinSubTooltip(html, rowEl, function (tip) {
                         attachProviderClickHandlers(tip);
-                    }
+                    });
+                    attachProviderClickHandlers(document.getElementById('as-sub-tooltip'));
                 });
             })(rows[ri]);
         }
@@ -1936,11 +2068,9 @@ window.ASDiversity = (function () {
         var gridClickables = bodyEl.querySelectorAll('.as-grid-clickable');
         for (var gc = 0; gc < gridClickables.length; gc++) {
             (function (el) {
-                el.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) return;
+                function buildGridPeerHtml() {
                     var peerIds = JSON.parse(el.dataset.peerIds);
-                    if (peerIds.length === 0) return;
-                    // Find the peer objects
+                    if (peerIds.length === 0) return null;
                     var idSet = {};
                     for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
                     var matchedPeers = [];
@@ -1952,34 +2082,43 @@ window.ASDiversity = (function () {
                     html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + dir + ' Peers</div>';
                     html += '</div>';
                     html += buildPeerListHtmlForSubSub(matchedPeers);
-                    showSubTooltip(html, e);
+                    return html;
+                }
+                el.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var html = buildGridPeerHtml();
+                        if (html) showHoverPreview(html, e);
+                        return;
+                    }
+                    var html = buildGridPeerHtml();
+                    if (html) showSubTooltip(html, e);
                 });
                 el.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
+                    // Toggle: clicking same element unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                        hideSubTooltip();
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
+                        return;
+                    }
                     var peerIds = JSON.parse(el.dataset.peerIds);
                     if (peerIds.length === 0) return;
-                    var idSet = {};
-                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
-                    var matchedPeers = [];
-                    for (var i = 0; i < lastPeersRaw.length; i++) {
-                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
-                    }
-                    var dir = el.dataset.direction === 'in' ? 'Inbound' : 'Outbound';
-                    var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + dir + ' Peers</div>';
-                    html += '</div>';
-                    html += buildPeerListHtmlForSubSub(matchedPeers);
+                    var html = buildGridPeerHtml();
+                    if (!html) return;
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) {
-                        tip.style.pointerEvents = 'auto';
+                    pinSubTooltip(html, el, function (tip) {
                         attachSubTooltipHandlers();
-                    }
+                    });
+                    attachSubTooltipHandlers();
 
                     // Filter map to these peers
                     if (_filterPeerTable) _filterPeerTable(peerIds);
@@ -2028,17 +2167,23 @@ window.ASDiversity = (function () {
             (function (el) {
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
+                    // Toggle: clicking same link unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                        hideSubTooltip();
+                        return;
+                    }
                     var allProvs = asGroups.map(function (g) {
                         return { asNumber: g.asNumber, name: g.asShort || g.asName || g.asNumber, color: getColorForAsNum(g.asNumber), peerCount: g.peerCount, peerIds: g.peerIds, peers: g.peers };
                     });
                     var html = buildProviderListHtml(allProvs, 'All Providers (' + allProvs.length + ')');
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
+                    pinSubTooltip(html, el, function (tip) {
+                        attachProviderClickHandlers(tip);
+                        attachProviderNavHandlers(tip);
+                    });
                     var tip = document.getElementById('as-sub-tooltip');
                     if (tip) {
-                        tip.style.pointerEvents = 'auto';
                         attachProviderClickHandlers(tip);
-                        // Also make provider names navigate to their panel
                         attachProviderNavHandlers(tip);
                     }
                 });
@@ -2052,15 +2197,21 @@ window.ASDiversity = (function () {
                 (function (el) {
                     el.addEventListener('click', function (e) {
                         e.stopPropagation();
+                        if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                            hideSubTooltip();
+                            return;
+                        }
                         var allProvs = asGroups.map(function (g) {
                             return { asNumber: g.asNumber, name: g.asShort || g.asName || g.asNumber, color: getColorForAsNum(g.asNumber), peerCount: g.peerCount, peerIds: g.peerIds, peers: g.peers };
                         });
                         var html = buildProviderListHtml(allProvs, 'All Providers (' + allProvs.length + ')');
                         showSubTooltip(html, e);
-                        subTooltipPinned = true;
+                        pinSubTooltip(html, el, function (tip) {
+                            attachProviderClickHandlers(tip);
+                            attachProviderNavHandlers(tip);
+                        });
                         var tip = document.getElementById('as-sub-tooltip');
                         if (tip) {
-                            tip.style.pointerEvents = 'auto';
                             attachProviderClickHandlers(tip);
                             attachProviderNavHandlers(tip);
                         }
@@ -2072,43 +2223,51 @@ window.ASDiversity = (function () {
         // "Longest peers" link — hover shows submenu, click pins it
         var longestLink = bodyEl.querySelector('.as-longest-peers-link');
         if (longestLink) {
-            longestLink.addEventListener('mouseenter', function (e) {
-                if (subTooltipPinned) return;
+            function buildLongestPeersHtml() {
                 var data = computeSummaryData();
                 var longestInsight = null;
                 for (var j = 0; j < data.insights.length; j++) {
                     if (data.insights[j].type === 'longest') { longestInsight = data.insights[j]; break; }
                 }
-                if (!longestInsight) return;
+                if (!longestInsight) return null;
                 var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
                 html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Top 50 Longest Connected Peers</div>';
                 html += '</div>';
-                html += buildPeerListHtmlForSubSub(longestInsight.allPeers.map(function (ep) { return ep.peer; }));
-                showSubTooltip(html, e);
+                html += buildRankedPeerListHtml(longestInsight.allPeers);
+                return html;
+            }
+            longestLink.addEventListener('mouseenter', function (e) {
+                if (subTooltipPinned) {
+                    var html = buildLongestPeersHtml();
+                    if (html) showHoverPreview(html, e);
+                    return;
+                }
+                var html = buildLongestPeersHtml();
+                if (html) showSubTooltip(html, e);
             });
             longestLink.addEventListener('mouseleave', function () {
-                if (subTooltipPinned) return;
+                if (subTooltipPinned) {
+                    restorePinnedSubTooltip();
+                    return;
+                }
                 hideSubTooltip();
             });
             longestLink.addEventListener('click', function (e) {
                 e.stopPropagation();
-                var data = computeSummaryData();
-                var longestInsight = null;
-                for (var j = 0; j < data.insights.length; j++) {
-                    if (data.insights[j].type === 'longest') { longestInsight = data.insights[j]; break; }
+                // Toggle: clicking same link unpins
+                if (subTooltipPinned && pinnedSubTooltipSrc === longestLink) {
+                    hideSubTooltip();
+                    longestLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    return;
                 }
-                if (!longestInsight) return;
-                var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Top 50 Longest Connected Peers</div>';
-                html += '</div>';
-                html += buildPeerListHtmlForSubSub(longestInsight.allPeers.map(function (ep) { return ep.peer; }));
+                var html = buildLongestPeersHtml();
+                if (!html) return;
                 showSubTooltip(html, e);
-                subTooltipPinned = true;
-                var tip = document.getElementById('as-sub-tooltip');
-                if (tip) {
-                    tip.style.pointerEvents = 'auto';
+                pinSubTooltip(html, longestLink, function (tip) {
                     attachSubTooltipHandlers();
-                }
+                });
+                attachSubTooltipHandlers();
+                longestLink.closest('.as-summary-insight').classList.add('sub-filter-active');
             });
         }
 
@@ -2163,27 +2322,37 @@ window.ASDiversity = (function () {
                 }
 
                 el.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        var result = buildDataProviderHtml();
+                        if (result) showHoverPreview(result.html, e);
+                        return;
+                    }
                     var result = buildDataProviderHtml();
                     if (!result) return;
                     showSubTooltip(result.html, e);
                 });
                 el.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
+                    // Toggle: clicking same link unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                        hideSubTooltip();
+                        el.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                        return;
+                    }
                     var result = buildDataProviderHtml();
                     if (!result) return;
                     showSubTooltip(result.html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) {
-                        tip.style.pointerEvents = 'auto';
-                        // Attach click handlers for each provider row to show peer sub-sub-tooltip
+                    pinSubTooltip(result.html, el, function (tip) {
                         attachDataProviderRowHandlers(tip, field);
-                    }
+                    });
+                    attachDataProviderRowHandlers(document.getElementById('as-sub-tooltip'), field);
                     // Highlight this insight as active
                     el.closest('.as-summary-insight').classList.add('sub-filter-active');
                 });
@@ -2727,7 +2896,8 @@ window.ASDiversity = (function () {
         // Don't show AS hover tooltip when a sub-tooltip is pinned
         if (subTooltipPinned) return;
         hoveredAs = asNum;
-        showTooltip(asNum, e);
+        // No floating tooltip — legend highlighting replaces it
+        highlightLegendItem(asNum);
 
         // Temporarily remove all-hovered highlight so only this segment is bright
         if ((hoveredAll || summarySelected) && containerEl) {
@@ -2746,7 +2916,7 @@ window.ASDiversity = (function () {
     function onSegmentLeave() {
         if (subTooltipPinned) return;
         hoveredAs = null;
-        hideTooltip();
+        clearLegendHighlight();
 
         // If hoveredAll or summarySelected is active, restore all-lines state
         if ((hoveredAll || summarySelected) && !selectedAs) {
@@ -2757,6 +2927,29 @@ window.ASDiversity = (function () {
         // ONLY clear lines if nothing is selected — selection keeps its lines
         if (!selectedAs) {
             if (_clearAsLines) _clearAsLines();
+        }
+    }
+
+    /** Add highlight class to the matching legend item */
+    function highlightLegendItem(asNum) {
+        if (!legendEl) return;
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].dataset.as === asNum) {
+                items[i].classList.add('highlighted');
+            } else {
+                items[i].classList.add('dimmed');
+            }
+        }
+    }
+
+    /** Remove highlight class from all legend items */
+    function clearLegendHighlight() {
+        if (!legendEl) return;
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var i = 0; i < items.length; i++) {
+            items[i].classList.remove('highlighted');
+            items[i].classList.remove('dimmed');
         }
     }
 

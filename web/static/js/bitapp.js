@@ -6065,11 +6065,22 @@
                 highlightTableRow(node.peerId);
             },
             zoomToPeerOnly: function (peerId) {
-                // Zoom to peer without deselecting the AS panel — keeps main panel open
+                // Zoom to peer without touching sub-panels or lines — just zoom + highlight
                 const node = nodes.find(n => n.peerId === peerId && n.alive);
                 if (!node) return;
-                if (window.ASDiversity) {
-                    window.ASDiversity.collapseToMainPanel();
+                // Draw line to just this one peer
+                const ASD = window.ASDiversity;
+                if (ASD && node.peerId !== undefined) {
+                    // Find the AS for this peer to get the right color
+                    const peer = lastPeers.find(p => p.id === peerId);
+                    if (peer && peer.as) {
+                        const asNum = ASD.getSelectedAs ? ASD.getSelectedAs() : null;
+                        const color = asNum ? (ASD.getColorForAs(asNum) || '#58a6ff') : '#58a6ff';
+                        asLineGroups = null;
+                        asLinePeerIds = [peerId];
+                        asLineColor = color;
+                        asLineAsNum = asNum || 'single';
+                    }
                 }
                 zoomToPeer(node);
                 highlightTableRow(node.peerId);

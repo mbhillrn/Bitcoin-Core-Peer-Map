@@ -245,15 +245,16 @@
 /* "TOP 8" header above the legend list */
 .as-legend-header {
     font-family: var(--font-data);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 1.2px;
+    letter-spacing: 1.4px;
     text-transform: uppercase;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-    padding: 1px 6px 2px;
+    padding: 2px 6px 4px;
     width: 100%;
     box-sizing: border-box;
+    text-align: center;
 }
 .as-legend-item {
     display: flex;
@@ -272,6 +273,11 @@
 }
 .as-legend-item.dimmed {
     opacity: 0.25;
+}
+.as-legend-item.highlighted {
+    background: rgba(88, 166, 255, 0.12);
+    transform: scale(1.04);
+    transform-origin: left center;
 }
 .as-legend-item.selected {
     background: rgba(88, 166, 255, 0.14);
