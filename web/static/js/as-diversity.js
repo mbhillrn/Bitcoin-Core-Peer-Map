@@ -30,7 +30,7 @@ window.ASDiversity = (function () {
         '#d2a8ff',   // lavender
         '#79c0ff',   // light blue
         '#f0883e',   // orange
-        '#484f58',   // dark gray (Others)
+        '#f472b6',   // pink (Others)
     ];
 
     // ═══════════════════════════════════════════════════════════
