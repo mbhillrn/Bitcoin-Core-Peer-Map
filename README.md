@@ -14,7 +14,8 @@ MBCore Dashboard uses Bitcoin Core's built in tools to query your running node, 
 
 - Interactive HTML5 Canvas world map with geolocated Bitcoin Core peers
 - **Service provider diversity analysis** -- donut chart with diversity score, concentration risk, and per-provider detail panel
-- Supports all 5 Bitcoin Core network types: **IPv4**, **IPv6**, **Tor**, **I2P**, **CJDNS**
+- Dashboard supports all 5 Bitcoin Core network types: **IPv4**, **IPv6**, **Tor**, **I2P**, **CJDNS**
+- Location and provider diversity analysis supports both **IPv4**, and **IPv6** (Tor, I2P, and CJDNS networks are private by design)
 - Real-time peer data, system stats, and live Bitcoin price
 - Connect, disconnect, and ban peers directly from the dashboard
 - Local GeoIP database with automatic updates, works offline for cached peers
