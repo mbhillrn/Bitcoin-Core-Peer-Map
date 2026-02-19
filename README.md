@@ -2,6 +2,8 @@
 
 A real-time monitoring dashboard for your personal Bitcoin Core node. Geolocates connected peers on an interactive canvas world map, analyzes service provider diversity across your peer connections, and provides tools to manage peers directly, all from a browser graphical user interface.
 
+![MBCore Dashboard -- Diversity Summary Panel](docs/images/N-Hero0.png)
+
 ![MBCore Dashboard -- Full Map with Service Provider Diversity](docs/images/N-Hero1.png)
 
 ![MBCore Dashboard -- Selected Provider with Connection Lines](docs/images/N-Hero2.png)
@@ -123,6 +125,20 @@ Clicking a provider segment opens a slide-in panel on the right side with compre
 ![Others Category -- All Providers](docs/images/N-AS-Screen2.png)
 
 *Selecting the "Others" segment shows a full list of all providers in that category with their AS numbers and names, along with summary statistics for the group.*
+
+**Diversity Summary:**
+
+Hovering or clicking the donut center opens the **Diversity Summary** panel, which gives you a high-level overview of your node's peer connections ranked by provider:
+
+- **Connections by Provider** -- each provider is listed with Total, Inbound, and Outbound peer counts on separate rows. Click any provider name to open its full detail panel. Hover a provider row to draw connection lines to its peers on the map.
+- **Most Stable Connection (by rank)** -- providers ranked by average connection duration of their peers. Hover to preview, click to pin. Expanding a provider shows a numbered list of individual peers sorted by uptime, each clickable to zoom to the peer on the map.
+- **Fastest Connection (by rank)** -- providers ranked by average ping latency (lowest first). Same hover-to-preview and click-to-pin behavior. Expanding a provider shows peers sorted by ping time.
+- **Most Data Sent To (by rank)** -- providers ranked by total bytes sent. Expanding shows individual peers ranked by bytes sent.
+- **Most Data Recv By (by rank)** -- providers ranked by total bytes received. Expanding shows peers ranked by bytes received.
+
+**Sub-menus and drill-down:**
+
+The detail panel, provider rows, and insight sections all support a three-level drill-down system. Clicking a category (like Software or Countries) in a provider panel opens a sub-menu listing the breakdown. Clicking an item in that sub-menu (like a specific Bitcoin Core version) opens a sub-sub-menu listing the individual peers. Each peer entry is clickable to zoom to that peer on the map. Sub-menus stay pinned until you click elsewhere, and they survive automatic data refreshes so you don't lose your place while exploring.
 
 ### Map
 

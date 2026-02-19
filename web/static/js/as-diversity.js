@@ -22,7 +22,7 @@ window.ASDiversity = (function () {
 
     // Curated colour palette — 9 colours (8 AS + Others), distinct and accessible
     const PALETTE = [
-        '#58a6ff',   // blue
+        '#f472b6',   // pink
         '#3fb950',   // green
         '#e3b341',   // gold
         '#f07178',   // coral
@@ -30,7 +30,7 @@ window.ASDiversity = (function () {
         '#d2a8ff',   // lavender
         '#79c0ff',   // light blue
         '#f0883e',   // orange
-        '#484f58',   // dark gray (Others)
+        '#58a6ff',   // blue (Others)
     ];
 
     // ═══════════════════════════════════════════════════════════
@@ -65,6 +65,9 @@ window.ASDiversity = (function () {
     let subFilterCategory = null;  // Category key ('software', 'conntype', 'country', 'services', 'provider')
     let subTooltipPinned = false;  // Whether the sub-tooltip is pinned (clicked vs hovered)
     let subSubTooltipPinned = false; // Whether the sub-sub-tooltip is pinned
+    let pinnedSubTooltipHtml = null; // HTML of the pinned sub-tooltip (for restore after hover preview)
+    let pinnedSubTooltipSrc = null;  // Source element that opened the pinned sub-tooltip
+    let pinnedSubTooltipSetup = null; // fn(tip) — re-attach handlers when restoring pinned tooltip
     let lastPeersRaw = [];         // Raw peers from last update (for summary computation)
     let panelHistory = [];         // Navigation stack [{type:'summary'|'provider', asNumber?, scrollTop?}]
 
@@ -75,7 +78,8 @@ window.ASDiversity = (function () {
     let _filterPeerTable = null;   // fn(peerIds | null) — filter peer table
     let _dimMapPeers = null;       // fn(peerIds | null) — dim non-matching peers
     let _getWorldToScreen = null;  // fn(lon, lat) => {x, y}
-    let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID
+    let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID (full deselect)
+    let _zoomToPeerOnly = null;    // fn(peerId) — zoom to peer without deselecting AS panel
 
     // Service flag definitions (mirrored from bitapp.js for hover expansion)
     var SERVICE_FLAGS = {
@@ -516,7 +520,7 @@ window.ASDiversity = (function () {
         );
     }
 
-    /** Build connection grid: each donut segment with IN/OUT counts */
+    /** Build connection grid: each donut segment with IN/OUT counts and outbound subtypes */
     function buildConnectionGrid() {
         var grid = [];
         for (var i = 0; i < donutSegments.length; i++) {
@@ -526,6 +530,23 @@ window.ASDiversity = (function () {
             for (var j = 0; j < peers.length; j++) {
                 if (peers[j].connection_type === 'inbound') inPeers.push(peers[j]);
                 else outPeers.push(peers[j]);
+            }
+            // Break out outbound by connection subtype
+            var outSubtypes = {};
+            for (var oj = 0; oj < outPeers.length; oj++) {
+                var ct = outPeers[oj].connection_type || 'unknown';
+                if (!outSubtypes[ct]) outSubtypes[ct] = [];
+                outSubtypes[ct].push(outPeers[oj]);
+            }
+            var outSubList = [];
+            for (var oKey in outSubtypes) {
+                if (!outSubtypes.hasOwnProperty(oKey)) continue;
+                outSubList.push({
+                    type: oKey,
+                    label: CONN_TYPE_LABELS[oKey] || oKey,
+                    count: outSubtypes[oKey].length,
+                    peerIds: outSubtypes[oKey].map(function (p) { return p.id; })
+                });
             }
             var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
             if (displayName.length > 16) displayName = displayName.substring(0, 15) + '\u2026';
@@ -538,20 +559,22 @@ window.ASDiversity = (function () {
                 outCount: outPeers.length,
                 inPeerIds: inPeers.map(function (p) { return p.id; }),
                 outPeerIds: outPeers.map(function (p) { return p.id; }),
+                totalPeerIds: peers.map(function (p) { return p.id; }),
                 inPeers: inPeers,
                 outPeers: outPeers,
+                outSubtypes: outSubList,
                 totalCount: peers.length
             });
         }
         return grid;
     }
 
-    /** Compute 3 dynamic insights for the summary panel */
+    /** Compute 4 dynamic insights for the summary panel */
     function computeInsights() {
         var insights = [];
         var nowSec = Math.floor(Date.now() / 1000);
 
-        // Insight 1: Stable peer dominance — provider with highest avg connection duration
+        // Insight 1: Most stable — provider with highest avg connection duration
         if (asGroups.length > 0) {
             var bestAvg = 0, bestGroup = null;
             for (var i = 0; i < asGroups.length; i++) {
@@ -572,70 +595,108 @@ window.ASDiversity = (function () {
                     icon: '\u23f3',
                     asNumber: bestGroup.asNumber,
                     provName: bestGroup.asShort || bestGroup.asNumber,
-                    durText: fmtDuration(bestAvg)
+                    durText: fmtDuration(bestAvg),
+                    peerIds: bestGroup.peers.map(function (p) { return p.id; }),
+                    peers: bestGroup.peers
                 });
             }
         }
 
-        // Insight 2: Longest standing peers (top 5 shown, top 50 available via sub-panel)
-        var allPeersByDur = [];
-        for (var i = 0; i < lastPeersRaw.length; i++) {
-            var p = lastPeersRaw[i];
-            if (p.conntime > 0 && parseAsNumber(p.as)) {
-                allPeersByDur.push({ peer: p, duration: nowSec - p.conntime });
+        // Insight 2: Fastest connection — providers ranked by avg ping time (lowest first)
+        if (asGroups.length > 0) {
+            var pingProvList = [];
+            for (var i = 0; i < asGroups.length; i++) {
+                var g = asGroups[i];
+                var totalPing = 0, pingCount = 0;
+                for (var j = 0; j < g.peers.length; j++) {
+                    if (g.peers[j].ping_ms > 0) {
+                        totalPing += g.peers[j].ping_ms;
+                        pingCount++;
+                    }
+                }
+                if (pingCount > 0) {
+                    var avgPing = totalPing / pingCount;
+                    var peersSorted = g.peers.slice().sort(function (a, b) { return (a.ping_ms || 9999) - (b.ping_ms || 9999); });
+                    pingProvList.push({
+                        asNumber: g.asNumber,
+                        provName: g.asShort || g.asName || g.asNumber,
+                        color: getColorForAsNum(g.asNumber),
+                        avgPing: avgPing,
+                        peers: peersSorted,
+                        peerIds: g.peerIds
+                    });
+                }
             }
-        }
-        allPeersByDur.sort(function (a, b) { return b.duration - a.duration; });
-        if (allPeersByDur.length > 0) {
-            insights.push({
-                type: 'longest',
-                icon: '\ud83c\udfc6',
-                topPeers: allPeersByDur.slice(0, 5),
-                allPeers: allPeersByDur.slice(0, 50)
-            });
+            pingProvList.sort(function (a, b) { return a.avgPing - b.avgPing; });
+            if (pingProvList.length > 0) {
+                insights.push({
+                    type: 'fastest',
+                    icon: '\u26a1',
+                    topProviders: pingProvList,
+                    field: 'ping'
+                });
+            }
         }
 
-        // Insight 3: Most data sent — peer with highest bytessent
-        var topSent = null, topSentBytes = 0;
-        var allBySent = [];
+        // Insight 3: Providers with most total bytes sent
+        var sentByProvider = {};
         for (var i = 0; i < lastPeersRaw.length; i++) {
             var p = lastPeersRaw[i];
-            if ((p.bytessent || 0) > 0 && parseAsNumber(p.as)) {
-                allBySent.push(p);
-                if (p.bytessent > topSentBytes) { topSentBytes = p.bytessent; topSent = p; }
-            }
+            var asNum = parseAsNumber(p.as);
+            if (!asNum || !(p.bytessent > 0)) continue;
+            if (!sentByProvider[asNum]) sentByProvider[asNum] = { asNumber: asNum, totalBytes: 0, peers: [] };
+            sentByProvider[asNum].totalBytes += p.bytessent;
+            sentByProvider[asNum].peers.push(p);
         }
-        if (topSent) {
-            allBySent.sort(function (a, b) { return (b.bytessent || 0) - (a.bytessent || 0); });
+        var sentProvList = [];
+        for (var k in sentByProvider) {
+            if (!sentByProvider.hasOwnProperty(k)) continue;
+            var sp = sentByProvider[k];
+            sp.peers.sort(function (a, b) { return (b.bytessent || 0) - (a.bytessent || 0); });
+            var grp = asGroups.find(function (g) { return g.asNumber === sp.asNumber; });
+            sp.provName = grp ? (grp.asShort || grp.asName || grp.asNumber) : sp.asNumber;
+            sp.color = getColorForAsNum(sp.asNumber);
+            sentProvList.push(sp);
+        }
+        sentProvList.sort(function (a, b) { return b.totalBytes - a.totalBytes; });
+        if (sentProvList.length > 0) {
             insights.push({
-                type: 'data',
+                type: 'data-providers',
                 icon: '\u2b06\ufe0f',
-                label: 'Most data sent',
-                topPeer: topSent,
-                amount: fmtBytes(topSentBytes),
-                allPeers: allBySent.slice(0, 10)
+                label: 'Most data sent to <span style="color:var(--text-muted)">(by rank)</span>',
+                topProviders: sentProvList,
+                field: 'bytessent'
             });
         }
 
-        // Insight 4: Most data received — peer with highest bytesrecv
-        var topRecv = null, topRecvBytes = 0;
-        var allByRecv = [];
+        // Insight 4: Providers with most total bytes received
+        var recvByProvider = {};
         for (var i = 0; i < lastPeersRaw.length; i++) {
             var p = lastPeersRaw[i];
-            if ((p.bytesrecv || 0) > 0 && parseAsNumber(p.as)) {
-                allByRecv.push(p);
-                if (p.bytesrecv > topRecvBytes) { topRecvBytes = p.bytesrecv; topRecv = p; }
-            }
+            var asNum = parseAsNumber(p.as);
+            if (!asNum || !(p.bytesrecv > 0)) continue;
+            if (!recvByProvider[asNum]) recvByProvider[asNum] = { asNumber: asNum, totalBytes: 0, peers: [] };
+            recvByProvider[asNum].totalBytes += p.bytesrecv;
+            recvByProvider[asNum].peers.push(p);
         }
-        if (topRecv) {
-            allByRecv.sort(function (a, b) { return (b.bytesrecv || 0) - (a.bytesrecv || 0); });
+        var recvProvList = [];
+        for (var k in recvByProvider) {
+            if (!recvByProvider.hasOwnProperty(k)) continue;
+            var rp = recvByProvider[k];
+            rp.peers.sort(function (a, b) { return (b.bytesrecv || 0) - (a.bytesrecv || 0); });
+            var grp = asGroups.find(function (g) { return g.asNumber === rp.asNumber; });
+            rp.provName = grp ? (grp.asShort || grp.asName || grp.asNumber) : rp.asNumber;
+            rp.color = getColorForAsNum(rp.asNumber);
+            recvProvList.push(rp);
+        }
+        recvProvList.sort(function (a, b) { return b.totalBytes - a.totalBytes; });
+        if (recvProvList.length > 0) {
             insights.push({
-                type: 'data',
+                type: 'data-providers',
                 icon: '\u2b07\ufe0f',
-                label: 'Most data recv',
-                topPeer: topRecv,
-                amount: fmtBytes(topRecvBytes),
-                allPeers: allByRecv.slice(0, 10)
+                label: 'Most data recv by <span style="color:var(--text-muted)">(by rank)</span>',
+                topProviders: recvProvList,
+                field: 'bytesrecv'
             });
         }
 
@@ -880,7 +941,7 @@ window.ASDiversity = (function () {
             qualityEl.className = 'as-score-quality ' + q.cls;
         }
 
-        scoreLbl.textContent = 'SUMMARY ANALYSIS';
+        scoreLbl.textContent = 'DIVERSITY SUMMARY';
         scoreLbl.classList.add('as-summary-link');
         if (summarySelected) {
             scoreLbl.classList.add('as-summary-active');
@@ -893,21 +954,49 @@ window.ASDiversity = (function () {
     function renderLegend() {
         if (!legendEl) return;
         var html = '';
-        for (var i = 0; i < donutSegments.length; i++) {
-            var seg = donutSegments[i];
-            var cls = ['as-legend-item'];
-            if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
-            if (selectedAs === seg.asNumber) cls.push('selected');
 
-            var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
-            var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+        // When an AS is clicked (selected), show only that provider in the legend
+        if (selectedAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (!seg) {
+                // Selected AS might be a sub-provider inside Others
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var color = getColorForAsNum(selectedAs);
+                    var displayName = grp.asShort || grp.asName || grp.asNumber;
+                    var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+                    html += '<div class="as-legend-item selected" data-as="' + selectedAs + '">';
+                    html += '<span class="as-legend-dot" style="background:' + color + '"></span>';
+                    html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+                    html += '<span class="as-legend-count">' + grp.peerCount + '</span>';
+                    html += '<span class="as-legend-pct">' + (totalPeers > 0 ? (grp.peerCount / totalPeers * 100).toFixed(0) : 0) + '%</span>';
+                    html += '</div>';
+                }
+            } else {
+                var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
+                var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+                html += '<div class="as-legend-item selected" data-as="' + seg.asNumber + '">';
+                html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
+                html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+                html += '<span class="as-legend-count">' + seg.peerCount + '</span>';
+                html += '<span class="as-legend-pct">' + seg.percentage.toFixed(0) + '%</span>';
+                html += '</div>';
+            }
+        } else {
+            // Default state: show "TOP 8" header + all segments
+            html += '<div class="as-legend-header">TOP ' + Math.min(MAX_SEGMENTS, donutSegments.length) + '</div>';
+            for (var i = 0; i < donutSegments.length; i++) {
+                var seg = donutSegments[i];
+                var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
+                var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
 
-            html += '<div class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '">';
-            html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
-            html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
-            html += '<span class="as-legend-count">' + seg.peerCount + '</span>';
-            html += '<span class="as-legend-pct">' + seg.percentage.toFixed(0) + '%</span>';
-            html += '</div>';
+                html += '<div class="as-legend-item" data-as="' + seg.asNumber + '">';
+                html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
+                html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+                html += '<span class="as-legend-count">' + seg.peerCount + '</span>';
+                html += '<span class="as-legend-pct">' + seg.percentage.toFixed(0) + '%</span>';
+                html += '</div>';
+            }
         }
         legendEl.innerHTML = html;
 
@@ -1023,7 +1112,10 @@ window.ASDiversity = (function () {
         var pctEl = panelEl.querySelector('.as-detail-pct');
         var riskEl = panelEl.querySelector('.as-detail-risk');
 
-        if (asnEl) asnEl.textContent = seg.isOthers ? 'Others' : seg.asNumber;
+        if (asnEl) {
+            asnEl.textContent = seg.isOthers ? 'Others' : seg.asNumber;
+            asnEl.classList.remove('as-summary-title');
+        }
         if (orgEl) orgEl.textContent = seg.isOthers ? seg.asName : (fullGroup.asName || seg.asNumber);
 
         // Meta badges
@@ -1129,7 +1221,7 @@ window.ASDiversity = (function () {
         } else {
             // ── Individual AS: connection types only (no duplicate inbound/outbound) ──
             html += '<div class="modal-section-title">Peers</div>';
-            html += row('Total', fullGroup.peerCount);
+            html += interactiveRow('Total', fullGroup.peerCount, fullGroup.peerIds, 'conntype');
 
             // Show only connection types that exist, with short labels
             if (fullGroup.connTypesList && fullGroup.connTypesList.length > 0) {
@@ -1176,6 +1268,7 @@ window.ASDiversity = (function () {
 
         // Attach hover/click handlers to all interactive rows
         attachInteractiveRowHandlers(bodyEl, seg);
+        attachPanelBlankClickHandler(bodyEl);
 
         // Show panel with animation + push content
         panelEl.classList.remove('hidden');
@@ -1219,13 +1312,14 @@ window.ASDiversity = (function () {
         var pctEl = panelEl.querySelector('.as-detail-pct');
         var riskEl = panelEl.querySelector('.as-detail-risk');
 
-        if (asnEl) asnEl.textContent = 'SUMMARY ANALYSIS';
-        // Clickable provider count and peer count in header
+        if (asnEl) {
+            asnEl.innerHTML = '<span style="color:var(--logo-accent, #7ec8e3)">Diversity</span> <span style="color:var(--logo-primary, #4a90d9)">Summary</span>';
+            asnEl.classList.add('as-summary-title');
+        }
+        // Clickable provider count in header (no peer count)
         if (orgEl) {
             orgEl.innerHTML = '<span class="as-panel-link as-all-providers-link" title="View all providers">'
-                + data.uniqueProviders + ' unique providers</span> \u00b7 '
-                + '<span class="as-panel-link as-all-providers-link" title="View all providers">'
-                + totalPeers + ' peers</span>';
+                + data.uniqueProviders + ' unique providers</span>';
         }
 
         if (metaEl) {
@@ -1264,53 +1358,53 @@ window.ASDiversity = (function () {
                  + topName + ' (' + data.topProvider.peerCount + ')</span></div>';
         }
 
-        // Dynamic insights
+        // Dynamic insights — each is a simple label row with hover/click sub-panel
         for (var ii = 0; ii < data.insights.length; ii++) {
             var ins = data.insights[ii];
             html += '<div class="as-summary-insight">';
             html += '<span class="as-insight-icon">' + ins.icon + '</span>';
             if (ins.type === 'stable') {
-                html += '<span class="as-insight-text">Most stable: <span class="as-panel-link as-navigate-provider" data-as="' + ins.asNumber + '">' + ins.provName + '</span> (avg ' + ins.durText + ')</span>';
-            } else if (ins.type === 'longest') {
-                html += '<span class="as-insight-text as-panel-link as-longest-peers-link" title="View top 50 longest connected peers">Longest Peers:</span>';
-                html += '<div class="as-insight-expand">';
-                for (var ei = 0; ei < ins.topPeers.length; ei++) {
-                    var ep = ins.topPeers[ei];
-                    html += '<div class="as-insight-expand-row">';
-                    html += '<span class="as-sub-tt-id as-sub-tt-id-link as-peer-select" data-peer-id="' + ep.peer.id + '" title="Select peer on map">#' + (ei + 1) + ' ID ' + ep.peer.id + '</span>';
-                    html += '<span class="as-insight-expand-dur">' + fmtDuration(ep.duration) + '</span>';
-                    html += '</div>';
-                }
-                html += '</div>';
-            } else if (ins.type === 'data') {
-                html += '<span class="as-insight-text">' + ins.label + ': <span class="as-sub-tt-id as-sub-tt-id-link as-peer-select" data-peer-id="' + ins.topPeer.id + '" title="Select peer on map">ID ' + ins.topPeer.id + '</span> (' + ins.amount + ')</span>';
+                var stablePeerJson = JSON.stringify(ins.peerIds).replace(/"/g, '&quot;');
+                html += '<span class="as-insight-text as-panel-link as-stable-link" data-as="' + ins.asNumber + '" data-peer-ids="' + stablePeerJson + '">Most stable: ' + ins.provName + ' (avg ' + ins.durText + ')</span>';
+            } else if (ins.type === 'fastest') {
+                html += '<span class="as-insight-text as-panel-link as-fastest-link" title="Providers ranked by average ping time">Fastest connection <span style="color:var(--text-muted)">(by rank)</span></span>';
+            } else if (ins.type === 'data-providers') {
+                html += '<span class="as-insight-text as-panel-link as-data-providers-link" data-field="' + ins.field + '" title="Providers ranked by total bytes">' + ins.label + '</span>';
             } else {
                 html += '<span class="as-insight-text">' + ins.text + '</span>';
             }
             html += '</div>';
         }
 
-        // ── Section 2: Connections by Provider (grid) ──
-        html += '<div class="modal-section-title" title="Inbound and outbound peer connections grouped by AS provider. Click provider name to view its panel, click IN/OUT numbers to see peer lists.">Connections by Provider</div>';
-        html += '<div class="as-summary-grid">';
-        html += '<div class="as-grid-header">';
-        html += '<span class="as-grid-h-name">Provider</span>';
-        html += '<span class="as-grid-h-val">IN</span>';
-        html += '<span class="as-grid-h-val">OUT</span>';
-        html += '</div>';
+        // ── Section 2: Connections by Provider (3 rows per provider) ──
+        html += '<div class="modal-section-title" title="Inbound and outbound peer connections grouped by AS provider. Click provider name to view its panel, click IN/OUT to see peer lists.">Connections by Provider</div>';
         for (var gi = 0; gi < data.connectionGrid.length; gi++) {
             var gItem = data.connectionGrid[gi];
+            var totalJson = JSON.stringify(gItem.totalPeerIds).replace(/"/g, '&quot;');
             var inJson = JSON.stringify(gItem.inPeerIds).replace(/"/g, '&quot;');
             var outJson = JSON.stringify(gItem.outPeerIds).replace(/"/g, '&quot;');
-            html += '<div class="as-grid-row">';
-            html += '<span class="as-grid-name as-grid-provider-click" data-as="' + gItem.asNumber + '" style="color:' + gItem.color + '" title="View ' + gItem.name + ' panel">';
-            html += '<span class="as-grid-dot" style="background:' + gItem.color + '"></span>' + gItem.name;
-            html += '</span>';
-            html += '<span class="as-grid-val as-grid-clickable" data-peer-ids="' + inJson + '" data-direction="in">' + gItem.inCount + '</span>';
-            html += '<span class="as-grid-val as-grid-clickable" data-peer-ids="' + outJson + '" data-direction="out">' + gItem.outCount + '</span>';
+            var outSubJson = JSON.stringify(gItem.outSubtypes).replace(/"/g, '&quot;');
+            // Provider name row (total) — clickable name navigates, row is interactive
+            html += '<div class="as-detail-sub-row as-conn-prov-row" data-peer-ids="' + totalJson + '" data-as="' + gItem.asNumber + '" style="cursor:pointer">';
+            html += '<span class="as-detail-sub-label"><span class="as-grid-dot" style="background:' + gItem.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle"></span>';
+            html += '<span class="as-grid-provider-click" data-as="' + gItem.asNumber + '" style="color:' + gItem.color + '" title="View ' + gItem.name + ' panel">' + gItem.name + '</span></span>';
+            html += '<span class="as-detail-sub-val">' + gItem.totalCount + '</span>';
             html += '</div>';
+            // In row
+            if (gItem.inCount > 0) {
+                html += '<div class="as-detail-sub-row as-interactive-row as-conn-dir-row" data-peer-ids="' + inJson + '" data-category="conntype" style="padding-left:22px">';
+                html += '<span class="as-detail-sub-label">In</span>';
+                html += '<span class="as-detail-sub-val">' + gItem.inCount + '</span>';
+                html += '</div>';
+            }
+            // Out row
+            if (gItem.outCount > 0) {
+                html += '<div class="as-detail-sub-row as-conn-out-row" data-peer-ids="' + outJson + '" data-out-subtypes="' + outSubJson + '" data-category="conntype" style="padding-left:22px; cursor:pointer">';
+                html += '<span class="as-detail-sub-label">Out</span>';
+                html += '<span class="as-detail-sub-val">' + gItem.outCount + '</span>';
+                html += '</div>';
+            }
         }
-        html += '</div>';
 
         // ── Section 3: Networks ──
         html += '<div class="modal-section-title" title="Peer connections grouped by network protocol. IPv4/IPv6 are clearnet, Tor/I2P/CJDNS are anonymous overlay networks.">Networks</div>';
@@ -1353,6 +1447,7 @@ window.ASDiversity = (function () {
         attachSummaryRowHandlers(bodyEl);
         attachGridHandlers(bodyEl);
         attachSummaryLinkHandlers(bodyEl);
+        attachPanelBlankClickHandler(bodyEl);
 
         // Show panel
         panelEl.classList.remove('hidden');
@@ -1473,16 +1568,15 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → select that peer on the map
+        // Peer ID click → zoom to peer, collapse subs, keep main panel
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
                 link.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
-                    if (_selectPeerById && !isNaN(peerId)) {
-                        hideSubTooltip();
-                        _selectPeerById(peerId);
+                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                        _zoomToPeerOnly(peerId);
                     }
                 });
             })(idLinks[li]);
@@ -1522,14 +1616,47 @@ window.ASDiversity = (function () {
         });
     }
 
+    /** Clicking blank space in the panel body closes any open sub-panels */
+    function attachPanelBlankClickHandler(bodyEl) {
+        bodyEl.addEventListener('click', function (e) {
+            // Only close if clicking on the body itself, not on interactive children
+            if (e.target === bodyEl || e.target.classList.contains('modal-section-title') ||
+                e.target.classList.contains('modal-row') || e.target.classList.contains('modal-label') ||
+                e.target.classList.contains('modal-val')) {
+                if (subTooltipPinned || subSubTooltipPinned) {
+                    hideSubTooltip();
+                    hideSubSubTooltip();
+                    if (summarySelected) {
+                        subFilterPeerIds = null;
+                        subFilterLabel = null;
+                        subFilterCategory = null;
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
+                        var rows = bodyEl.querySelectorAll('.sub-filter-active');
+                        for (var i = 0; i < rows.length; i++) rows[i].classList.remove('sub-filter-active');
+                    } else if (selectedAs) {
+                        clearSubFilter();
+                    }
+                }
+            }
+        });
+    }
+
     /** Attach hover and click handlers to interactive rows in the detail panel */
     function attachInteractiveRowHandlers(bodyEl, seg) {
         var rows = bodyEl.querySelectorAll('.as-interactive-row');
         for (var ri = 0; ri < rows.length; ri++) {
             (function (rowEl) {
                 rowEl.addEventListener('mouseenter', function (e) {
-                    // Don't override a pinned sub-tooltip with hover
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                        var category = rowEl.dataset.category;
+                        var label = rowEl.querySelector('.as-detail-sub-label').textContent;
+                        var html = buildPeerSummaryHtml(peerIds, category, label);
+                        showHoverPreview(html, e);
+                        return;
+                    }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var category = rowEl.dataset.category;
                     var label = rowEl.querySelector('.as-detail-sub-label').textContent;
@@ -1537,12 +1664,13 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                 });
                 rowEl.addEventListener('mousemove', function (e) {
-                    if (subTooltipPinned) return;
-                    positionSubTooltip(e);
+                    if (!subTooltipPinned) positionSubTooltip(e);
                 });
                 rowEl.addEventListener('mouseleave', function () {
-                    // Don't hide a pinned sub-tooltip on mouseleave
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -1550,13 +1678,16 @@ window.ASDiversity = (function () {
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var category = rowEl.dataset.category;
                     var label = rowEl.querySelector('.as-detail-sub-label').textContent;
+                    // Toggle: clicking same row unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        clearSubFilter();
+                        return;
+                    }
                     applySubFilter(peerIds, category, label);
-                    // Pin the sub-tooltip so it stays visible
                     var html = buildPeerSummaryHtml(peerIds, category, label);
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) tip.style.pointerEvents = 'auto';
+                    pinSubTooltip(html, rowEl, null);
                 });
             })(rows[ri]);
         }
@@ -1602,7 +1733,43 @@ window.ASDiversity = (function () {
             tip.style.pointerEvents = 'none';
         }
         subTooltipPinned = false;
+        pinnedSubTooltipHtml = null;
+        pinnedSubTooltipSrc = null;
+        pinnedSubTooltipSetup = null;
         hideSubSubTooltip();
+    }
+
+    /** Pin the sub-tooltip: store HTML and source for hover-preview restore */
+    function pinSubTooltip(html, srcEl, setupFn) {
+        subTooltipPinned = true;
+        pinnedSubTooltipHtml = html;
+        pinnedSubTooltipSrc = srcEl || null;
+        pinnedSubTooltipSetup = setupFn || null;
+        var tip = document.getElementById('as-sub-tooltip');
+        if (tip) tip.style.pointerEvents = 'auto';
+    }
+
+    /** Show a hover preview over a pinned sub-tooltip (temporary replacement) */
+    function showHoverPreview(html, event) {
+        hideSubSubTooltip();
+        var tip = document.getElementById('as-sub-tooltip');
+        if (!tip) return;
+        tip.innerHTML = html;
+        tip.classList.remove('hidden');
+        tip.style.display = '';
+        positionSubTooltip(event);
+        attachSubTooltipHandlers();
+    }
+
+    /** Restore the pinned sub-tooltip after a hover preview ends */
+    function restorePinnedSubTooltip() {
+        if (!subTooltipPinned || !pinnedSubTooltipHtml) return;
+        var tip = document.getElementById('as-sub-tooltip');
+        if (!tip) return;
+        tip.innerHTML = pinnedSubTooltipHtml;
+        tip.style.pointerEvents = 'auto';
+        if (pinnedSubTooltipSetup) pinnedSubTooltipSetup(tip);
+        attachSubTooltipHandlers();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1658,15 +1825,15 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-sub-tooltip');
         if (!tip) return;
 
+        // Peer ID click → zoom to peer, collapse subs, keep main panel
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
                 link.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
-                    if (_selectPeerById && !isNaN(peerId)) {
-                        hideSubSubTooltip();
-                        _selectPeerById(peerId);
+                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                        _zoomToPeerOnly(peerId);
                     }
                 });
             })(idLinks[li]);
@@ -1695,6 +1862,35 @@ window.ASDiversity = (function () {
             var peerList = tip.querySelector('.as-sub-tt-scroll');
             if (peerList) peerList.classList.remove('as-sub-tt-expanded');
         });
+    }
+
+    /** Build peer list HTML with rank numbers for the sub-tooltip.
+     *  peerEntries: [{peer, duration}] — sorted by duration desc */
+    function buildRankedPeerListHtml(peerEntries) {
+        var html = '';
+        var initialShow = 6;
+        var hasMore = peerEntries.length > initialShow;
+
+        html += '<div class="as-sub-tt-scroll">';
+        for (var pi = 0; pi < peerEntries.length; pi++) {
+            var ep = peerEntries[pi];
+            var p = ep.peer;
+            var ct = p.connection_type || 'unknown';
+            var ctLabel = CONN_TYPE_LABELS[ct] || ct;
+            var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '" style="min-width:70px">#' + (pi + 1) + ' ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-type">' + fmtDuration(ep.duration) + '</span>';
+            html += '<span class="as-sub-tt-loc">' + ctLabel + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        if (hasMore) {
+            var remaining = peerEntries.length - initialShow;
+            html += '<div class="as-sub-tt-more as-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
+        }
+        return html;
     }
 
     /** Build provider list HTML for the sub-tooltip in summary drill-down mode.
@@ -1762,18 +1958,27 @@ window.ASDiversity = (function () {
         for (var ri = 0; ri < rows.length; ri++) {
             (function (rowEl) {
                 rowEl.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        // Hover preview over pinned tooltip
+                        var providers = JSON.parse(rowEl.dataset.providers);
+                        var catLabel = rowEl.dataset.catLabel;
+                        var html = buildProviderListHtml(providers, catLabel);
+                        showHoverPreview(html, e);
+                        return;
+                    }
                     var providers = JSON.parse(rowEl.dataset.providers);
                     var catLabel = rowEl.dataset.catLabel;
                     var html = buildProviderListHtml(providers, catLabel);
                     showSubTooltip(html, e);
                 });
                 rowEl.addEventListener('mousemove', function (e) {
-                    if (subTooltipPinned) return;
-                    positionSubTooltip(e);
+                    if (!subTooltipPinned) positionSubTooltip(e);
                 });
                 rowEl.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -1782,30 +1987,70 @@ window.ASDiversity = (function () {
                     var providers = JSON.parse(rowEl.dataset.providers);
                     var catLabel = rowEl.dataset.catLabel;
 
+                    // Toggle: clicking same row unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        clearSummarySubFilter();
+                        return;
+                    }
+
                     // Apply sub-filter for all peers in this category
                     applySummarySubFilter(peerIds, catLabel);
 
                     // Pin the sub-tooltip with provider list
                     var html = buildProviderListHtml(providers, catLabel);
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) {
-                        tip.style.pointerEvents = 'auto';
+                    pinSubTooltip(html, rowEl, function (tip) {
                         attachProviderClickHandlers(tip);
-                    }
+                    });
+                    attachProviderClickHandlers(document.getElementById('as-sub-tooltip'));
                 });
             })(rows[ri]);
         }
     }
 
     /** Attach click handlers for provider rows in the sub-tooltip (summary mode).
-     *  Clicking a provider opens the sub-sub-tooltip with that provider's peers. */
+     *  Hovering previews lines on the map; clicking opens the sub-sub-tooltip with that provider's peers. */
     function attachProviderClickHandlers(tip) {
         var provRows = tip.querySelectorAll('.as-provider-row');
         for (var pi = 0; pi < provRows.length; pi++) {
             (function (provRow) {
                 provRow.style.cursor = 'pointer';
+                // Hover preview: show lines for this provider's peers
+                provRow.addEventListener('mouseenter', function () {
+                    var asNum = provRow.dataset.as;
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    if (peerIds.length > 0 && _drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+                provRow.addEventListener('mouseleave', function () {
+                    // Restore to the parent sub-filter state or all-lines
+                    if (subFilterPeerIds) {
+                        if (_dimMapPeers) _dimMapPeers(subFilterPeerIds);
+                        // Re-draw lines for the sub-filter
+                        if (_drawLinesForAllAs && donutSegments.length > 0) {
+                            var idSet = {};
+                            for (var i = 0; i < subFilterPeerIds.length; i++) idSet[subFilterPeerIds[i]] = true;
+                            var groups = [];
+                            for (var si = 0; si < donutSegments.length; si++) {
+                                var seg = donutSegments[si];
+                                var filteredIds = [];
+                                for (var fpi = 0; fpi < seg.peerIds.length; fpi++) {
+                                    if (idSet[seg.peerIds[fpi]]) filteredIds.push(seg.peerIds[fpi]);
+                                }
+                                if (filteredIds.length > 0) {
+                                    groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                }
+                            }
+                            _drawLinesForAllAs(groups);
+                        }
+                    } else if (summarySelected) {
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
+                    }
+                });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
@@ -1834,7 +2079,7 @@ window.ASDiversity = (function () {
         }
     }
 
-    /** Attach handlers for the connection grid (Section 2 of summary panel) */
+    /** Attach handlers for the Connections by Provider section (Section 2 of summary panel) */
     function attachGridHandlers(bodyEl) {
         // Provider name clicks → navigate to that provider's panel (with back button)
         var provClicks = bodyEl.querySelectorAll('.as-grid-provider-click');
@@ -1849,69 +2094,207 @@ window.ASDiversity = (function () {
             })(provClicks[i]);
         }
 
-        // IN/OUT number clicks → show peer list in sub-tooltip
-        var gridClickables = bodyEl.querySelectorAll('.as-grid-clickable');
-        for (var gc = 0; gc < gridClickables.length; gc++) {
-            (function (el) {
-                el.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) return;
-                    var peerIds = JSON.parse(el.dataset.peerIds);
-                    if (peerIds.length === 0) return;
-                    // Find the peer objects
+        // Provider total rows — hover/click shows all peers for this provider
+        var connProvRows = bodyEl.querySelectorAll('.as-conn-prov-row');
+        for (var cpi = 0; cpi < connProvRows.length; cpi++) {
+            (function (rowEl) {
+                function buildProvPeerHtml() {
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    if (peerIds.length === 0) return null;
                     var idSet = {};
                     for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
                     var matchedPeers = [];
                     for (var i = 0; i < lastPeersRaw.length; i++) {
                         if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
                     }
-                    var dir = el.dataset.direction === 'in' ? 'Inbound' : 'Outbound';
                     var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + dir + ' Peers</div>';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">All Peers</div>';
                     html += '</div>';
                     html += buildPeerListHtmlForSubSub(matchedPeers);
-                    showSubTooltip(html, e);
+                    return html;
+                }
+                rowEl.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var html = buildProvPeerHtml();
+                        if (html) showHoverPreview(html, e);
+                        return;
+                    }
+                    var html = buildProvPeerHtml();
+                    if (html) showSubTooltip(html, e);
                 });
-                el.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) return;
+                rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) { restorePinnedSubTooltip(); return; }
                     hideSubTooltip();
                 });
-                el.addEventListener('click', function (e) {
+                rowEl.addEventListener('click', function (e) {
+                    // Don't intercept provider name clicks (they navigate)
+                    if (e.target.classList.contains('as-grid-provider-click') || e.target.closest('.as-grid-provider-click')) return;
                     e.stopPropagation();
-                    var peerIds = JSON.parse(el.dataset.peerIds);
-                    if (peerIds.length === 0) return;
-                    var idSet = {};
-                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
-                    var matchedPeers = [];
-                    for (var i = 0; i < lastPeersRaw.length; i++) {
-                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
+                        return;
                     }
-                    var dir = el.dataset.direction === 'in' ? 'Inbound' : 'Outbound';
-                    var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + dir + ' Peers</div>';
-                    html += '</div>';
-                    html += buildPeerListHtmlForSubSub(matchedPeers);
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    var html = buildProvPeerHtml();
+                    if (!html) return;
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) {
-                        tip.style.pointerEvents = 'auto';
-                        attachSubTooltipHandlers();
-                    }
-
-                    // Filter map to these peers
+                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
+                    attachSubTooltipHandlers();
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
-            })(gridClickables[gc]);
+            })(connProvRows[cpi]);
+        }
+
+        // Out rows — hover/click shows outbound subtypes breakdown
+        var connOutRows = bodyEl.querySelectorAll('.as-conn-out-row');
+        for (var coi = 0; coi < connOutRows.length; coi++) {
+            (function (rowEl) {
+                function buildOutSubHtml() {
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    if (peerIds.length === 0) return null;
+                    var subtypes = JSON.parse(rowEl.dataset.outSubtypes);
+                    var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Outbound Peers</div>';
+                    html += '</div>';
+                    html += '<div class="as-sub-tt-scroll">';
+                    for (var si = 0; si < subtypes.length; si++) {
+                        var st = subtypes[si];
+                        html += '<div class="as-sub-tt-peer">';
+                        html += '<span class="as-sub-tt-id" style="font-weight:600; min-width:60px">' + st.label + '</span>';
+                        html += '<span class="as-sub-tt-type">' + st.count + ' peer' + (st.count !== 1 ? 's' : '') + '</span>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                    // Also include full peer list below subtypes
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    html += '<div style="border-top:1px solid rgba(88,166,255,0.1); margin-top:4px; padding-top:4px">';
+                    html += buildPeerListHtmlForSubSub(matchedPeers);
+                    html += '</div>';
+                    return html;
+                }
+                rowEl.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var html = buildOutSubHtml();
+                        if (html) showHoverPreview(html, e);
+                        return;
+                    }
+                    var html = buildOutSubHtml();
+                    if (html) showSubTooltip(html, e);
+                });
+                rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) { restorePinnedSubTooltip(); return; }
+                    hideSubTooltip();
+                });
+                rowEl.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
+                        return;
+                    }
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    var html = buildOutSubHtml();
+                    if (!html) return;
+                    showSubTooltip(html, e);
+                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
+                    attachSubTooltipHandlers();
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(connOutRows[coi]);
+        }
+
+        // In rows already have .as-interactive-row class — handled by attachInteractiveRowHandlers if in provider panel,
+        // but here in summary we need explicit handling. The .as-conn-dir-row In rows:
+        var connDirRows = bodyEl.querySelectorAll('.as-conn-dir-row');
+        for (var cdi = 0; cdi < connDirRows.length; cdi++) {
+            (function (rowEl) {
+                function buildDirPeerHtml() {
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    if (peerIds.length === 0) return null;
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Inbound Peers</div>';
+                    html += '</div>';
+                    html += buildPeerListHtmlForSubSub(matchedPeers);
+                    return html;
+                }
+                rowEl.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var html = buildDirPeerHtml();
+                        if (html) showHoverPreview(html, e);
+                        return;
+                    }
+                    var html = buildDirPeerHtml();
+                    if (html) showSubTooltip(html, e);
+                });
+                rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) { restorePinnedSubTooltip(); return; }
+                    hideSubTooltip();
+                });
+                rowEl.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
+                        hideSubTooltip();
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
+                        return;
+                    }
+                    var peerIds = JSON.parse(rowEl.dataset.peerIds);
+                    var html = buildDirPeerHtml();
+                    if (!html) return;
+                    showSubTooltip(html, e);
+                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
+                    attachSubTooltipHandlers();
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(connDirRows[cdi]);
         }
     }
 
     /** Attach handlers for clickable links in the summary panel (provider nav, peer select, all-providers, longest peers, data insights) */
     function attachSummaryLinkHandlers(bodyEl) {
-        // "Navigate to provider" links
+        // "Navigate to provider" links — hover previews lines to that provider's peers, click navigates
         var navLinks = bodyEl.querySelectorAll('.as-navigate-provider');
         for (var i = 0; i < navLinks.length; i++) {
             (function (el) {
+                el.addEventListener('mouseenter', function () {
+                    if (subTooltipPinned) return;
+                    var asNum = el.dataset.as;
+                    if (!asNum) return;
+                    var peerIds = getPeerIdsForAnyAs(asNum);
+                    var color = getColorForAsNum(asNum);
+                    if (peerIds.length > 0 && _drawLinesForAs) {
+                        _drawLinesForAs(asNum, peerIds, color);
+                    }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+                el.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) return;
+                    // Restore to summary all-lines state
+                    if (summarySelected) {
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
+                    }
+                });
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var asNum = el.dataset.as;
@@ -1926,17 +2309,23 @@ window.ASDiversity = (function () {
             (function (el) {
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
+                    // Toggle: clicking same link unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                        hideSubTooltip();
+                        return;
+                    }
                     var allProvs = asGroups.map(function (g) {
                         return { asNumber: g.asNumber, name: g.asShort || g.asName || g.asNumber, color: getColorForAsNum(g.asNumber), peerCount: g.peerCount, peerIds: g.peerIds, peers: g.peers };
                     });
                     var html = buildProviderListHtml(allProvs, 'All Providers (' + allProvs.length + ')');
                     showSubTooltip(html, e);
-                    subTooltipPinned = true;
+                    pinSubTooltip(html, el, function (tip) {
+                        attachProviderClickHandlers(tip);
+                        attachProviderNavHandlers(tip);
+                    });
                     var tip = document.getElementById('as-sub-tooltip');
                     if (tip) {
-                        tip.style.pointerEvents = 'auto';
                         attachProviderClickHandlers(tip);
-                        // Also make provider names navigate to their panel
                         attachProviderNavHandlers(tip);
                     }
                 });
@@ -1950,15 +2339,21 @@ window.ASDiversity = (function () {
                 (function (el) {
                     el.addEventListener('click', function (e) {
                         e.stopPropagation();
+                        if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                            hideSubTooltip();
+                            return;
+                        }
                         var allProvs = asGroups.map(function (g) {
                             return { asNumber: g.asNumber, name: g.asShort || g.asName || g.asNumber, color: getColorForAsNum(g.asNumber), peerCount: g.peerCount, peerIds: g.peerIds, peers: g.peers };
                         });
                         var html = buildProviderListHtml(allProvs, 'All Providers (' + allProvs.length + ')');
                         showSubTooltip(html, e);
-                        subTooltipPinned = true;
+                        pinSubTooltip(html, el, function (tip) {
+                            attachProviderClickHandlers(tip);
+                            attachProviderNavHandlers(tip);
+                        });
                         var tip = document.getElementById('as-sub-tooltip');
                         if (tip) {
-                            tip.style.pointerEvents = 'auto';
                             attachProviderClickHandlers(tip);
                             attachProviderNavHandlers(tip);
                         }
@@ -1967,96 +2362,390 @@ window.ASDiversity = (function () {
             }
         }
 
-        // "Longest peers" link — opens sub-tooltip with top 50 peers sorted by duration
-        var longestLink = bodyEl.querySelector('.as-longest-peers-link');
-        if (longestLink) {
-            longestLink.addEventListener('click', function (e) {
-                e.stopPropagation();
+        // "Fastest connection" link — hover shows providers ranked by avg ping, click pins
+        var fastestLink = bodyEl.querySelector('.as-fastest-link');
+        if (fastestLink) {
+            function buildFastestProvHtml() {
                 var data = computeSummaryData();
-                var longestInsight = null;
+                var fastInsight = null;
                 for (var j = 0; j < data.insights.length; j++) {
-                    if (data.insights[j].type === 'longest') { longestInsight = data.insights[j]; break; }
+                    if (data.insights[j].type === 'fastest') { fastInsight = data.insights[j]; break; }
                 }
-                if (!longestInsight) return;
+                if (!fastInsight || !fastInsight.topProviders) return null;
                 var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Top 50 Longest Connected Peers</div>';
+                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Fastest Connection \u2014 Avg Ping</div>';
                 html += '</div>';
-                html += buildPeerListHtmlForSubSub(longestInsight.allPeers.map(function (ep) { return ep.peer; }));
-                showSubTooltip(html, e);
-                subTooltipPinned = true;
-                var tip = document.getElementById('as-sub-tooltip');
-                if (tip) {
-                    tip.style.pointerEvents = 'auto';
-                    attachSubTooltipHandlers();
+                html += '<div class="as-sub-tt-scroll">';
+                for (var pi = 0; pi < fastInsight.topProviders.length; pi++) {
+                    var prov = fastInsight.topProviders[pi];
+                    var peerIdsJson = JSON.stringify(prov.peerIds.slice(0, 20)).replace(/"/g, '&quot;');
+                    html += '<div class="as-sub-tt-peer as-provider-row as-fastest-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '">';
+                    html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
+                    html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
+                    var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
+                    html += '<span class="as-sub-tt-loc" title="' + prov.provName + '">' + name + '</span>';
+                    html += '<span class="as-sub-tt-type">' + Math.round(prov.avgPing) + 'ms</span>';
+                    html += '</div>';
                 }
+                html += '</div>';
+                return html;
+            }
+            fastestLink.addEventListener('mouseenter', function (e) {
+                if (subTooltipPinned) {
+                    var html = buildFastestProvHtml();
+                    if (html) showHoverPreview(html, e);
+                    return;
+                }
+                var html = buildFastestProvHtml();
+                if (html) showSubTooltip(html, e);
+            });
+            fastestLink.addEventListener('mouseleave', function () {
+                if (subTooltipPinned) {
+                    restorePinnedSubTooltip();
+                    return;
+                }
+                hideSubTooltip();
+            });
+            fastestLink.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (subTooltipPinned && pinnedSubTooltipSrc === fastestLink) {
+                    hideSubTooltip();
+                    fastestLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    return;
+                }
+                var html = buildFastestProvHtml();
+                if (!html) return;
+                showSubTooltip(html, e);
+                pinSubTooltip(html, fastestLink, function (tip) {
+                    attachFastestProvRowHandlers(tip);
+                });
+                attachFastestProvRowHandlers(document.getElementById('as-sub-tooltip'));
+                fastestLink.closest('.as-summary-insight').classList.add('sub-filter-active');
             });
         }
 
-        // Peer select links (in insights section)
-        var peerLinks = bodyEl.querySelectorAll('.as-peer-select');
-        for (var i = 0; i < peerLinks.length; i++) {
-            (function (el) {
-                el.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var peerId = parseInt(el.dataset.peerId);
-                    if (_selectPeerById && !isNaN(peerId)) {
-                        _selectPeerById(peerId);
+        // "Most stable" link — hover shows peer list for that provider, click pins sub-panel
+        var stableLink = bodyEl.querySelector('.as-stable-link');
+        if (stableLink) {
+            function buildStablePeersHtml() {
+                var data = computeSummaryData();
+                var stableInsight = null;
+                for (var j = 0; j < data.insights.length; j++) {
+                    if (data.insights[j].type === 'stable') { stableInsight = data.insights[j]; break; }
+                }
+                if (!stableInsight) return null;
+                var peerIds = stableInsight.peerIds;
+                var idSet = {};
+                for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                var matchedPeers = [];
+                for (var i = 0; i < lastPeersRaw.length; i++) {
+                    if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                }
+                var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+                html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + stableInsight.provName + ' Peers</div>';
+                html += '<div class="as-sub-tt-nav as-grid-provider-click" data-as="' + stableInsight.asNumber + '" style="font-size:9px; color:var(--accent); cursor:pointer; margin-top:2px">\u25B6 Open provider panel</div>';
+                html += '</div>';
+                html += buildPeerListHtmlForSubSub(matchedPeers);
+                return { html: html, peerIds: peerIds, asNum: stableInsight.asNumber };
+            }
+            stableLink.addEventListener('mouseenter', function (e) {
+                if (subTooltipPinned) {
+                    var result = buildStablePeersHtml();
+                    if (result) showHoverPreview(result.html, e);
+                    return;
+                }
+                var result = buildStablePeersHtml();
+                if (result) showSubTooltip(result.html, e);
+                // Preview lines for this provider
+                var asNum = stableLink.dataset.as;
+                if (asNum) {
+                    var peerIds = getPeerIdsForAnyAs(asNum);
+                    var color = getColorForAsNum(asNum);
+                    if (peerIds.length > 0 && _drawLinesForAs) {
+                        _drawLinesForAs(asNum, peerIds, color);
                     }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                }
+            });
+            stableLink.addEventListener('mouseleave', function () {
+                if (subTooltipPinned) {
+                    restorePinnedSubTooltip();
+                    return;
+                }
+                hideSubTooltip();
+                if (summarySelected) {
+                    if (_dimMapPeers) _dimMapPeers(null);
+                    activateHoverAll();
+                }
+            });
+            stableLink.addEventListener('click', function (e) {
+                e.stopPropagation();
+                // Toggle
+                if (subTooltipPinned && pinnedSubTooltipSrc === stableLink) {
+                    hideSubTooltip();
+                    stableLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    if (_filterPeerTable) _filterPeerTable(null);
+                    if (_dimMapPeers) _dimMapPeers(null);
+                    if (summarySelected) activateHoverAll();
+                    return;
+                }
+                var result = buildStablePeersHtml();
+                if (!result) return;
+                showSubTooltip(result.html, e);
+                pinSubTooltip(result.html, stableLink, function (tip) {
+                    attachSubTooltipHandlers();
+                    attachProviderNavHandlers(tip);
                 });
-            })(peerLinks[i]);
+                attachSubTooltipHandlers();
+                var tip = document.getElementById('as-sub-tooltip');
+                if (tip) attachProviderNavHandlers(tip);
+                stableLink.closest('.as-summary-insight').classList.add('sub-filter-active');
+                if (_filterPeerTable) _filterPeerTable(result.peerIds);
+                if (_dimMapPeers) _dimMapPeers(result.peerIds);
+            });
         }
 
-        // Data insight hover sub-panels (Most data sent/received — hover shows top 10)
-        var dataInsights = bodyEl.querySelectorAll('.as-summary-insight');
-        for (var i = 0; i < dataInsights.length; i++) {
+        // Data insight provider sub-panels (Most sent/recv — hover shows providers ranked by bytes)
+        var dataProvLinks = bodyEl.querySelectorAll('.as-data-providers-link');
+        for (var i = 0; i < dataProvLinks.length; i++) {
             (function (el) {
-                var insText = el.querySelector('.as-insight-text');
-                if (!insText) return;
-                var label = insText.textContent;
-                if (label.indexOf('Most data sent') === -1 && label.indexOf('Most data recv') === -1) return;
+                var field = el.dataset.field;
+                var isRecv = field === 'bytesrecv';
 
-                el.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) return;
+                function buildDataProviderHtml() {
                     var data = computeSummaryData();
                     var insight = null;
-                    var isRecv = label.indexOf('recv') !== -1;
                     for (var j = 0; j < data.insights.length; j++) {
-                        if (data.insights[j].type === 'data' && data.insights[j].label === (isRecv ? 'Most data recv' : 'Most data sent')) {
+                        if (data.insights[j].type === 'data-providers' && data.insights[j].field === field) {
                             insight = data.insights[j]; break;
                         }
                     }
-                    if (!insight || !insight.allPeers) return;
-                    var field = isRecv ? 'bytesrecv' : 'bytessent';
+                    if (!insight || !insight.topProviders) return null;
+
+                    var title = isRecv ? 'Top Providers \u2014 Total Recv' : 'Top Providers \u2014 Total Sent';
                     var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Top 10 ' + (isRecv ? 'Data Received' : 'Data Sent') + '</div>';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + title + '</div>';
                     html += '</div>';
                     html += '<div class="as-sub-tt-scroll">';
-                    for (var pi = 0; pi < insight.allPeers.length; pi++) {
-                        var p = insight.allPeers[pi];
-                        html += '<div class="as-sub-tt-peer">';
-                        html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
-                        html += '<span class="as-sub-tt-type">' + fmtBytes(p[field]) + '</span>';
+                    for (var pi = 0; pi < insight.topProviders.length; pi++) {
+                        var prov = insight.topProviders[pi];
+                        var peerIdsJson = JSON.stringify(prov.peers.slice(0, 20).map(function (p) { return p.id; })).replace(/"/g, '&quot;');
+                        html += '<div class="as-sub-tt-peer as-provider-row as-data-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '" data-field="' + field + '">';
+                        html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
+                        html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
+                        var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
+                        html += '<span class="as-sub-tt-loc" title="' + prov.provName + '">' + name + '</span>';
+                        html += '<span class="as-sub-tt-type">' + fmtBytes(prov.totalBytes) + '</span>';
                         html += '</div>';
                     }
                     html += '</div>';
-                    showSubTooltip(html, e);
+                    return { html: html, insight: insight };
+                }
+
+                el.addEventListener('mouseenter', function (e) {
+                    if (subTooltipPinned) {
+                        var result = buildDataProviderHtml();
+                        if (result) showHoverPreview(result.html, e);
+                        return;
+                    }
+                    var result = buildDataProviderHtml();
+                    if (!result) return;
+                    showSubTooltip(result.html, e);
                 });
                 el.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) return;
+                    if (subTooltipPinned) {
+                        restorePinnedSubTooltip();
+                        return;
+                    }
                     hideSubTooltip();
                 });
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    // Pin the hover tooltip
-                    subTooltipPinned = true;
-                    var tip = document.getElementById('as-sub-tooltip');
-                    if (tip) {
-                        tip.style.pointerEvents = 'auto';
-                        attachSubTooltipHandlers();
+                    // Toggle: clicking same link unpins
+                    if (subTooltipPinned && pinnedSubTooltipSrc === el) {
+                        hideSubTooltip();
+                        el.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                        return;
+                    }
+                    var result = buildDataProviderHtml();
+                    if (!result) return;
+                    showSubTooltip(result.html, e);
+                    pinSubTooltip(result.html, el, function (tip) {
+                        attachDataProviderRowHandlers(tip, field);
+                    });
+                    attachDataProviderRowHandlers(document.getElementById('as-sub-tooltip'), field);
+                    // Highlight this insight as active
+                    el.closest('.as-summary-insight').classList.add('sub-filter-active');
+                });
+            })(dataProvLinks[i]);
+        }
+    }
+
+    /** Attach handlers for fastest connection provider rows.
+     *  Clicking a provider shows sub-sub-tooltip with its peers ranked by ping. */
+    function attachFastestProvRowHandlers(tip) {
+        var provRows = tip.querySelectorAll('.as-fastest-prov-row');
+        for (var pi = 0; pi < provRows.length; pi++) {
+            (function (provRow) {
+                provRow.style.cursor = 'pointer';
+                provRow.addEventListener('mouseenter', function () {
+                    var asNum = provRow.dataset.as;
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    if (peerIds.length > 0 && _drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+                provRow.addEventListener('mouseleave', function () {
+                    if (summarySelected) {
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
                     }
                 });
-            })(dataInsights[i]);
+                provRow.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    var asNum = provRow.dataset.as;
+
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    matchedPeers.sort(function (a, b) { return (a.ping_ms || 9999) - (b.ping_ms || 9999); });
+
+                    // Build sub-sub-tooltip with peers ranked by ping
+                    var html = buildPingPeerListHtml(matchedPeers.slice(0, 20));
+                    showSubSubTooltip(html, e);
+                    subSubTooltipPinned = true;
+
+                    if (_drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(provRows[pi]);
         }
+    }
+
+    /** Build peer list HTML for ping sub-sub-tooltip. */
+    function buildPingPeerListHtml(peers) {
+        var html = '';
+        var initialShow = 8;
+        var hasMore = peers.length > initialShow;
+
+        html += '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+        html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">Peers \u2014 By Ping</div>';
+        html += '</div>';
+        html += '<div class="as-sub-tt-scroll">';
+        for (var pi = 0; pi < peers.length; pi++) {
+            var p = peers[pi];
+            var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
+            html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-type">' + (p.ping_ms > 0 ? Math.round(p.ping_ms) + 'ms' : '\u2014') + '</span>';
+            var ct = p.connection_type || 'unknown';
+            html += '<span class="as-sub-tt-loc">' + (CONN_TYPE_LABELS[ct] || ct) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        if (hasMore) {
+            var remaining = peers.length - initialShow;
+            html += '<div class="as-sub-tt-more as-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
+        }
+        return html;
+    }
+
+    /** Attach click handlers for data provider rows in the sub-tooltip.
+     *  Clicking a provider shows sub-sub-tooltip with that provider's top 20 peers. */
+    function attachDataProviderRowHandlers(tip, field) {
+        var provRows = tip.querySelectorAll('.as-data-prov-row');
+        for (var pi = 0; pi < provRows.length; pi++) {
+            (function (provRow) {
+                provRow.style.cursor = 'pointer';
+                // Hover preview: show lines for this provider's peers
+                provRow.addEventListener('mouseenter', function () {
+                    var asNum = provRow.dataset.as;
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    if (peerIds.length > 0 && _drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+                provRow.addEventListener('mouseleave', function () {
+                    // Restore to all-lines state
+                    if (summarySelected) {
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        activateHoverAll();
+                    }
+                });
+                provRow.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    var asNum = provRow.dataset.as;
+                    var rowField = provRow.dataset.field;
+
+                    // Find matching peer objects from lastPeersRaw
+                    var idSet = {};
+                    for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
+                    var matchedPeers = [];
+                    for (var i = 0; i < lastPeersRaw.length; i++) {
+                        if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
+                    }
+                    // Sort by the relevant field
+                    matchedPeers.sort(function (a, b) { return (b[rowField] || 0) - (a[rowField] || 0); });
+
+                    // Build sub-sub-tooltip showing top 20 peers with bytes amounts
+                    var html = buildDataPeerListHtml(matchedPeers.slice(0, 20), rowField);
+                    showSubSubTooltip(html, e);
+                    subSubTooltipPinned = true;
+
+                    // Draw lines for this provider's peers
+                    if (_drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                });
+            })(provRows[pi]);
+        }
+    }
+
+    /** Build peer list HTML for data sub-sub-tooltip showing bytes amounts.
+     *  Shows 6-10 initially with scroll for the rest. */
+    function buildDataPeerListHtml(peers, field) {
+        var html = '';
+        var initialShow = 8;
+        var hasMore = peers.length > initialShow;
+        var isRecv = field === 'bytesrecv';
+        var title = isRecv ? 'Top Peers \u2014 Bytes Received' : 'Top Peers \u2014 Bytes Sent';
+
+        html += '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
+        html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + title + '</div>';
+        html += '</div>';
+        html += '<div class="as-sub-tt-scroll">';
+        for (var pi = 0; pi < peers.length; pi++) {
+            var p = peers[pi];
+            var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
+            html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-type">' + fmtBytes(p[field]) + '</span>';
+            var ct = p.connection_type || 'unknown';
+            html += '<span class="as-sub-tt-loc">' + (CONN_TYPE_LABELS[ct] || ct) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        if (hasMore) {
+            var remaining = peers.length - initialShow;
+            html += '<div class="as-sub-tt-more as-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
+        }
+        return html;
     }
 
     /** Attach provider navigation handlers (clicking a provider name navigates to its panel) */
@@ -2076,6 +2765,20 @@ window.ASDiversity = (function () {
                     });
                 }
             })(provRows[i]);
+        }
+        // Also handle standalone provider-click links (e.g. "Open provider panel" in sub-tooltips)
+        var provClicks = tip.querySelectorAll('.as-grid-provider-click');
+        for (var i = 0; i < provClicks.length; i++) {
+            (function (el) {
+                el.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var asNum = el.dataset.as;
+                    if (asNum) {
+                        hideSubTooltip();
+                        navigateToProvider(asNum);
+                    }
+                });
+            })(provClicks[i]);
         }
     }
 
@@ -2120,10 +2823,10 @@ window.ASDiversity = (function () {
         if (_dimMapPeers) _dimMapPeers(null);
         // Re-draw all lines
         if (summarySelected) activateHoverAll();
-        // Remove active highlights
+        // Remove active highlights from both summary rows and insight rows
         var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
         if (bodyEl) {
-            var rows = bodyEl.querySelectorAll('.as-summary-row');
+            var rows = bodyEl.querySelectorAll('.sub-filter-active');
             for (var ri = 0; ri < rows.length; ri++) rows[ri].classList.remove('sub-filter-active');
         }
     }
@@ -2298,6 +3001,30 @@ window.ASDiversity = (function () {
             existing.style.display = '';
         } else {
             if (existing) existing.style.display = 'none';
+        }
+    }
+
+    /** Collapse sub-tooltips but keep the main panel open.
+     *  Used when selecting a peer from within sub-panels. */
+    function collapseToMainPanel() {
+        hideSubSubTooltip();
+        hideSubTooltip();
+        subFilterPeerIds = null;
+        subFilterLabel = null;
+        subFilterCategory = null;
+        // Remove active highlights
+        var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+        if (bodyEl) {
+            var rows = bodyEl.querySelectorAll('.sub-filter-active');
+            for (var i = 0; i < rows.length; i++) rows[i].classList.remove('sub-filter-active');
+        }
+        // Restore lines
+        if (summarySelected) {
+            if (_filterPeerTable) _filterPeerTable(null);
+            if (_dimMapPeers) _dimMapPeers(null);
+            activateHoverAll();
+        } else if (selectedAs) {
+            clearSubFilter();
         }
     }
 
@@ -2484,7 +3211,8 @@ window.ASDiversity = (function () {
         // Don't show AS hover tooltip when a sub-tooltip is pinned
         if (subTooltipPinned) return;
         hoveredAs = asNum;
-        showTooltip(asNum, e);
+        // No floating tooltip — legend highlighting replaces it
+        highlightLegendItem(asNum);
 
         // Temporarily remove all-hovered highlight so only this segment is bright
         if ((hoveredAll || summarySelected) && containerEl) {
@@ -2503,7 +3231,7 @@ window.ASDiversity = (function () {
     function onSegmentLeave() {
         if (subTooltipPinned) return;
         hoveredAs = null;
-        hideTooltip();
+        clearLegendHighlight();
 
         // If hoveredAll or summarySelected is active, restore all-lines state
         if ((hoveredAll || summarySelected) && !selectedAs) {
@@ -2514,6 +3242,29 @@ window.ASDiversity = (function () {
         // ONLY clear lines if nothing is selected — selection keeps its lines
         if (!selectedAs) {
             if (_clearAsLines) _clearAsLines();
+        }
+    }
+
+    /** Add highlight class to the matching legend item */
+    function highlightLegendItem(asNum) {
+        if (!legendEl) return;
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].dataset.as === asNum) {
+                items[i].classList.add('highlighted');
+            } else {
+                items[i].classList.add('dimmed');
+            }
+        }
+    }
+
+    /** Remove highlight class from all legend items */
+    function clearLegendHighlight() {
+        if (!legendEl) return;
+        var items = legendEl.querySelectorAll('.as-legend-item');
+        for (var i = 0; i < items.length; i++) {
+            items[i].classList.remove('highlighted');
+            items[i].classList.remove('dimmed');
         }
     }
 
@@ -2661,14 +3412,14 @@ window.ASDiversity = (function () {
             titleEl.addEventListener('mouseleave', onTitleLeave);
             titleEl.addEventListener('click', onSummaryClick);
         }
-        var scoreLblEl = document.getElementById('as-score-label');
-        if (scoreLblEl) {
-            scoreLblEl.addEventListener('mouseenter', onTitleEnter);
-            scoreLblEl.addEventListener('mouseleave', onTitleLeave);
-            scoreLblEl.addEventListener('click', onSummaryClick);
-        }
-        // Click on donut center also opens summary
+        // Donut center: hover previews all lines, click opens summary
+        // NOTE: We intentionally do NOT add separate mouseenter/mouseleave on as-score-label,
+        // because donutCenter already covers it. Adding handlers on the child causes
+        // lines to disappear when the mouse moves from the label to the score value
+        // (child mouseleave fires while still inside the parent).
         if (donutCenter) {
+            donutCenter.addEventListener('mouseenter', onTitleEnter);
+            donutCenter.addEventListener('mouseleave', onTitleLeave);
             donutCenter.addEventListener('click', onSummaryClick);
         }
 
@@ -2702,6 +3453,7 @@ window.ASDiversity = (function () {
         _dimMapPeers = hooks.dimMapPeers || null;
         _getWorldToScreen = hooks.getWorldToScreen || null;
         _selectPeerById = hooks.selectPeerById || null;
+        _zoomToPeerOnly = hooks.zoomToPeerOnly || null;
     }
 
     /** Update with new peer data. Called after each fetchPeers(). */
@@ -2743,66 +3495,158 @@ window.ASDiversity = (function () {
 
         // If a selection is active, refresh the panel + filter + keep lines
         if (selectedAs) {
-            // Save sub-filter identity so we can re-apply after panel rebuild
             var savedCategory = subFilterCategory;
             var savedLabel = subFilterLabel;
 
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (seg) {
-                openPanel(selectedAs);
+                if (subTooltipPinned || subSubTooltipPinned) {
+                    // Sub-tooltip is open — DON'T rebuild panel DOM or change filters.
+                    // Keep current peer table filter and dim state intact so drill-down
+                    // (e.g. Country > Provider > Peer) isn't disrupted by data refresh.
+                    // Just keep lines drawing for the current selection.
+                    if (savedCategory && savedLabel) {
+                        var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
+                        if (freshPeerIds && freshPeerIds.length > 0) {
+                            subFilterPeerIds = freshPeerIds;
+                            subFilterCategory = savedCategory;
+                            subFilterLabel = savedLabel;
+                        }
+                    }
+                } else {
+                    // No sub-tooltip pinned — safe to rebuild panel
+                    openPanel(selectedAs);
 
-                // Try to re-apply sub-filter by matching category+label in fresh data
-                if (savedCategory && savedLabel) {
-                    var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
-                    if (freshPeerIds && freshPeerIds.length > 0) {
-                        subFilterPeerIds = freshPeerIds;
-                        subFilterCategory = savedCategory;
-                        subFilterLabel = savedLabel;
-                        if (_filterPeerTable) _filterPeerTable(freshPeerIds);
-                        if (_dimMapPeers) _dimMapPeers(freshPeerIds);
-                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, freshPeerIds, seg.color);
-                        highlightActiveSubRow();
-                        // Re-pin the sub-tooltip with fresh data if it was pinned
-                        if (subTooltipPinned) {
-                            var html = buildPeerSummaryHtml(freshPeerIds, savedCategory, savedLabel);
-                            var tip = document.getElementById('as-sub-tooltip');
-                            if (tip) {
-                                tip.innerHTML = html;
-                                tip.style.pointerEvents = 'auto';
-                                attachSubTooltipHandlers();
-                            }
+                    if (savedCategory && savedLabel) {
+                        var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
+                        if (freshPeerIds && freshPeerIds.length > 0) {
+                            subFilterPeerIds = freshPeerIds;
+                            subFilterCategory = savedCategory;
+                            subFilterLabel = savedLabel;
+                            if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                            if (_drawLinesForAs) _drawLinesForAs(selectedAs, freshPeerIds, seg.color);
+                            highlightActiveSubRow();
+                        } else {
+                            subFilterPeerIds = null;
+                            subFilterCategory = null;
+                            subFilterLabel = null;
+                            hideSubTooltip();
+                            if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                            if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                            if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
                         }
                     } else {
-                        // Sub-filter no longer matches (all peers in that category disconnected)
-                        subFilterPeerIds = null;
-                        subFilterCategory = null;
-                        subFilterLabel = null;
-                        hideSubTooltip();
                         if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                         if (_dimMapPeers) _dimMapPeers(seg.peerIds);
                         if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
                     }
-                } else {
-                    // No sub-filter active, show full AS
-                    if (_filterPeerTable) _filterPeerTable(seg.peerIds);
-                    if (_dimMapPeers) _dimMapPeers(seg.peerIds);
-                    if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
                 }
             } else {
                 deselect();
             }
         }
 
-        // If summary is active, refresh the summary panel + keep all lines
+        // If summary is active, refresh — but DON'T rebuild the panel DOM if a
+        // sub-tooltip is pinned (that destroys pinnedSubTooltipSrc and resets state).
+        // Instead, just refresh lines/filters with fresh peer data.
         if (summarySelected) {
-            // Close any pinned tooltips before rebuilding panel
-            hideSubSubTooltip();
-            hideSubTooltip();
-            subFilterPeerIds = null;
-            subFilterLabel = null;
-            subFilterCategory = null;
-            openSummaryPanel();
-            activateHoverAll();
+            if (subTooltipPinned || subSubTooltipPinned) {
+                // Sub-tooltip is open — preserve DOM, don't change filters/dim.
+                // Just silently refresh the underlying peer ID data.
+                if (subFilterPeerIds && subFilterCategory && subFilterLabel) {
+                    var freshSumData = computeSummaryData();
+                    var freshPeerIds = null;
+                    var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
+                    for (var ci = 0; ci < allCats.length; ci++) {
+                        if (!allCats[ci]) continue;
+                        for (var ri = 0; ri < allCats[ci].length; ri++) {
+                            if (allCats[ci][ri].label === subFilterLabel) {
+                                freshPeerIds = allCats[ci][ri].peerIds;
+                                break;
+                            }
+                        }
+                        if (freshPeerIds) break;
+                    }
+                    if (freshPeerIds && freshPeerIds.length > 0) {
+                        subFilterPeerIds = freshPeerIds;
+                        if (_drawLinesForAllAs && donutSegments.length > 0) {
+                            var idSet = {};
+                            for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
+                            var groups = [];
+                            for (var si = 0; si < donutSegments.length; si++) {
+                                var seg = donutSegments[si];
+                                var filteredIds = [];
+                                for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                    if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                                }
+                                if (filteredIds.length > 0) {
+                                    groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                }
+                            }
+                            _drawLinesForAllAs(groups);
+                        }
+                    }
+                } else {
+                    // No sub-filter, just keep all-lines going
+                    activateHoverAll();
+                }
+            } else {
+                // No sub-tooltip pinned — safe to rebuild the panel
+                var savedSumCategory = subFilterCategory;
+                var savedSumLabel = subFilterLabel;
+
+                openSummaryPanel();
+
+                if (savedSumCategory && savedSumLabel) {
+                    var freshSumData = computeSummaryData();
+                    var freshPeerIds = null;
+                    var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
+                    for (var ci = 0; ci < allCats.length; ci++) {
+                        if (!allCats[ci]) continue;
+                        for (var ri = 0; ri < allCats[ci].length; ri++) {
+                            if (allCats[ci][ri].label === savedSumLabel) {
+                                freshPeerIds = allCats[ci][ri].peerIds;
+                                break;
+                            }
+                        }
+                        if (freshPeerIds) break;
+                    }
+                    if (freshPeerIds && freshPeerIds.length > 0) {
+                        subFilterPeerIds = freshPeerIds;
+                        subFilterCategory = savedSumCategory;
+                        subFilterLabel = savedSumLabel;
+                        if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                        if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                        highlightActiveSummaryRow();
+                        if (_drawLinesForAllAs && donutSegments.length > 0) {
+                            var idSet = {};
+                            for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
+                            var groups = [];
+                            for (var si = 0; si < donutSegments.length; si++) {
+                                var seg = donutSegments[si];
+                                var filteredIds = [];
+                                for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                    if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                                }
+                                if (filteredIds.length > 0) {
+                                    groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                }
+                            }
+                            _drawLinesForAllAs(groups);
+                        }
+                    } else {
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
+                        hideSubTooltip();
+                        hideSubSubTooltip();
+                        activateHoverAll();
+                    }
+                } else {
+                    activateHoverAll();
+                }
+            }
         }
     }
 
@@ -2849,6 +3693,34 @@ window.ASDiversity = (function () {
         return null;
     }
 
+    /** Get the line origin position for a given AS number.
+     *  - If asNum is a top-8 segment, returns that segment's legend dot.
+     *  - If asNum is in the "Others" group, returns the "Others" legend dot.
+     *  - Final fallback: donut center (only when legend genuinely not rendered). */
+    function getLineOriginForAs(asNum) {
+        // First: direct legend dot match (works for top-8 and selected AS)
+        var direct = getLegendDotPosition(asNum);
+        if (direct) return direct;
+
+        // Second: check if this AS is inside the "Others" bucket
+        if (donutSegments) {
+            for (var i = 0; i < donutSegments.length; i++) {
+                var seg = donutSegments[i];
+                if (seg.isOthers && seg._othersGroups) {
+                    for (var j = 0; j < seg._othersGroups.length; j++) {
+                        if (seg._othersGroups[j].asNumber === asNum) {
+                            // Found in Others — use the Others legend dot
+                            return getLegendDotPosition('Others');
+                        }
+                    }
+                }
+            }
+        }
+
+        // Final fallback: donut center (only when legend genuinely not rendered)
+        return getDonutCenter();
+    }
+
     /** Get the currently selected AS number */
     function getSelectedAs() {
         return selectedAs;
@@ -2890,6 +3762,7 @@ window.ASDiversity = (function () {
         isViewActive: isViewActive,
         getDonutCenter: getDonutCenter,
         getLegendDotPosition: getLegendDotPosition,
+        getLineOriginForAs: getLineOriginForAs,
         getHoveredAs: getHoveredAs,
         getHoveredAll: function () { return hoveredAll || summarySelected; },
         getSelectedAs: getSelectedAs,
@@ -2897,5 +3770,6 @@ window.ASDiversity = (function () {
         getPeerIdsForAs: getPeerIdsForAs,
         getColorForAs: getColorForAs,
         getSegments: getSegments,
+        collapseToMainPanel: collapseToMainPanel,
     };
 })();

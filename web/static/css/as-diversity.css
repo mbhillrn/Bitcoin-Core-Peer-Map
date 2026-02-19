@@ -242,6 +242,20 @@
     transform: translateY(0);
     pointer-events: auto;
 }
+/* "TOP 8" header above the legend list */
+.as-legend-header {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    padding: 2px 6px 4px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+}
 .as-legend-item {
     display: flex;
     align-items: center;
@@ -259,6 +273,11 @@
 }
 .as-legend-item.dimmed {
     opacity: 0.25;
+}
+.as-legend-item.highlighted {
+    background: rgba(88, 166, 255, 0.12);
+    transform: scale(1.04);
+    transform-origin: left center;
 }
 .as-legend-item.selected {
     background: rgba(88, 166, 255, 0.14);
@@ -422,6 +441,17 @@ body.as-panel-open .footer {
     font-weight: 700;
     color: var(--accent);
     margin-bottom: 2px;
+}
+.as-detail-asn.as-summary-title {
+    font-family: var(--font-display);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.15);
+    margin-bottom: 6px;
 }
 .as-detail-org {
     font-family: var(--font-data);
@@ -620,6 +650,7 @@ body.hud-solid .as-diversity-container {
    ========================================================== */
 body.theme-light .as-tt-number,
 body.theme-light .as-detail-asn { text-shadow: none; }
+body.theme-light .as-legend-header,
 body.theme-light .as-legend-name,
 body.theme-light .as-legend-count,
 body.theme-light .as-legend-pct,
@@ -716,6 +747,13 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     color: var(--accent);
     font-weight: 700;
     white-space: nowrap;
+    flex-shrink: 0;
+}
+.as-sub-tt-rank {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 9px;
+    min-width: 18px;
     flex-shrink: 0;
 }
 .as-sub-tt-id-link {
@@ -823,11 +861,26 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    padding: 4px 0;
+    padding: 4px 2px;
     font-family: var(--font-data);
     font-size: 10px;
     color: var(--text-secondary);
     line-height: 1.4;
+    border-radius: 3px;
+    border-left: 2px solid transparent;
+    transition: background 0.15s ease, border-left-color 0.15s ease;
+}
+/* Hover state for insight rows */
+.as-summary-insight:hover {
+    background: rgba(88, 166, 255, 0.06);
+}
+/* Selected/active state for insight rows */
+.as-summary-insight.sub-filter-active {
+    background: rgba(88, 166, 255, 0.16);
+    border-left-color: var(--accent);
+}
+.as-summary-insight.sub-filter-active .as-insight-text {
+    color: var(--text-primary);
 }
 .as-insight-icon {
     flex-shrink: 0;
@@ -836,22 +889,6 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 }
 .as-insight-text {
     flex: 1;
-}
-.as-insight-expand {
-    margin-top: 4px;
-    padding-left: 2px;
-}
-.as-insight-expand-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 1px 0;
-    font-size: 10px;
-}
-.as-insight-expand-dur {
-    color: var(--text-muted);
-    font-weight: 600;
-    flex-shrink: 0;
 }
 
 /* Connection grid (Section 2) */
@@ -940,6 +977,29 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-grid-clickable:hover {
     background: rgba(88, 166, 255, 0.15);
     color: var(--accent);
+}
+
+/* Connection provider rows (3-row layout per provider) */
+.as-conn-prov-row {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    font-weight: 600;
+}
+.as-conn-prov-row:hover {
+    background: rgba(88, 166, 255, 0.06);
+}
+.as-conn-dir-row,
+.as-conn-out-row {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.as-conn-dir-row:hover,
+.as-conn-out-row:hover {
+    background: rgba(88, 166, 255, 0.06);
 }
 
 /* Summary interactive rows (sections 3-7) — clickable with provider drill-down */

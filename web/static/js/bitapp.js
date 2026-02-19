@@ -2892,8 +2892,8 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // [AS-DIVERSITY] Draw lines from DONUT to peers of a hovered/selected AS
-    // Lines originate from the donut chart position, not map center.
+    // [AS-DIVERSITY] Draw lines from LEGEND DOT to peers of a hovered/selected AS
+    // Lines always originate from the legend dot, never the donut center.
     // Adapts to map pan/zoom since this runs every frame.
     // ═══════════════════════════════════════════════════════════
 
@@ -2902,40 +2902,48 @@
         const ASD = window.ASDiversity;
         if (!ASD) return;
 
-        // Try legend dot position first (when legend is visible), fall back to donut center
+        // Lines originate from legend dots (top-8 direct, Others for non-top-8, donut center fallback)
         let lineOrigin = null;
         if (asLineAsNum) {
-            lineOrigin = ASD.getLegendDotPosition(asLineAsNum);
-        }
-        if (!lineOrigin) {
-            lineOrigin = ASD.getDonutCenter();
+            lineOrigin = ASD.getLineOriginForAs(asLineAsNum);
         }
         if (!lineOrigin) return;
-        const donutCenter = lineOrigin;
 
         const peerIdSet = new Set(asLinePeerIds);
         const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
         if (matchingNodes.length === 0) return;
 
-        // Convert donut center from page coords to canvas logical coords
+        // Convert legend dot position from page coords to canvas logical coords
         const canvasRect = canvas.getBoundingClientRect();
-        const originX = (donutCenter.x - canvasRect.left) * (W / canvasRect.width);
-        const originY = (donutCenter.y - canvasRect.top) * (H / canvasRect.height);
+        const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
+        const originY = (lineOrigin.y - canvasRect.top) * (H / canvasRect.height);
 
-        // Resolve screen positions for each matching node
+        // Resolve screen positions for each matching node.
+        // Two-pass: prefer copies near the viewport, fall back to wider margin for zoomed views.
         const resolved = [];
+        const MARGIN_TIGHT = 300;   // First pass: viewport + 300px
+        const MARGIN_WIDE = Math.max(W, 800);  // Second pass: wider for zoomed-in views
         for (const node of matchingNodes) {
             let bestS = null;
             let bestDist = Infinity;
+            // Pass 1: prefer copies near the viewport
             for (const off of wrapOffsets) {
                 const s = worldToScreen(node.lon + off, node.lat);
-                if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                if (s.x < -MARGIN_TIGHT || s.x > W + MARGIN_TIGHT || s.y < -MARGIN_TIGHT || s.y > H + MARGIN_TIGHT) continue;
                 const dx = s.x - originX;
                 const dy = s.y - originY;
                 const d2 = dx * dx + dy * dy;
-                if (d2 < bestDist) {
-                    bestDist = d2;
-                    bestS = s;
+                if (d2 < bestDist) { bestDist = d2; bestS = s; }
+            }
+            // Pass 2: wider margin only if nothing found near viewport
+            if (!bestS) {
+                for (const off of wrapOffsets) {
+                    const s = worldToScreen(node.lon + off, node.lat);
+                    if (s.x < -MARGIN_WIDE || s.x > W + MARGIN_WIDE || s.y < -MARGIN_WIDE || s.y > H + MARGIN_WIDE) continue;
+                    const dx = s.x - originX;
+                    const dy = s.y - originY;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 < bestDist) { bestDist = d2; bestS = s; }
                 }
             }
             if (bestS) resolved.push({ node: node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
@@ -3026,9 +3034,8 @@
         ctx.lineWidth = lineW;
 
         for (const grp of asLineGroups) {
-            // Find this group's line origin (legend dot, fallback to donut center)
-            let lineOrigin = ASD.getLegendDotPosition(grp.asNum);
-            if (!lineOrigin) lineOrigin = ASD.getDonutCenter();
+            // Lines originate from legend dots (top-8 direct, Others for non-top-8, donut center fallback)
+            let lineOrigin = ASD.getLineOriginForAs(grp.asNum);
             if (!lineOrigin) continue;
 
             const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
@@ -3038,18 +3045,29 @@
             const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
             if (matchingNodes.length === 0) continue;
 
-            // Resolve screen positions
+            // Resolve screen positions (two-pass: prefer near-viewport, then wider)
             const resolved = [];
+            const MT = 300, MW = Math.max(W, 800);
             for (const node of matchingNodes) {
                 let bestS = null;
                 let bestDist = Infinity;
                 for (const off of wrapOffsets) {
                     const s = worldToScreen(node.lon + off, node.lat);
-                    if (s.x < -100 || s.x > W + 100 || s.y < -100 || s.y > H + 100) continue;
+                    if (s.x < -MT || s.x > W + MT || s.y < -MT || s.y > H + MT) continue;
                     const dx = s.x - originX;
                     const dy = s.y - originY;
                     const d2 = dx * dx + dy * dy;
                     if (d2 < bestDist) { bestDist = d2; bestS = s; }
+                }
+                if (!bestS) {
+                    for (const off of wrapOffsets) {
+                        const s = worldToScreen(node.lon + off, node.lat);
+                        if (s.x < -MW || s.x > W + MW || s.y < -MW || s.y > H + MW) continue;
+                        const dx = s.x - originX;
+                        const dy = s.y - originY;
+                        const d2 = dx * dx + dy * dy;
+                        if (d2 < bestDist) { bestDist = d2; bestS = s; }
+                    }
                 }
                 if (bestS) resolved.push({ node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
             }
@@ -6060,17 +6078,34 @@
             },
             getWorldToScreen: worldToScreen,
             selectPeerById: function (peerId) {
-                // Find the node on the map by peer ID
+                // Find the node on the map by peer ID — full deselect (closes AS panel)
                 const node = nodes.find(n => n.peerId === peerId && n.alive);
                 if (!node) return;
-                // Clear AS selection and sub-filter
                 if (window.ASDiversity) {
                     window.ASDiversity.deselect();
                 }
-                // Set selection state and zoom to the peer
-                groupedNodes = null;
-                mapFilterPeerIds = new Set([node.peerId]);
-                renderPeerTable();
+                zoomToPeer(node);
+                highlightTableRow(node.peerId);
+            },
+            zoomToPeerOnly: function (peerId) {
+                // Zoom to peer without touching sub-panels or lines — just zoom + highlight
+                const node = nodes.find(n => n.peerId === peerId && n.alive);
+                if (!node) return;
+                // Draw line from the peer's AS legend dot to this peer
+                const ASD = window.ASDiversity;
+                if (ASD && node.peerId !== undefined) {
+                    const peer = lastPeers.find(p => p.id === peerId);
+                    if (peer && peer.as) {
+                        // peer.as is "AS12345 Org Name" string — extract just "AS12345"
+                        const asMatch = peer.as.match(/^(AS\d+)/);
+                        const peerAsNum = asMatch ? asMatch[1] : peer.as;
+                        const color = ASD.getColorForAs(peerAsNum) || '#58a6ff';
+                        asLineGroups = null;
+                        asLinePeerIds = [peerId];
+                        asLineColor = color;
+                        asLineAsNum = peerAsNum;
+                    }
+                }
                 zoomToPeer(node);
                 highlightTableRow(node.peerId);
             },
