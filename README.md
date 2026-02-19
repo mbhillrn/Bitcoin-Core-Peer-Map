@@ -10,7 +10,7 @@ A real-time monitoring dashboard for your personal Bitcoin Core node. Geolocates
 
 *Selecting a service provider on the donut chart draws animated connection lines to all peers hosted by that provider (Digital Ocean, LLC shown above), with a full breakdown in the detail panel.*
 
-MBCore Dashboard uses `bitcoin-cli` to query your running Bitcoin Core node, geolocates public peers via a maintained database and online IP geolocation searches like [ip-api.com](http://ip-api.com), and aggregates peer data by Autonomous System (AS) to visualize how your connections are distributed across internet service providers and hosting companies. Maintains a local SQLite database of peer locations (latitude, longitude, ISP, AS info, and more) for instant recall. The database is continuously updated with new IP geolocations from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset).
+MBCore Dashboard uses Bitcoin Core's built in tools to query your running node, and then geolocates peers via a maintained database and online IP geolocation searches like [ip-api.com](http://ip-api.com), and aggregates peer data by Autonomous System (AS) to visualize how your connections are distributed across internet service providers and hosting companies. Maintains a local SQLite database of peer locations (latitude, longitude, ISP, AS info, and more) for instant recall. The database is continuously updated with new IP geolocations from the [Bitcoin Node GeoIP Dataset](https://github.com/mbhillrn/Bitcoin-Node-GeoIP-Dataset).
 
 - Interactive HTML5 Canvas world map with geolocated Bitcoin Core peers
 - **Service provider diversity analysis** -- donut chart with diversity score, concentration risk, and per-provider detail panel
