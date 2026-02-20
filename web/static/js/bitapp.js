@@ -2892,6 +2892,71 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // [AS-DIVERSITY] Resolve which wrap copy of each peer to draw lines to.
+    // Prefers the copy visible on the current map view, breaking ties by
+    // proximity to viewport center.  Falls back to closest-to-center among
+    // all wrap copies when nothing is on-screen.
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * For each node, pick the best wrap-copy screen position to draw a line to.
+     * Priority:
+     *   1. On-screen copies (within viewport + small margin) → closest to viewport center
+     *   2. Near-screen copies (within a wider margin) → closest to viewport center
+     *   3. Any copy → closest to viewport center
+     * The returned `dist` is to the *line origin* (legend dot), used for alpha fade.
+     */
+    function resolveAsLinePeers(matchingNodes, wrapOffsets, originX, originY) {
+        const resolved = [];
+        const vcx = W / 2;  // viewport center x
+        const vcy = H / 2;  // viewport center y
+        // Scale margins with canvas size so behaviour is resolution-independent
+        const MARGIN_ONSCREEN = Math.max(W, H) * 0.05;   // ~5% beyond edges
+        const MARGIN_NEAR     = Math.max(W, H) * 0.25;   // ~25% beyond edges
+
+        for (const node of matchingNodes) {
+            let bestS = null;
+            let bestCenterDist = Infinity;
+            let bestTier = 3;   // lower = better (1=on-screen, 2=near, 3=any)
+
+            for (const off of wrapOffsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+
+                // Determine which tier this copy falls into
+                let tier;
+                if (s.x >= -MARGIN_ONSCREEN && s.x <= W + MARGIN_ONSCREEN &&
+                    s.y >= -MARGIN_ONSCREEN && s.y <= H + MARGIN_ONSCREEN) {
+                    tier = 1;  // on-screen
+                } else if (s.x >= -MARGIN_NEAR && s.x <= W + MARGIN_NEAR &&
+                           s.y >= -MARGIN_NEAR && s.y <= H + MARGIN_NEAR) {
+                    tier = 2;  // near-screen
+                } else {
+                    tier = 3;  // far off-screen
+                }
+
+                // Distance to viewport center (used as tie-breaker within same tier)
+                const dcx = s.x - vcx;
+                const dcy = s.y - vcy;
+                const dc2 = dcx * dcx + dcy * dcy;
+
+                if (tier < bestTier || (tier === bestTier && dc2 < bestCenterDist)) {
+                    bestTier = tier;
+                    bestCenterDist = dc2;
+                    bestS = s;
+                }
+            }
+
+            if (bestS) {
+                // dist to line origin — kept for alpha-fade calculation
+                const odx = bestS.x - originX;
+                const ody = bestS.y - originY;
+                resolved.push({ node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(odx * odx + ody * ody) });
+            }
+        }
+        return resolved;
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // [AS-DIVERSITY] Draw lines from LEGEND DOT to peers of a hovered/selected AS
     // Lines always originate from the legend dot, never the donut center.
     // Adapts to map pan/zoom since this runs every frame.
@@ -2918,36 +2983,8 @@
         const originX = (lineOrigin.x - canvasRect.left) * (W / canvasRect.width);
         const originY = (lineOrigin.y - canvasRect.top) * (H / canvasRect.height);
 
-        // Resolve screen positions for each matching node.
-        // Two-pass: prefer copies near the viewport, fall back to wider margin for zoomed views.
-        const resolved = [];
-        const MARGIN_TIGHT = 300;   // First pass: viewport + 300px
-        const MARGIN_WIDE = Math.max(W, 800);  // Second pass: wider for zoomed-in views
-        for (const node of matchingNodes) {
-            let bestS = null;
-            let bestDist = Infinity;
-            // Pass 1: prefer copies near the viewport
-            for (const off of wrapOffsets) {
-                const s = worldToScreen(node.lon + off, node.lat);
-                if (s.x < -MARGIN_TIGHT || s.x > W + MARGIN_TIGHT || s.y < -MARGIN_TIGHT || s.y > H + MARGIN_TIGHT) continue;
-                const dx = s.x - originX;
-                const dy = s.y - originY;
-                const d2 = dx * dx + dy * dy;
-                if (d2 < bestDist) { bestDist = d2; bestS = s; }
-            }
-            // Pass 2: wider margin only if nothing found near viewport
-            if (!bestS) {
-                for (const off of wrapOffsets) {
-                    const s = worldToScreen(node.lon + off, node.lat);
-                    if (s.x < -MARGIN_WIDE || s.x > W + MARGIN_WIDE || s.y < -MARGIN_WIDE || s.y > H + MARGIN_WIDE) continue;
-                    const dx = s.x - originX;
-                    const dy = s.y - originY;
-                    const d2 = dx * dx + dy * dy;
-                    if (d2 < bestDist) { bestDist = d2; bestS = s; }
-                }
-            }
-            if (bestS) resolved.push({ node: node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
-        }
+        // Resolve screen positions: prefer on-screen copies, break ties by viewport center
+        const resolved = resolveAsLinePeers(matchingNodes, wrapOffsets, originX, originY);
         if (resolved.length === 0) return;
 
         // Group by approximate screen position (within 8px = same dot)
@@ -3045,32 +3082,8 @@
             const matchingNodes = nodes.filter(n => n.alive && peerIdSet.has(n.peerId));
             if (matchingNodes.length === 0) continue;
 
-            // Resolve screen positions (two-pass: prefer near-viewport, then wider)
-            const resolved = [];
-            const MT = 300, MW = Math.max(W, 800);
-            for (const node of matchingNodes) {
-                let bestS = null;
-                let bestDist = Infinity;
-                for (const off of wrapOffsets) {
-                    const s = worldToScreen(node.lon + off, node.lat);
-                    if (s.x < -MT || s.x > W + MT || s.y < -MT || s.y > H + MT) continue;
-                    const dx = s.x - originX;
-                    const dy = s.y - originY;
-                    const d2 = dx * dx + dy * dy;
-                    if (d2 < bestDist) { bestDist = d2; bestS = s; }
-                }
-                if (!bestS) {
-                    for (const off of wrapOffsets) {
-                        const s = worldToScreen(node.lon + off, node.lat);
-                        if (s.x < -MW || s.x > W + MW || s.y < -MW || s.y > H + MW) continue;
-                        const dx = s.x - originX;
-                        const dy = s.y - originY;
-                        const d2 = dx * dx + dy * dy;
-                        if (d2 < bestDist) { bestDist = d2; bestS = s; }
-                    }
-                }
-                if (bestS) resolved.push({ node, sx: bestS.x, sy: bestS.y, dist: Math.sqrt(bestDist) });
-            }
+            // Resolve screen positions: prefer on-screen copies, break ties by viewport center
+            const resolved = resolveAsLinePeers(matchingNodes, wrapOffsets, originX, originY);
             if (resolved.length === 0) continue;
 
             // Group by approximate screen position (within 8px = same dot)
