@@ -65,6 +65,9 @@ window.ASDiversity = (function () {
     let subFilterCategory = null;  // Category key ('software', 'conntype', 'country', 'services', 'provider')
     let subTooltipPinned = false;  // Whether the sub-tooltip is pinned (clicked vs hovered)
     let subSubTooltipPinned = false; // Whether the sub-sub-tooltip is pinned
+    let subSubFilterPeerIds = null;  // Peer IDs at sub-sub level (specific provider within a category drill-down)
+    let subSubFilterAsNum = null;    // AS number for the sub-sub drill-down provider
+    let subSubFilterColor = null;    // Line color for the sub-sub drill-down provider
     let pinnedSubTooltipHtml = null; // HTML of the pinned sub-tooltip (for restore after hover preview)
     let pinnedSubTooltipSrc = null;  // Source element that opened the pinned sub-tooltip
     let pinnedSubTooltipSetup = null; // fn(tip) — re-attach handlers when restoring pinned tooltip
@@ -1392,14 +1395,14 @@ window.ASDiversity = (function () {
             html += '</div>';
             // In row
             if (gItem.inCount > 0) {
-                html += '<div class="as-detail-sub-row as-interactive-row as-conn-dir-row" data-peer-ids="' + inJson + '" data-category="conntype" style="padding-left:22px">';
+                html += '<div class="as-detail-sub-row as-interactive-row as-conn-dir-row" data-peer-ids="' + inJson + '" data-as="' + gItem.asNumber + '" data-category="conntype" style="padding-left:22px">';
                 html += '<span class="as-detail-sub-label">In</span>';
                 html += '<span class="as-detail-sub-val">' + gItem.inCount + '</span>';
                 html += '</div>';
             }
             // Out row
             if (gItem.outCount > 0) {
-                html += '<div class="as-detail-sub-row as-conn-out-row" data-peer-ids="' + outJson + '" data-out-subtypes="' + outSubJson + '" data-category="conntype" style="padding-left:22px; cursor:pointer">';
+                html += '<div class="as-detail-sub-row as-conn-out-row" data-peer-ids="' + outJson + '" data-as="' + gItem.asNumber + '" data-out-subtypes="' + outSubJson + '" data-category="conntype" style="padding-left:22px; cursor:pointer">';
                 html += '<span class="as-detail-sub-label">Out</span>';
                 html += '<span class="as-detail-sub-val">' + gItem.outCount + '</span>';
                 html += '</div>';
@@ -1818,6 +1821,9 @@ window.ASDiversity = (function () {
             tip.style.pointerEvents = 'none';
         }
         subSubTooltipPinned = false;
+        subSubFilterPeerIds = null;
+        subSubFilterAsNum = null;
+        subSubFilterColor = null;
     }
 
     /** Attach peer-click and expand handlers to the sub-sub-tooltip */
@@ -2068,9 +2074,14 @@ window.ASDiversity = (function () {
                     showSubSubTooltip(html, e);
                     subSubTooltipPinned = true;
 
+                    // Track sub-sub state for data refresh preservation
+                    subSubFilterPeerIds = peerIds;
+                    subSubFilterAsNum = asNum;
+                    subSubFilterColor = getColorForAsNum(asNum);
+
                     // Draw lines for just this provider's peers
                     if (_drawLinesForAs && asNum) {
-                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                        _drawLinesForAs(asNum, peerIds, subSubFilterColor);
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
@@ -2132,6 +2143,9 @@ window.ASDiversity = (function () {
                     e.stopPropagation();
                     if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
@@ -2143,6 +2157,11 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
                     attachSubTooltipHandlers();
+                    // Track sub-filter state for data refresh preservation
+                    var asNum = rowEl.dataset.as;
+                    subFilterPeerIds = peerIds;
+                    subFilterCategory = 'conn-provider';
+                    subFilterLabel = asNum || '';
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
@@ -2198,6 +2217,9 @@ window.ASDiversity = (function () {
                     e.stopPropagation();
                     if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
@@ -2209,6 +2231,10 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
                     attachSubTooltipHandlers();
+                    // Track sub-filter state for data refresh preservation
+                    subFilterPeerIds = peerIds;
+                    subFilterCategory = 'conn-out';
+                    subFilterLabel = rowEl.dataset.as || '';
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
@@ -2252,6 +2278,9 @@ window.ASDiversity = (function () {
                     e.stopPropagation();
                     if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
@@ -2263,6 +2292,10 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
                     attachSubTooltipHandlers();
+                    // Track sub-filter state for data refresh preservation
+                    subFilterPeerIds = peerIds;
+                    subFilterCategory = 'conn-in';
+                    subFilterLabel = rowEl.dataset.as || '';
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
@@ -2312,6 +2345,12 @@ window.ASDiversity = (function () {
                     // Toggle: clicking same link unpins
                     if (subTooltipPinned && pinnedSubTooltipSrc === el) {
                         hideSubTooltip();
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
                         return;
                     }
                     var allProvs = asGroups.map(function (g) {
@@ -2328,6 +2367,10 @@ window.ASDiversity = (function () {
                         attachProviderClickHandlers(tip);
                         attachProviderNavHandlers(tip);
                     }
+                    // Track sub-filter state for data refresh preservation
+                    subFilterPeerIds = [];
+                    subFilterCategory = 'all-providers';
+                    subFilterLabel = 'all-providers';
                 });
             })(allProvLinks[i]);
         }
@@ -2341,6 +2384,12 @@ window.ASDiversity = (function () {
                         e.stopPropagation();
                         if (subTooltipPinned && pinnedSubTooltipSrc === el) {
                             hideSubTooltip();
+                            subFilterPeerIds = null;
+                            subFilterCategory = null;
+                            subFilterLabel = null;
+                            if (_filterPeerTable) _filterPeerTable(null);
+                            if (_dimMapPeers) _dimMapPeers(null);
+                            if (summarySelected) activateHoverAll();
                             return;
                         }
                         var allProvs = asGroups.map(function (g) {
@@ -2357,6 +2406,10 @@ window.ASDiversity = (function () {
                             attachProviderClickHandlers(tip);
                             attachProviderNavHandlers(tip);
                         }
+                        // Track sub-filter state for data refresh preservation
+                        subFilterPeerIds = [];
+                        subFilterCategory = 'all-providers';
+                        subFilterLabel = 'all-providers';
                     });
                 })(headerProvLinks[i]);
             }
@@ -2411,6 +2464,12 @@ window.ASDiversity = (function () {
                 if (subTooltipPinned && pinnedSubTooltipSrc === fastestLink) {
                     hideSubTooltip();
                     fastestLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    subFilterPeerIds = null;
+                    subFilterCategory = null;
+                    subFilterLabel = null;
+                    if (_filterPeerTable) _filterPeerTable(null);
+                    if (_dimMapPeers) _dimMapPeers(null);
+                    if (summarySelected) activateHoverAll();
                     return;
                 }
                 var html = buildFastestProvHtml();
@@ -2421,6 +2480,10 @@ window.ASDiversity = (function () {
                 });
                 attachFastestProvRowHandlers(document.getElementById('as-sub-tooltip'));
                 fastestLink.closest('.as-summary-insight').classList.add('sub-filter-active');
+                // Track sub-filter state for data refresh preservation
+                subFilterPeerIds = [];
+                subFilterCategory = 'insight-fastest';
+                subFilterLabel = 'fastest';
             });
         }
 
@@ -2484,6 +2547,9 @@ window.ASDiversity = (function () {
                 if (subTooltipPinned && pinnedSubTooltipSrc === stableLink) {
                     hideSubTooltip();
                     stableLink.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                    subFilterPeerIds = null;
+                    subFilterCategory = null;
+                    subFilterLabel = null;
                     if (_filterPeerTable) _filterPeerTable(null);
                     if (_dimMapPeers) _dimMapPeers(null);
                     if (summarySelected) activateHoverAll();
@@ -2500,8 +2566,17 @@ window.ASDiversity = (function () {
                 var tip = document.getElementById('as-sub-tooltip');
                 if (tip) attachProviderNavHandlers(tip);
                 stableLink.closest('.as-summary-insight').classList.add('sub-filter-active');
+                // Track sub-filter state for data refresh preservation
+                subFilterPeerIds = result.peerIds;
+                subFilterCategory = 'insight-stable';
+                subFilterLabel = result.asNum;
                 if (_filterPeerTable) _filterPeerTable(result.peerIds);
                 if (_dimMapPeers) _dimMapPeers(result.peerIds);
+                // Draw lines for this provider
+                var color = getColorForAsNum(result.asNum);
+                if (_drawLinesForAs && result.asNum) {
+                    _drawLinesForAs(result.asNum, result.peerIds, color);
+                }
             });
         }
 
@@ -2565,6 +2640,12 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned && pinnedSubTooltipSrc === el) {
                         hideSubTooltip();
                         el.closest('.as-summary-insight').classList.remove('sub-filter-active');
+                        subFilterPeerIds = null;
+                        subFilterCategory = null;
+                        subFilterLabel = null;
+                        if (_filterPeerTable) _filterPeerTable(null);
+                        if (_dimMapPeers) _dimMapPeers(null);
+                        if (summarySelected) activateHoverAll();
                         return;
                     }
                     var result = buildDataProviderHtml();
@@ -2576,6 +2657,10 @@ window.ASDiversity = (function () {
                     attachDataProviderRowHandlers(document.getElementById('as-sub-tooltip'), field);
                     // Highlight this insight as active
                     el.closest('.as-summary-insight').classList.add('sub-filter-active');
+                    // Track sub-filter state for data refresh preservation
+                    subFilterPeerIds = [];
+                    subFilterCategory = 'insight-data-' + field;
+                    subFilterLabel = field;
                 });
             })(dataProvLinks[i]);
         }
@@ -2620,8 +2705,13 @@ window.ASDiversity = (function () {
                     showSubSubTooltip(html, e);
                     subSubTooltipPinned = true;
 
+                    // Track sub-sub state for data refresh preservation
+                    subSubFilterPeerIds = peerIds;
+                    subSubFilterAsNum = asNum;
+                    subSubFilterColor = getColorForAsNum(asNum);
+
                     if (_drawLinesForAs && asNum) {
-                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                        _drawLinesForAs(asNum, peerIds, subSubFilterColor);
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
@@ -2704,9 +2794,14 @@ window.ASDiversity = (function () {
                     showSubSubTooltip(html, e);
                     subSubTooltipPinned = true;
 
+                    // Track sub-sub state for data refresh preservation
+                    subSubFilterPeerIds = peerIds;
+                    subSubFilterAsNum = asNum;
+                    subSubFilterColor = getColorForAsNum(asNum);
+
                     // Draw lines for this provider's peers
                     if (_drawLinesForAs && asNum) {
-                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                        _drawLinesForAs(asNum, peerIds, subSubFilterColor);
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
@@ -3085,6 +3180,13 @@ window.ASDiversity = (function () {
 
         // Draw lines for sub-filtered peers
         var seg = selectedAs ? donutSegments.find(function (s) { return s.asNumber === selectedAs; }) : null;
+        if (!seg && selectedAs) {
+            var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+            if (grp) {
+                var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                seg = { asNumber: selectedAs, peerIds: grp.peerIds, color: othersSeg ? othersSeg.color : '#58a6ff' };
+            }
+        }
         if (seg && _drawLinesForAs) {
             _drawLinesForAs(selectedAs, peerIds, seg.color);
         }
@@ -3118,6 +3220,13 @@ window.ASDiversity = (function () {
         // Restore to full AS filter
         if (selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (!seg) {
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                    seg = { asNumber: selectedAs, peerIds: grp.peerIds, color: othersSeg ? othersSeg.color : '#58a6ff' };
+                }
+            }
             if (seg) {
                 if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
@@ -3362,10 +3471,30 @@ window.ASDiversity = (function () {
         if (e.key === 'Escape') {
             if (subSubTooltipPinned) {
                 hideSubSubTooltip();
-                // Restore to summary sub-filter state
-                if (summarySelected && subFilterPeerIds) {
+                // Restore to parent sub-filter state
+                if (summarySelected && subFilterPeerIds && subFilterPeerIds.length > 0) {
                     if (_filterPeerTable) _filterPeerTable(subFilterPeerIds);
                     if (_dimMapPeers) _dimMapPeers(subFilterPeerIds);
+                    // Re-draw lines for the parent sub-filter (not all lines)
+                    if (_drawLinesForAllAs && donutSegments.length > 0) {
+                        var idSet = {};
+                        for (var i = 0; i < subFilterPeerIds.length; i++) idSet[subFilterPeerIds[i]] = true;
+                        var groups = [];
+                        for (var si = 0; si < donutSegments.length; si++) {
+                            var seg = donutSegments[si];
+                            var filteredIds = [];
+                            for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                            }
+                            if (filteredIds.length > 0) {
+                                groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                            }
+                        }
+                        _drawLinesForAllAs(groups);
+                    }
+                } else if (summarySelected) {
+                    if (_filterPeerTable) _filterPeerTable(null);
+                    if (_dimMapPeers) _dimMapPeers(null);
                     activateHoverAll();
                 }
                 return;
@@ -3499,6 +3628,14 @@ window.ASDiversity = (function () {
             var savedLabel = subFilterLabel;
 
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            // If not in top-8 donut segments, check full asGroups (e.g. provider inside "Others" bucket)
+            if (!seg) {
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                    seg = { asNumber: selectedAs, peerIds: grp.peerIds, color: othersSeg ? othersSeg.color : '#58a6ff', isOthers: false, _synthetic: true };
+                }
+            }
             if (seg) {
                 if (subTooltipPinned || subSubTooltipPinned) {
                     // Sub-tooltip is open — DON'T rebuild panel DOM or change filters.
@@ -3552,41 +3689,128 @@ window.ASDiversity = (function () {
         // Instead, just refresh lines/filters with fresh peer data.
         if (summarySelected) {
             if (subTooltipPinned || subSubTooltipPinned) {
-                // Sub-tooltip is open — preserve DOM, don't change filters/dim.
-                // Just silently refresh the underlying peer ID data.
-                if (subFilterPeerIds && subFilterCategory && subFilterLabel) {
-                    var freshSumData = computeSummaryData();
-                    var freshPeerIds = null;
-                    var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
-                    for (var ci = 0; ci < allCats.length; ci++) {
-                        if (!allCats[ci]) continue;
-                        for (var ri = 0; ri < allCats[ci].length; ri++) {
-                            if (allCats[ci][ri].label === subFilterLabel) {
-                                freshPeerIds = allCats[ci][ri].peerIds;
-                                break;
+                // Sub-tooltip is open — preserve DOM. Refresh lines/filters with fresh peer data.
+
+                // PRIORITY 1: Sub-sub-tooltip pinned (e.g. IPv6 → Provider → Peers)
+                // Draw lines only for the specific provider, not the entire category.
+                if (subSubTooltipPinned && subSubFilterAsNum) {
+                    var provGroup = asGroups.find(function (g) { return g.asNumber === subSubFilterAsNum; });
+                    if (provGroup) {
+                        var freshProvPeerIds = provGroup.peerIds;
+                        // If there's a parent category filter (e.g. "IPv6"), intersect
+                        if (subFilterCategory === 'summary' && subFilterLabel) {
+                            var freshSumData = computeSummaryData();
+                            var freshCatPeerIds = null;
+                            var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
+                            for (var ci = 0; ci < allCats.length; ci++) {
+                                if (!allCats[ci]) continue;
+                                for (var ri = 0; ri < allCats[ci].length; ri++) {
+                                    if (allCats[ci][ri].label === subFilterLabel) {
+                                        freshCatPeerIds = allCats[ci][ri].peerIds;
+                                        break;
+                                    }
+                                }
+                                if (freshCatPeerIds) break;
+                            }
+                            if (freshCatPeerIds) {
+                                subFilterPeerIds = freshCatPeerIds;
+                                var catSet = {};
+                                for (var i = 0; i < freshCatPeerIds.length; i++) catSet[freshCatPeerIds[i]] = true;
+                                freshProvPeerIds = [];
+                                for (var i = 0; i < provGroup.peerIds.length; i++) {
+                                    if (catSet[provGroup.peerIds[i]]) freshProvPeerIds.push(provGroup.peerIds[i]);
+                                }
                             }
                         }
-                        if (freshPeerIds) break;
+                        subSubFilterPeerIds = freshProvPeerIds;
+                        var ssColor = subSubFilterColor || getColorForAsNum(subSubFilterAsNum);
+                        if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, freshProvPeerIds, ssColor);
+                        if (_filterPeerTable) _filterPeerTable(freshProvPeerIds);
+                        if (_dimMapPeers) _dimMapPeers(freshProvPeerIds);
                     }
-                    if (freshPeerIds && freshPeerIds.length > 0) {
-                        subFilterPeerIds = freshPeerIds;
-                        if (_drawLinesForAllAs && donutSegments.length > 0) {
-                            var idSet = {};
-                            for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
-                            var groups = [];
-                            for (var si = 0; si < donutSegments.length; si++) {
-                                var seg = donutSegments[si];
-                                var filteredIds = [];
-                                for (var pi = 0; pi < seg.peerIds.length; pi++) {
-                                    if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
-                                }
-                                if (filteredIds.length > 0) {
-                                    groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                }
+                // PRIORITY 2: Sub-tooltip pinned at category level (e.g. "IPv6" showing providers)
+                else if (subFilterPeerIds && subFilterCategory && subFilterLabel) {
+                    if (subFilterCategory === 'summary') {
+                        // Standard summary category — look up fresh peer IDs
+                        var freshSumData = computeSummaryData();
+                        var freshPeerIds = null;
+                        var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
+                        for (var ci = 0; ci < allCats.length; ci++) {
+                            if (!allCats[ci]) continue;
+                            for (var ri = 0; ri < allCats[ci].length; ri++) {
+                                if (allCats[ci][ri].label === subFilterLabel) {
+                                    freshPeerIds = allCats[ci][ri].peerIds;
+                                    break;
                                 }
                             }
-                            _drawLinesForAllAs(groups);
+                            if (freshPeerIds) break;
+                        }
+                        if (freshPeerIds && freshPeerIds.length > 0) {
+                            subFilterPeerIds = freshPeerIds;
+                            if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                            if (_drawLinesForAllAs && donutSegments.length > 0) {
+                                var idSet = {};
+                                for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
+                                var groups = [];
+                                for (var si = 0; si < donutSegments.length; si++) {
+                                    var seg = donutSegments[si];
+                                    var filteredIds = [];
+                                    for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                        if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                                    }
+                                    if (filteredIds.length > 0) {
+                                        groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                    }
+                                }
+                                _drawLinesForAllAs(groups);
+                            }
+                        }
+                    } else if (subFilterCategory === 'insight-stable') {
+                        // "Most stable" insight — refresh by AS number stored in subFilterLabel
+                        var provGroup = asGroups.find(function (g) { return g.asNumber === subFilterLabel; });
+                        if (provGroup) {
+                            subFilterPeerIds = provGroup.peerIds;
+                            var color = getColorForAsNum(subFilterLabel);
+                            if (_drawLinesForAs) _drawLinesForAs(subFilterLabel, provGroup.peerIds, color);
+                            if (_filterPeerTable) _filterPeerTable(provGroup.peerIds);
+                            if (_dimMapPeers) _dimMapPeers(provGroup.peerIds);
+                        }
+                    } else if (subFilterCategory === 'conn-provider') {
+                        // Connection by Provider row — refresh by AS number in subFilterLabel
+                        var provGroup = asGroups.find(function (g) { return g.asNumber === subFilterLabel; });
+                        if (provGroup) {
+                            subFilterPeerIds = provGroup.peerIds;
+                            if (_filterPeerTable) _filterPeerTable(provGroup.peerIds);
+                            if (_dimMapPeers) _dimMapPeers(provGroup.peerIds);
+                        }
+                    } else if (subFilterCategory === 'conn-out') {
+                        // Outbound connection row — refresh outbound peers for the AS
+                        var provGroup = asGroups.find(function (g) { return g.asNumber === subFilterLabel; });
+                        if (provGroup) {
+                            var outPeerIds = [];
+                            for (var i = 0; i < provGroup.peers.length; i++) {
+                                if (provGroup.peers[i].direction === 'outbound') outPeerIds.push(provGroup.peers[i].id);
+                            }
+                            subFilterPeerIds = outPeerIds;
+                            if (_filterPeerTable) _filterPeerTable(outPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(outPeerIds);
+                        }
+                    } else if (subFilterCategory === 'conn-in') {
+                        // Inbound connection row — refresh inbound peers for the AS
+                        var provGroup = asGroups.find(function (g) { return g.asNumber === subFilterLabel; });
+                        if (provGroup) {
+                            var inPeerIds = [];
+                            for (var i = 0; i < provGroup.peers.length; i++) {
+                                if (provGroup.peers[i].direction === 'inbound') inPeerIds.push(provGroup.peers[i].id);
+                            }
+                            subFilterPeerIds = inPeerIds;
+                            if (_filterPeerTable) _filterPeerTable(inPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(inPeerIds);
                         }
                     }
+                    // For insight-fastest, insight-data-*, all-providers: just preserve DOM, no filter change
                 } else {
                     // No sub-filter, just keep all-lines going
                     activateHoverAll();
@@ -3598,7 +3822,7 @@ window.ASDiversity = (function () {
 
                 openSummaryPanel();
 
-                if (savedSumCategory && savedSumLabel) {
+                if (savedSumCategory === 'summary' && savedSumLabel) {
                     var freshSumData = computeSummaryData();
                     var freshPeerIds = null;
                     var allCats = [freshSumData.networks, freshSumData.hosting, freshSumData.countries, freshSumData.software, freshSumData.services];
