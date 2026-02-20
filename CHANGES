@@ -1,1 +1,1 @@
-Diversity Summary panel with ranked provider insights, drill-down sub-menus, and interactive peer lists. Redesigned connection lines with two-pass culling for zoomed and panned maps. Bug fixes for sub-menu persistence, line origin accuracy, and panel state during data refreshes.
+Connection lines now prefer visible peers on screen over off-screen ones. Hover preview shows lines and filters the peer table across all panel rows. Fixed drill-down state being destroyed by the data refresh cycle.
