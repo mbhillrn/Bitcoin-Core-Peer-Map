@@ -47,6 +47,7 @@ window.ASDiversity = (function () {
     let diversityScore = 0;        // 0-10 score
     let totalPeers = 0;
     let hasRenderedOnce = false;   // Track if we've ever rendered data
+    let legendFocusAs = null;      // AS number to exclusively show in legend during panel hover
 
     // DOM refs (cached on init)
     let containerEl = null;
@@ -958,8 +959,36 @@ window.ASDiversity = (function () {
         if (!legendEl) return;
         var html = '';
 
-        // When an AS is clicked (selected), show only that provider in the legend
-        if (selectedAs) {
+        // When a provider is hovered in the panel, show only that provider in the legend
+        var focusAs = legendFocusAs || (summarySelected && subSubTooltipPinned && subSubFilterAsNum ? subSubFilterAsNum : null);
+        if (focusAs) {
+            var seg = donutSegments.find(function (s) { return s.asNumber === focusAs; });
+            if (seg) {
+                var displayName = seg.isOthers ? seg.asName : (seg.asShort || seg.asName || seg.asNumber);
+                var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+                html += '<div class="as-legend-item highlighted" data-as="' + seg.asNumber + '">';
+                html += '<span class="as-legend-dot" style="background:' + seg.color + '"></span>';
+                html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+                html += '<span class="as-legend-count">' + seg.peerCount + '</span>';
+                html += '<span class="as-legend-pct">' + seg.percentage.toFixed(0) + '%</span>';
+                html += '</div>';
+            } else {
+                // Provider is inside Others — show its actual name, not "Others"
+                var grp = asGroups.find(function (g) { return g.asNumber === focusAs; });
+                if (grp) {
+                    var color = getColorForAsNum(focusAs);
+                    var displayName = grp.asShort || grp.asName || grp.asNumber;
+                    var shortName = displayName.length > 18 ? displayName.substring(0, 17) + '\u2026' : displayName;
+                    html += '<div class="as-legend-item highlighted" data-as="' + focusAs + '">';
+                    html += '<span class="as-legend-dot" style="background:' + color + '"></span>';
+                    html += '<span class="as-legend-name" title="' + displayName + '">' + shortName + '</span>';
+                    html += '<span class="as-legend-count">' + grp.peerCount + '</span>';
+                    html += '<span class="as-legend-pct">' + (totalPeers > 0 ? (grp.peerCount / totalPeers * 100).toFixed(0) : 0) + '%</span>';
+                    html += '</div>';
+                }
+            }
+        } else if (selectedAs) {
+            // When an AS is clicked (selected), show only that provider in the legend
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
             if (!seg) {
                 // Selected AS might be a sub-provider inside Others
@@ -1010,6 +1039,21 @@ window.ASDiversity = (function () {
             items[li].addEventListener('mouseleave', onSegmentLeave);
             items[li].addEventListener('click', onSegmentClick);
         }
+    }
+
+    /** Focus the legend on a single provider (used during panel hover/click) */
+    function setLegendFocus(asNum) {
+        if (legendFocusAs === asNum) return;
+        legendFocusAs = asNum;
+        renderLegend();
+    }
+
+    /** Clear the legend focus, returning to normal display */
+    function clearLegendFocus() {
+        if (!legendFocusAs) return;
+        if (subSubTooltipPinned) return; // Don't clear while sub-sub is pinned
+        legendFocusAs = null;
+        renderLegend();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1829,6 +1873,11 @@ window.ASDiversity = (function () {
         subSubFilterPeerIds = null;
         subSubFilterAsNum = null;
         subSubFilterColor = null;
+        // Clear legend focus when sub-sub dismisses
+        if (legendFocusAs) {
+            legendFocusAs = null;
+            renderLegend();
+        }
     }
 
     /** Attach peer-click and expand handlers to the sub-sub-tooltip */
@@ -2107,6 +2156,8 @@ window.ASDiversity = (function () {
                 provRow.addEventListener('mouseenter', function () {
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    // Focus legend on this provider
+                    if (asNum) setLegendFocus(asNum);
                     if (peerIds.length > 0 && _drawLinesForAs && asNum) {
                         _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
                     }
@@ -2114,6 +2165,7 @@ window.ASDiversity = (function () {
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
                 provRow.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     restoreSummaryFromPreview();
                 });
                 provRow.addEventListener('click', function (e) {
@@ -2129,6 +2181,10 @@ window.ASDiversity = (function () {
                     }
 
                     var asNum = provRow.dataset.as;
+                    // Keep legend focused on this provider while sub-sub is pinned
+                    legendFocusAs = asNum;
+                    renderLegend();
+
                     var html = buildPeerListHtmlForSubSub(matchedPeers);
                     showSubSubTooltip(html, e);
                     subSubTooltipPinned = true;
@@ -2186,6 +2242,8 @@ window.ASDiversity = (function () {
                 rowEl.addEventListener('mouseenter', function (e) {
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var asNum = rowEl.dataset.as;
+                    // Focus legend on this provider
+                    if (asNum) setLegendFocus(asNum);
                     if (subTooltipPinned) {
                         var html = buildProvPeerHtml();
                         if (html) showHoverPreview(html, e);
@@ -2202,6 +2260,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 rowEl.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     if (subTooltipPinned) {
                         restorePinnedSubTooltip();
                         restoreSummaryFromPreview();
@@ -2276,6 +2335,8 @@ window.ASDiversity = (function () {
                 rowEl.addEventListener('mouseenter', function (e) {
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var asNum = rowEl.dataset.as;
+                    // Focus legend on this provider
+                    if (asNum) setLegendFocus(asNum);
                     if (subTooltipPinned) {
                         var html = buildOutSubHtml();
                         if (html) showHoverPreview(html, e);
@@ -2292,6 +2353,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 rowEl.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     if (subTooltipPinned) {
                         restorePinnedSubTooltip();
                         restoreSummaryFromPreview();
@@ -2351,6 +2413,8 @@ window.ASDiversity = (function () {
                 rowEl.addEventListener('mouseenter', function (e) {
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var asNum = rowEl.dataset.as;
+                    // Focus legend on this provider
+                    if (asNum) setLegendFocus(asNum);
                     if (subTooltipPinned) {
                         var html = buildDirPeerHtml();
                         if (html) showHoverPreview(html, e);
@@ -2367,6 +2431,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 rowEl.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     if (subTooltipPinned) {
                         restorePinnedSubTooltip();
                         restoreSummaryFromPreview();
@@ -2414,6 +2479,8 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned) return;
                     var asNum = el.dataset.as;
                     if (!asNum) return;
+                    // Focus legend on this provider
+                    setLegendFocus(asNum);
                     var peerIds = getPeerIdsForAnyAs(asNum);
                     var color = getColorForAsNum(asNum);
                     if (peerIds.length > 0 && _drawLinesForAs) {
@@ -2424,6 +2491,7 @@ window.ASDiversity = (function () {
                 });
                 el.addEventListener('mouseleave', function () {
                     if (subTooltipPinned) return;
+                    clearLegendFocus();
                     restoreSummaryFromPreview();
                 });
                 el.addEventListener('click', function (e) {
@@ -2549,11 +2617,12 @@ window.ASDiversity = (function () {
                     var html = buildFastestProvHtml();
                     if (html) showSubTooltip(html, e);
                 }
-                // Preview lines for the #1 fastest provider
+                // Preview lines for the #1 fastest provider + focus legend
                 var data = computeSummaryData();
                 for (var j = 0; j < data.insights.length; j++) {
                     if (data.insights[j].type === 'fastest' && data.insights[j].topProviders && data.insights[j].topProviders.length > 0) {
                         var top = data.insights[j].topProviders[0];
+                        setLegendFocus(top.asNumber);
                         if (_drawLinesForAs) _drawLinesForAs(top.asNumber, top.peerIds, top.color);
                         if (_filterPeerTable) _filterPeerTable(top.peerIds);
                         if (_dimMapPeers) _dimMapPeers(top.peerIds);
@@ -2562,6 +2631,7 @@ window.ASDiversity = (function () {
                 }
             });
             fastestLink.addEventListener('mouseleave', function () {
+                clearLegendFocus();
                 if (subTooltipPinned) {
                     restorePinnedSubTooltip();
                     restoreSummaryFromPreview();
@@ -2623,6 +2693,9 @@ window.ASDiversity = (function () {
                 return { html: html, peerIds: peerIds, asNum: stableInsight.asNumber };
             }
             stableLink.addEventListener('mouseenter', function (e) {
+                var asNum = stableLink.dataset.as;
+                // Focus legend on this provider
+                if (asNum) setLegendFocus(asNum);
                 if (subTooltipPinned) {
                     var result = buildStablePeersHtml();
                     if (result) showHoverPreview(result.html, e);
@@ -2631,7 +2704,6 @@ window.ASDiversity = (function () {
                     if (result) showSubTooltip(result.html, e);
                 }
                 // Preview lines + filter for this provider
-                var asNum = stableLink.dataset.as;
                 if (asNum) {
                     var peerIds = getPeerIdsForAnyAs(asNum);
                     var color = getColorForAsNum(asNum);
@@ -2643,6 +2715,7 @@ window.ASDiversity = (function () {
                 }
             });
             stableLink.addEventListener('mouseleave', function () {
+                clearLegendFocus();
                 if (subTooltipPinned) {
                     restorePinnedSubTooltip();
                     restoreSummaryFromPreview();
@@ -2736,10 +2809,11 @@ window.ASDiversity = (function () {
                         if (!result) return;
                         showSubTooltip(result.html, e);
                     }
-                    // Preview lines for the #1 data provider
+                    // Preview lines for the #1 data provider + focus legend
                     var result2 = buildDataProviderHtml();
                     if (result2 && result2.insight && result2.insight.topProviders && result2.insight.topProviders.length > 0) {
                         var top = result2.insight.topProviders[0];
+                        setLegendFocus(top.asNumber);
                         var topPeerIds = top.peers.slice(0, 20).map(function (p) { return p.id; });
                         if (_drawLinesForAs) _drawLinesForAs(top.asNumber, topPeerIds, top.color);
                         if (_filterPeerTable) _filterPeerTable(topPeerIds);
@@ -2747,6 +2821,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 el.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     if (subTooltipPinned) {
                         restorePinnedSubTooltip();
                         restoreSummaryFromPreview();
@@ -2797,6 +2872,8 @@ window.ASDiversity = (function () {
                 provRow.addEventListener('mouseenter', function () {
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    // Focus legend on this provider
+                    if (asNum) setLegendFocus(asNum);
                     if (peerIds.length > 0 && _drawLinesForAs && asNum) {
                         _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
                     }
@@ -2804,12 +2881,17 @@ window.ASDiversity = (function () {
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
                 provRow.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     restoreSummaryFromPreview();
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
                     var asNum = provRow.dataset.as;
+
+                    // Keep legend focused on this provider while sub-sub is pinned
+                    legendFocusAs = asNum;
+                    renderLegend();
 
                     var idSet = {};
                     for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
@@ -2880,6 +2962,8 @@ window.ASDiversity = (function () {
                 provRow.addEventListener('mouseenter', function () {
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    // Focus legend on this provider
+                    if (asNum) setLegendFocus(asNum);
                     if (peerIds.length > 0 && _drawLinesForAs && asNum) {
                         _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
                     }
@@ -2887,6 +2971,7 @@ window.ASDiversity = (function () {
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
                 provRow.addEventListener('mouseleave', function () {
+                    clearLegendFocus();
                     restoreSummaryFromPreview();
                 });
                 provRow.addEventListener('click', function (e) {
@@ -2894,6 +2979,10 @@ window.ASDiversity = (function () {
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
                     var asNum = provRow.dataset.as;
                     var rowField = provRow.dataset.field;
+
+                    // Keep legend focused on this provider while sub-sub is pinned
+                    legendFocusAs = asNum;
+                    renderLegend();
 
                     // Find matching peer objects from lastPeersRaw
                     var idSet = {};
@@ -3736,6 +3825,13 @@ window.ASDiversity = (function () {
 
         renderDonut();
         renderCenter();
+
+        // Clear transient legend hover focus unless tooltips are pinned (DOM preserved).
+        // When pinned, hover listeners are still attached so legendFocusAs stays valid.
+        // The persistent sub-sub check in renderLegend handles the pinned case via subSubFilterAsNum.
+        if (legendFocusAs && !subTooltipPinned && !subSubTooltipPinned) {
+            legendFocusAs = null;
+        }
         renderLegend();
 
         // If a selection is active, refresh the panel + filter + keep lines
