@@ -1610,6 +1610,33 @@ window.ASDiversity = (function () {
         return html;
     }
 
+    /** Attach hover handlers to individual peer rows inside a tooltip element.
+     *  On hover: draws a line to just that one peer and filters the table/map.
+     *  On leave: restores the parent filter (summary or provider mode). */
+    function attachPeerRowHoverHandlers(tip) {
+        var peerRows = tip.querySelectorAll('.as-sub-tt-peer[data-peer-id]');
+        for (var pri = 0; pri < peerRows.length; pri++) {
+            (function (row) {
+                row.addEventListener('mouseenter', function () {
+                    var peerId = parseInt(row.dataset.peerId);
+                    if (isNaN(peerId)) return;
+                    if (summarySelected) {
+                        previewSummaryLines([peerId]);
+                    } else if (selectedAs) {
+                        previewProviderLines([peerId]);
+                    }
+                });
+                row.addEventListener('mouseleave', function () {
+                    if (summarySelected) {
+                        restoreSummaryFromPreview();
+                    } else if (selectedAs) {
+                        restoreProviderFromPreview();
+                    }
+                });
+            })(peerRows[pri]);
+        }
+    }
+
     /** Attach expand/collapse and peer-click handlers to the sub-tooltip after rendering */
     function attachSubTooltipHandlers() {
         var tip = document.getElementById('as-sub-tooltip');
@@ -1628,6 +1655,9 @@ window.ASDiversity = (function () {
                 });
             })(idLinks[li]);
         }
+
+        // Peer row hover → preview line to individual peer
+        attachPeerRowHoverHandlers(tip);
 
         var showMore = tip.querySelector('.as-sub-tt-show-more');
         var showLess = tip.querySelector('.as-sub-tt-show-less');
@@ -1899,6 +1929,9 @@ window.ASDiversity = (function () {
             })(idLinks[li]);
         }
 
+        // Peer row hover → preview line to individual peer
+        attachPeerRowHoverHandlers(tip);
+
         var showMore = tip.querySelector('.as-sub-tt-show-more');
         var showLess = tip.querySelector('.as-sub-tt-show-less');
         if (!showMore || !showLess) return;
@@ -1937,8 +1970,9 @@ window.ASDiversity = (function () {
             var p = ep.peer;
             var ct = p.connection_type || 'unknown';
             var ctLabel = CONN_TYPE_LABELS[ct] || ct;
+            var peerAs = parseAsNumber(p.as) || '';
             var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
-            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<div class="as-sub-tt-peer' + extraClass + '" data-peer-id="' + p.id + '" data-as="' + peerAs + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
             html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '" style="min-width:70px">#' + (pi + 1) + ' ID\u00a0' + p.id + '</span>';
             html += '<span class="as-sub-tt-type">' + fmtDuration(ep.duration) + '</span>';
             html += '<span class="as-sub-tt-loc">' + ctLabel + '</span>';
@@ -1991,8 +2025,9 @@ window.ASDiversity = (function () {
             var ctLabel = CONN_TYPE_LABELS[ct] || ct;
             var loc = (p.city || '') + (p.city && p.country ? ', ' : '') + (p.country || '');
             if (loc.length > 16) loc = loc.substring(0, 15) + '\u2026';
+            var peerAs = parseAsNumber(p.as) || '';
             var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
-            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<div class="as-sub-tt-peer' + extraClass + '" data-peer-id="' + p.id + '" data-as="' + peerAs + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
             html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
             html += '<span class="as-sub-tt-type">' + ctLabel + '</span>';
             if (loc) html += '<span class="as-sub-tt-loc">' + loc + '</span>';
