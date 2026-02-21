@@ -1,1 +1,1 @@
-Connection lines now prefer visible peers on screen over off-screen ones. Hover preview shows lines and filters the peer table across all panel rows. Fixed drill-down state being destroyed by the data refresh cycle.
+Clicking a provider row in Connections by Provider now pins a sub-tooltip with peer details and an "Open provider panel" link instead of navigating directly. Hovering individual peer rows in any sub-tooltip draws a line to just that peer. Fixed insight highlights stacking when clicking between different insights.
