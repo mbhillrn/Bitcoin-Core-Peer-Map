@@ -1431,10 +1431,10 @@ window.ASDiversity = (function () {
             var inJson = JSON.stringify(gItem.inPeerIds).replace(/"/g, '&quot;');
             var outJson = JSON.stringify(gItem.outPeerIds).replace(/"/g, '&quot;');
             var outSubJson = JSON.stringify(gItem.outSubtypes).replace(/"/g, '&quot;');
-            // Provider name row (total) — clickable name navigates, row is interactive
+            // Provider name row (total) — click pins sub-tooltip, "Open provider panel" link inside navigates
             html += '<div class="as-detail-sub-row as-conn-prov-row" data-peer-ids="' + totalJson + '" data-as="' + gItem.asNumber + '" style="cursor:pointer">';
             html += '<span class="as-detail-sub-label"><span class="as-grid-dot" style="background:' + gItem.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle"></span>';
-            html += '<span class="as-grid-provider-click" data-as="' + gItem.asNumber + '" style="color:' + gItem.color + '" title="View ' + gItem.name + ' panel">' + gItem.name + '</span></span>';
+            html += '<span style="color:' + gItem.color + '">' + gItem.name + '</span></span>';
             html += '<span class="as-detail-sub-val">' + gItem.totalCount + '</span>';
             html += '</div>';
             // In row
@@ -2207,19 +2207,6 @@ window.ASDiversity = (function () {
 
     /** Attach handlers for the Connections by Provider section (Section 2 of summary panel) */
     function attachGridHandlers(bodyEl) {
-        // Provider name clicks → navigate to that provider's panel (with back button)
-        var provClicks = bodyEl.querySelectorAll('.as-grid-provider-click');
-        for (var i = 0; i < provClicks.length; i++) {
-            (function (el) {
-                el.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var asNum = el.dataset.as;
-                    if (!asNum) return;
-                    navigateToProvider(asNum);
-                });
-            })(provClicks[i]);
-        }
-
         // Provider total rows — hover/click shows all peers for this provider
         var connProvRows = bodyEl.querySelectorAll('.as-conn-prov-row');
         for (var cpi = 0; cpi < connProvRows.length; cpi++) {
@@ -2227,14 +2214,20 @@ window.ASDiversity = (function () {
                 function buildProvPeerHtml() {
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     if (peerIds.length === 0) return null;
+                    var asNum = rowEl.dataset.as;
                     var idSet = {};
                     for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
                     var matchedPeers = [];
                     for (var i = 0; i < lastPeersRaw.length; i++) {
                         if (idSet[lastPeersRaw[i].id]) matchedPeers.push(lastPeersRaw[i]);
                     }
+                    // Find the provider name for the header
+                    var provName = asNum;
+                    var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+                    if (grp) provName = grp.asShort || grp.asName || asNum;
                     var html = '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
-                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">All Peers</div>';
+                    html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + provName + ' Peers</div>';
+                    html += '<div class="as-sub-tt-nav as-grid-provider-click" data-as="' + asNum + '" style="font-size:9px; color:var(--accent); cursor:pointer; margin-top:2px">\u25B6 Open provider panel</div>';
                     html += '</div>';
                     html += buildPeerListHtmlForSubSub(matchedPeers);
                     return html;
@@ -2270,8 +2263,6 @@ window.ASDiversity = (function () {
                     }
                 });
                 rowEl.addEventListener('click', function (e) {
-                    // Don't intercept provider name clicks (they navigate)
-                    if (e.target.classList.contains('as-grid-provider-click') || e.target.closest('.as-grid-provider-click')) return;
                     e.stopPropagation();
                     if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
@@ -2287,13 +2278,23 @@ window.ASDiversity = (function () {
                     var html = buildProvPeerHtml();
                     if (!html) return;
                     showSubTooltip(html, e);
-                    pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
+                    pinSubTooltip(html, rowEl, function (tip) {
+                        attachSubTooltipHandlers();
+                        attachProviderNavHandlers(tip);
+                    });
                     attachSubTooltipHandlers();
+                    var tipEl = document.getElementById('as-sub-tooltip');
+                    if (tipEl) attachProviderNavHandlers(tipEl);
                     // Track sub-filter state for data refresh preservation
                     var asNum = rowEl.dataset.as;
                     subFilterPeerIds = peerIds;
                     subFilterCategory = 'conn-provider';
                     subFilterLabel = asNum || '';
+                    // Draw lines for this provider's peers
+                    if (asNum && _drawLinesForAs) {
+                        var color = getColorForAsNum(asNum);
+                        _drawLinesForAs(asNum, peerIds, color);
+                    }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
                 });
@@ -2660,6 +2661,9 @@ window.ASDiversity = (function () {
                     attachFastestProvRowHandlers(tip);
                 });
                 attachFastestProvRowHandlers(document.getElementById('as-sub-tooltip'));
+                // Clear any other active highlights before adding ours
+                var activeBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                if (activeBodyEl) { var prev = activeBodyEl.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
                 fastestLink.closest('.as-summary-insight').classList.add('sub-filter-active');
                 // Track sub-filter state for data refresh preservation
                 subFilterPeerIds = [];
@@ -2748,6 +2752,9 @@ window.ASDiversity = (function () {
                 attachSubTooltipHandlers();
                 var tip = document.getElementById('as-sub-tooltip');
                 if (tip) attachProviderNavHandlers(tip);
+                // Clear any other active highlights before adding ours
+                var activeBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                if (activeBodyEl) { var prev = activeBodyEl.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
                 stableLink.closest('.as-summary-insight').classList.add('sub-filter-active');
                 // Track sub-filter state for data refresh preservation
                 subFilterPeerIds = result.peerIds;
@@ -2851,6 +2858,9 @@ window.ASDiversity = (function () {
                         attachDataProviderRowHandlers(tip, field);
                     });
                     attachDataProviderRowHandlers(document.getElementById('as-sub-tooltip'), field);
+                    // Clear any other active highlights before adding ours
+                    var activeBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                    if (activeBodyEl) { var prev = activeBodyEl.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
                     // Highlight this insight as active
                     el.closest('.as-summary-insight').classList.add('sub-filter-active');
                     // Track sub-filter state for data refresh preservation
@@ -3994,6 +4004,8 @@ window.ASDiversity = (function () {
                         var provGroup = asGroups.find(function (g) { return g.asNumber === subFilterLabel; });
                         if (provGroup) {
                             subFilterPeerIds = provGroup.peerIds;
+                            var color = getColorForAsNum(subFilterLabel);
+                            if (_drawLinesForAs) _drawLinesForAs(subFilterLabel, provGroup.peerIds, color);
                             if (_filterPeerTable) _filterPeerTable(provGroup.peerIds);
                             if (_dimMapPeers) _dimMapPeers(provGroup.peerIds);
                         }
