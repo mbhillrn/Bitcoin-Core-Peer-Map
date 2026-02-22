@@ -88,7 +88,7 @@
         pulseSpeedIn:    50,         // slider 0-100, 50 = original speed
         pulseSpeedOut:   50,         // slider 0-100, 50 = original speed
         // AS Diversity line settings
-        asLineWidth:     30,         // slider 0-100, 30 = ~1.4px (default — subtle but visible)
+        asLineWidth:     40,         // slider 0-100, 40 = ~1.8px (default — visible)
         asLineFan:       50,         // slider 0-100, 50 = 35% spread (default)
         // Land appearance
         landHue:        215,         // hue degrees (current dark blue-gray)
@@ -3009,8 +3009,11 @@
         }
 
         // Line width from advSettings: slider 0→0.3px, 50→1.2px, 100→4px
+        // Boost line width when zoomed in (single-peer zoom makes lines more visible)
         const lwSlider = advSettings.asLineWidth;
-        const lineW = 0.3 + (lwSlider / 100) * 3.7;
+        const baseLineW = 0.3 + (lwSlider / 100) * 3.7;
+        const zoomBoost = Math.min(view.zoom / 1.5, 3);  // up to 3x thicker when zoomed in
+        const lineW = baseLineW * zoomBoost;
         // Fan spread from advSettings: slider 0→0%, 50→35%, 100→70% of line length
         const fanSlider = advSettings.asLineFan;
         const fanPct = (fanSlider / 100) * 0.7;
@@ -3066,7 +3069,9 @@
 
         const canvasRect = canvas.getBoundingClientRect();
         const lwSlider = advSettings.asLineWidth;
-        const lineW = 0.3 + (lwSlider / 100) * 3.7;
+        const baseLineW = 0.3 + (lwSlider / 100) * 3.7;
+        const zoomBoost = Math.min(view.zoom / 1.5, 3);
+        const lineW = baseLineW * zoomBoost;
         const fanSlider = advSettings.asLineFan;
         const fanPct = (fanSlider / 100) * 0.7;
         const fanMax = 40 + (fanSlider / 100) * 120;
@@ -4882,27 +4887,42 @@
             const group = findNodesAtScreen(e.clientX, e.clientY);
             if (group.length > 0) {
                 if (group.length === 1) {
-                    // Single peer: open peer detail panel + animate donut
                     const node = group[0];
-                    pinnedNode = node;
-                    highlightedPeerId = node.peerId;
-                    groupedNodes = null;
-                    mapFilterPeerIds = new Set([node.peerId]);
-                    renderPeerTable();
-                    // [AS-DIVERSITY] Open full peer detail in right panel
+                    // If clicking the same peer that's already shown in detail, close popup instead
                     const ASD = window.ASDiversity;
-                    if (ASD) {
-                        const rawPeers = ASD.getLastPeersRaw();
-                        const peerData = rawPeers.find(p => p.id === node.peerId);
-                        if (peerData) {
-                            ASD.openPeerDetailPanel(peerData, 'map');
+                    if (pinnedNode && pinnedNode.peerId === node.peerId && ASD && ASD.isPeerDetailActive()) {
+                        pinnedNode = null;
+                        highlightedPeerId = null;
+                        hoveredNode = null;
+                        hideTooltip();
+                        highlightTableRow(null);
+                        clearMapDotFilter();
+                        ASD.closePeerPopup();
+                    } else {
+                        // Single peer: open peer detail panel + animate donut
+                        pinnedNode = node;
+                        highlightedPeerId = node.peerId;
+                        groupedNodes = null;
+                        mapFilterPeerIds = new Set([node.peerId]);
+                        renderPeerTable();
+                        // [AS-DIVERSITY] Open full peer detail in right panel
+                        if (ASD) {
+                            const rawPeers = ASD.getLastPeersRaw();
+                            const peerData = rawPeers.find(p => p.id === node.peerId);
+                            if (peerData) {
+                                ASD.openPeerDetailPanel(peerData, 'map');
+                            }
                         }
-                    }
-                    if (!panelEl.classList.contains('collapsed')) {
-                        highlightTableRow(node.peerId, true);
+                        if (!panelEl.classList.contains('collapsed')) {
+                            highlightTableRow(node.peerId, true);
+                        }
                     }
                 } else {
                     // Multi-peer dot: show small pinned selection list near the dot
+                    // Close any existing peer detail popup first
+                    if (window.ASDiversity) {
+                        window.ASDiversity.closePeerPopup();
+                    }
                     pinnedNode = null;  // no single peer pinned yet
                     groupedNodes = group;
                     mapFilterPeerIds = new Set(group.map(n => n.peerId));

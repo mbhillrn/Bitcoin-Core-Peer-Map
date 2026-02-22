@@ -2250,16 +2250,9 @@ window.ASDiversity = (function () {
         for (var ri = 0; ri < rows.length; ri++) {
             (function (rowEl) {
                 rowEl.addEventListener('mouseenter', function (e) {
+                    // When something is selected (pinned), suppress hover previews
+                    if (subTooltipPinned) return;
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
-                    if (subTooltipPinned) {
-                        var category = rowEl.dataset.category;
-                        var label = rowEl.querySelector('.as-detail-sub-label').textContent;
-                        var html = buildPeerSummaryHtml(peerIds, category, label);
-                        showHoverPreview(html, e);
-                        // Preview lines/filter for hovered sub-row
-                        previewProviderLines(peerIds);
-                        return;
-                    }
                     var category = rowEl.dataset.category;
                     var label = rowEl.querySelector('.as-detail-sub-label').textContent;
                     var html = buildPeerSummaryHtml(peerIds, category, label);
@@ -2271,11 +2264,7 @@ window.ASDiversity = (function () {
                     if (!subTooltipPinned) positionSubTooltip(e);
                 });
                 rowEl.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        restoreProviderFromPreview();
-                        return;
-                    }
+                    if (subTooltipPinned) return;
                     hideSubTooltip();
                     restoreProviderFromPreview();
                 });
@@ -2746,17 +2735,9 @@ window.ASDiversity = (function () {
         for (var ri = 0; ri < rows.length; ri++) {
             (function (rowEl) {
                 rowEl.addEventListener('mouseenter', function (e) {
+                    // When something is selected (pinned), suppress hover previews
+                    if (subTooltipPinned) return;
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
-                    if (subTooltipPinned) {
-                        // Hover preview over pinned tooltip
-                        var providers = JSON.parse(rowEl.dataset.providers);
-                        var catLabel = rowEl.dataset.catLabel;
-                        var html = buildProviderListHtml(providers, catLabel);
-                        showHoverPreview(html, e);
-                        // Preview lines/filter for hovered category
-                        previewSummaryLines(peerIds);
-                        return;
-                    }
                     var providers = JSON.parse(rowEl.dataset.providers);
                     var catLabel = rowEl.dataset.catLabel;
                     var html = buildProviderListHtml(providers, catLabel);
@@ -2768,13 +2749,9 @@ window.ASDiversity = (function () {
                     if (!subTooltipPinned) positionSubTooltip(e);
                 });
                 rowEl.addEventListener('mouseleave', function () {
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        restoreSummaryFromPreview();
-                    } else {
-                        hideSubTooltip();
-                        restoreSummaryFromPreview();
-                    }
+                    if (subTooltipPinned) return;
+                    hideSubTooltip();
+                    restoreSummaryFromPreview();
                     restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -2900,17 +2877,13 @@ window.ASDiversity = (function () {
                     return html;
                 }
                 rowEl.addEventListener('mouseenter', function (e) {
+                    // When something is selected (pinned), suppress hover previews
+                    if (subTooltipPinned) return;
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var asNum = rowEl.dataset.as;
-                    // Focus legend on this provider
                     if (asNum) setLegendFocus(asNum);
-                    if (subTooltipPinned) {
-                        var html = buildProvPeerHtml();
-                        if (html) showHoverPreview(html, e);
-                    } else {
-                        var html = buildProvPeerHtml();
-                        if (html) showSubTooltip(html, e);
-                    }
+                    var html = buildProvPeerHtml();
+                    if (html) showSubTooltip(html, e);
                     // Preview lines for this provider
                     if (asNum && peerIds.length > 0) {
                         var color = getColorForAsNum(asNum);
@@ -2918,21 +2891,16 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(peerIds);
                         if (_dimMapPeers) _dimMapPeers(peerIds);
                     }
-                    // In focused mode, show provider in donut center + animate
                     if (donutFocused && asNum) {
                         showFocusedCenterText(asNum);
                         animateDonutExpand(asNum);
                     }
                 });
                 rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) return;
                     clearLegendFocus();
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        restoreSummaryFromPreview();
-                    } else {
-                        hideSubTooltip();
-                        restoreSummaryFromPreview();
-                    }
+                    hideSubTooltip();
+                    restoreSummaryFromPreview();
                     restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -3022,39 +2990,29 @@ window.ASDiversity = (function () {
                     return html;
                 }
                 rowEl.addEventListener('mouseenter', function (e) {
+                    // When something is selected (pinned), suppress hover previews
+                    if (subTooltipPinned) return;
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var asNum = rowEl.dataset.as;
-                    // Focus legend on this provider
                     if (asNum) setLegendFocus(asNum);
-                    if (subTooltipPinned) {
-                        var html = buildOutSubHtml();
-                        if (html) showHoverPreview(html, e);
-                    } else {
-                        var html = buildOutSubHtml();
-                        if (html) showSubTooltip(html, e);
-                    }
-                    // Preview lines for this provider's outbound peers
+                    var html = buildOutSubHtml();
+                    if (html) showSubTooltip(html, e);
                     if (asNum && peerIds.length > 0) {
                         var color = getColorForAsNum(asNum);
                         if (_drawLinesForAs) _drawLinesForAs(asNum, peerIds, color);
                         if (_filterPeerTable) _filterPeerTable(peerIds);
                         if (_dimMapPeers) _dimMapPeers(peerIds);
                     }
-                    // In focused mode, show provider in donut center + animate
                     if (donutFocused && asNum) {
                         showFocusedCenterText(asNum);
                         animateDonutExpand(asNum);
                     }
                 });
                 rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) return;
                     clearLegendFocus();
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        restoreSummaryFromPreview();
-                    } else {
-                        hideSubTooltip();
-                        restoreSummaryFromPreview();
-                    }
+                    hideSubTooltip();
+                    restoreSummaryFromPreview();
                     restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -3116,39 +3074,29 @@ window.ASDiversity = (function () {
                     return html;
                 }
                 rowEl.addEventListener('mouseenter', function (e) {
+                    // When something is selected (pinned), suppress hover previews
+                    if (subTooltipPinned) return;
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var asNum = rowEl.dataset.as;
-                    // Focus legend on this provider
                     if (asNum) setLegendFocus(asNum);
-                    if (subTooltipPinned) {
-                        var html = buildDirPeerHtml();
-                        if (html) showHoverPreview(html, e);
-                    } else {
-                        var html = buildDirPeerHtml();
-                        if (html) showSubTooltip(html, e);
-                    }
-                    // Preview lines for this provider's inbound peers
+                    var html = buildDirPeerHtml();
+                    if (html) showSubTooltip(html, e);
                     if (asNum && peerIds.length > 0) {
                         var color = getColorForAsNum(asNum);
                         if (_drawLinesForAs) _drawLinesForAs(asNum, peerIds, color);
                         if (_filterPeerTable) _filterPeerTable(peerIds);
                         if (_dimMapPeers) _dimMapPeers(peerIds);
                     }
-                    // In focused mode, show provider in donut center + animate
                     if (donutFocused && asNum) {
                         showFocusedCenterText(asNum);
                         animateDonutExpand(asNum);
                     }
                 });
                 rowEl.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) return;
                     clearLegendFocus();
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        restoreSummaryFromPreview();
-                    } else {
-                        hideSubTooltip();
-                        restoreSummaryFromPreview();
-                    }
+                    hideSubTooltip();
+                    restoreSummaryFromPreview();
                     restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -3338,14 +3286,11 @@ window.ASDiversity = (function () {
                 return html;
             }
             fastestLink.addEventListener('mouseenter', function (e) {
-                if (subTooltipPinned) {
-                    var html = buildFastestProvHtml();
-                    if (html) showHoverPreview(html, e);
-                } else {
-                    var html = buildFastestProvHtml();
-                    if (html) showSubTooltip(html, e);
-                }
-                // Preview lines for the #1 fastest provider + focus legend
+                // When something is selected (pinned), suppress hover previews
+                if (subTooltipPinned) return;
+                var html = buildFastestProvHtml();
+                if (html) showSubTooltip(html, e);
+                // Preview lines for the #1 fastest provider + focus legend + show insight rect
                 var data = computeSummaryData();
                 for (var j = 0; j < data.insights.length; j++) {
                     if (data.insights[j].type === 'fastest' && data.insights[j].topProviders && data.insights[j].topProviders.length > 0) {
@@ -3354,9 +3299,15 @@ window.ASDiversity = (function () {
                         if (_drawLinesForAs) _drawLinesForAs(top.asNumber, top.peerIds, top.color);
                         if (_filterPeerTable) _filterPeerTable(top.peerIds);
                         if (_dimMapPeers) _dimMapPeers(top.peerIds);
-                        // In focused mode, show provider in donut center + animate
                         if (donutFocused) {
-                            showFocusedCenterText(top.asNumber);
+                            showInsightRect('fastest', {
+                                provName: top.provName || (top.asShort || top.asNumber),
+                                asNumber: top.asNumber,
+                                peerIds: top.peerIds,
+                                avgPing: top.avgPing,
+                                rank: 1,
+                                color: top.color || getColorForAsNum(top.asNumber)
+                            });
                             animateDonutExpand(top.asNumber);
                         }
                         break;
@@ -3364,14 +3315,11 @@ window.ASDiversity = (function () {
                 }
             });
             fastestLink.addEventListener('mouseleave', function () {
+                if (subTooltipPinned) return;
                 clearLegendFocus();
-                if (subTooltipPinned) {
-                    restorePinnedSubTooltip();
-                    restoreSummaryFromPreview();
-                } else {
-                    hideSubTooltip();
-                    restoreSummaryFromPreview();
-                }
+                hideSubTooltip();
+                hideInsightRect();
+                restoreSummaryFromPreview();
                 restoreDonutAfterPreview();
             });
             fastestLink.addEventListener('click', function (e) {
@@ -3461,17 +3409,13 @@ window.ASDiversity = (function () {
                 return { html: html, peerIds: peerIds, asNum: stableInsight.asNumber };
             }
             stableLink.addEventListener('mouseenter', function (e) {
+                // When something is selected (pinned), suppress hover previews
+                if (subTooltipPinned) return;
                 var asNum = stableLink.dataset.as;
-                // Focus legend on this provider
                 if (asNum) setLegendFocus(asNum);
-                if (subTooltipPinned) {
-                    var result = buildStablePeersHtml();
-                    if (result) showHoverPreview(result.html, e);
-                } else {
-                    var result = buildStablePeersHtml();
-                    if (result) showSubTooltip(result.html, e);
-                }
-                // Preview lines + filter for this provider
+                var result = buildStablePeersHtml();
+                if (result) showSubTooltip(result.html, e);
+                // Preview lines + filter for this provider + show insight rect
                 if (asNum) {
                     var peerIds = getPeerIdsForAnyAs(asNum);
                     var color = getColorForAsNum(asNum);
@@ -3480,22 +3424,31 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
-                    // In focused mode, show provider in donut center + animate
                     if (donutFocused) {
-                        showFocusedCenterText(asNum);
+                        var insData = computeSummaryData();
+                        var stableIns = null;
+                        for (var ij = 0; ij < insData.insights.length; ij++) {
+                            if (insData.insights[ij].type === 'stable') { stableIns = insData.insights[ij]; break; }
+                        }
+                        if (stableIns) {
+                            showInsightRect('stable', {
+                                provName: stableIns.provName,
+                                asNumber: stableIns.asNumber,
+                                peerIds: stableIns.peerIds,
+                                durText: stableIns.durText,
+                                color: color
+                            });
+                        }
                         animateDonutExpand(asNum);
                     }
                 }
             });
             stableLink.addEventListener('mouseleave', function () {
+                if (subTooltipPinned) return;
                 clearLegendFocus();
-                if (subTooltipPinned) {
-                    restorePinnedSubTooltip();
-                    restoreSummaryFromPreview();
-                } else {
-                    hideSubTooltip();
-                    restoreSummaryFromPreview();
-                }
+                hideSubTooltip();
+                hideInsightRect();
+                restoreSummaryFromPreview();
                 restoreDonutAfterPreview();
             });
             stableLink.addEventListener('click', function (e) {
@@ -3604,39 +3557,39 @@ window.ASDiversity = (function () {
                 }
 
                 el.addEventListener('mouseenter', function (e) {
-                    if (subTooltipPinned) {
-                        var result = buildDataProviderHtml();
-                        if (result) showHoverPreview(result.html, e);
-                    } else {
-                        var result = buildDataProviderHtml();
-                        if (!result) return;
-                        showSubTooltip(result.html, e);
-                    }
-                    // Preview lines for the #1 data provider + focus legend
-                    var result2 = buildDataProviderHtml();
-                    if (result2 && result2.insight && result2.insight.topProviders && result2.insight.topProviders.length > 0) {
-                        var top = result2.insight.topProviders[0];
+                    // When something is selected (pinned), suppress hover previews
+                    if (subTooltipPinned) return;
+                    var result = buildDataProviderHtml();
+                    if (!result) return;
+                    showSubTooltip(result.html, e);
+                    // Preview lines for the #1 data provider + focus legend + show insight rect
+                    if (result.insight && result.insight.topProviders && result.insight.topProviders.length > 0) {
+                        var top = result.insight.topProviders[0];
                         setLegendFocus(top.asNumber);
                         var topPeerIds = top.peers.slice(0, 20).map(function (p) { return p.id; });
                         if (_drawLinesForAs) _drawLinesForAs(top.asNumber, topPeerIds, top.color);
                         if (_filterPeerTable) _filterPeerTable(topPeerIds);
                         if (_dimMapPeers) _dimMapPeers(topPeerIds);
-                        // In focused mode, show provider in donut center + animate
                         if (donutFocused) {
-                            showFocusedCenterText(top.asNumber);
+                            var rectType = field === 'bytesrecv' ? 'data-bytesrecv' : 'data-bytessent';
+                            showInsightRect(rectType, {
+                                provName: top.provName,
+                                asNumber: top.asNumber,
+                                peers: top.peers,
+                                totalBytes: top.totalBytes,
+                                rank: 1,
+                                color: top.color || getColorForAsNum(top.asNumber)
+                            });
                             animateDonutExpand(top.asNumber);
                         }
                     }
                 });
                 el.addEventListener('mouseleave', function () {
+                    if (subTooltipPinned) return;
                     clearLegendFocus();
-                    if (subTooltipPinned) {
-                        restorePinnedSubTooltip();
-                        restoreSummaryFromPreview();
-                    } else {
-                        hideSubTooltip();
-                        restoreSummaryFromPreview();
-                    }
+                    hideSubTooltip();
+                    hideInsightRect();
+                    restoreSummaryFromPreview();
                     restoreDonutAfterPreview();
                 });
                 el.addEventListener('click', function (e) {
@@ -5047,6 +5000,9 @@ window.ASDiversity = (function () {
                 if (_drawLinesForAs) _drawLinesForAs(insightActiveAsNum, peerIds, color);
                 if (_filterPeerTable) _filterPeerTable(peerIds);
                 if (_dimMapPeers) _dimMapPeers(peerIds);
+            } else if (subFilterPeerIds && subFilterPeerIds.length > 0) {
+                // Restore to active sub-filter (e.g. IPv6, country, etc.)
+                previewSummaryLines(subFilterPeerIds);
             } else {
                 if (_filterPeerTable) _filterPeerTable(null);
                 if (_dimMapPeers) _dimMapPeers(null);
@@ -6153,6 +6109,7 @@ window.ASDiversity = (function () {
         openPeerDetailPanel: openPeerDetailPanel,
         openMultiPeerPopup: openMultiPeerPopup,
         closePeerPopup: closePeerPopup,
+        isPeerDetailActive: function () { return peerDetailActive; },
         getLastPeersRaw: function () { return lastPeersRaw; },
     };
 })();
