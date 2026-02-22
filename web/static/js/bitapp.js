@@ -4460,15 +4460,44 @@
 
             // [AS-DIVERSITY] Open full peer detail in right panel + animate donut
             const ASD = window.ASDiversity;
+            let bigPopupOpened = false;
             if (ASD) {
                 const rawPeers = ASD.getLastPeersRaw();
                 const peerData = rawPeers.find(p => p.id === peerId);
                 if (peerData) {
                     ASD.openPeerDetailPanel(peerData, 'peerlist');
+                    bigPopupOpened = true;
                 }
             }
 
-            zoomToPeer(node);
+            if (bigPopupOpened) {
+                // Zoom without opening small tooltip — big popup handles peer info
+                const p = project(node.lon, node.lat);
+                const topbarH2 = 40;
+                const panelH2 = panelEl.classList.contains('collapsed') ? 32 : 340;
+                const visibleH2 = (H - panelH2) - topbarH2;
+                const targetSY = topbarH2 + visibleH2 * 0.30;
+                let z2 = 3;
+                for (; z2 <= CFG.maxZoom; z2 += 0.2) {
+                    const ofc = (H / 2 - targetSY) / z2;
+                    const cY = (p.y - 0.5) * H - ofc;
+                    const mnY = (project(0, 85).y - 0.5) * H + H / (2 * z2);
+                    const mxY = (project(0, -85).y - 0.5) * H - H / (2 * z2);
+                    if (mnY < mxY && cY >= mnY && cY <= mxY) break;
+                }
+                z2 = Math.min(z2, CFG.maxZoom);
+                const ofc = (H / 2 - targetSY) / z2;
+                view.x = (p.x - 0.5) * W;
+                view.y = 0;
+                view.zoom = 1;
+                targetView.x = (p.x - 0.5) * W;
+                targetView.y = (p.y - 0.5) * H - ofc;
+                targetView.zoom = z2;
+                highlightedPeerId = node.peerId;
+                pinnedNode = node;
+            } else {
+                zoomToPeer(node);
+            }
             highlightTableRow(peerId, true);  // scroll into view on click
 
             row.classList.add('row-selected');
@@ -4855,12 +4884,17 @@
                         highlightTableRow(node.peerId, true);
                     }
                 } else {
-                    // Multi-peer dot: show selection list + filter table to all
+                    // Multi-peer dot: show list in the big peer info popup with back button
                     pinnedNode = null;  // no single peer pinned yet
                     groupedNodes = group;
                     mapFilterPeerIds = new Set(group.map(n => n.peerId));
                     renderPeerTable();
-                    showGroupSelectionList(group, e.clientX, e.clientY);
+                    const ASD = window.ASDiversity;
+                    if (ASD) {
+                        ASD.openMultiPeerPopup(group.map(n => n.peerId));
+                    } else {
+                        showGroupSelectionList(group, e.clientX, e.clientY);
+                    }
                 }
             } else {
                 // Clicked empty space — unpin tooltip + clear map filter
@@ -6135,7 +6169,6 @@
                 if (ASD && node.peerId !== undefined) {
                     const peer = lastPeers.find(p => p.id === peerId);
                     if (peer && peer.as) {
-                        // peer.as is "AS12345 Org Name" string — extract just "AS12345"
                         const asMatch = peer.as.match(/^(AS\d+)/);
                         const peerAsNum = asMatch ? asMatch[1] : peer.as;
                         const color = ASD.getColorForAs(peerAsNum) || '#58a6ff';
@@ -6145,7 +6178,35 @@
                         asLineAsNum = peerAsNum;
                     }
                 }
-                zoomToPeer(node);
+                // Zoom to peer but suppress the small map tooltip (big popup handles it)
+                const p = project(node.lon, node.lat);
+                const topbarH = 40;
+                const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
+                const visibleTop = topbarH;
+                const visibleBot = H - panelH;
+                const visibleH = visibleBot - visibleTop;
+                const targetScreenY = visibleTop + visibleH * 0.30;
+                const yTop = project(0, 85).y;
+                const yBot = project(0, -85).y;
+                let z = 3;
+                for (; z <= CFG.maxZoom; z += 0.2) {
+                    const offsetFromCenter = (H / 2 - targetScreenY) / z;
+                    const candidateY = (p.y - 0.5) * H - offsetFromCenter;
+                    const minPanY = (yTop - 0.5) * H + H / (2 * z);
+                    const maxPanY = (yBot - 0.5) * H - H / (2 * z);
+                    if (minPanY < maxPanY && candidateY >= minPanY && candidateY <= maxPanY) break;
+                }
+                z = Math.min(z, CFG.maxZoom);
+                const offsetFromCenter = (H / 2 - targetScreenY) / z;
+                view.x = (p.x - 0.5) * W;
+                view.y = 0;
+                view.zoom = 1;
+                targetView.x = (p.x - 0.5) * W;
+                targetView.y = (p.y - 0.5) * H - offsetFromCenter;
+                targetView.zoom = z;
+                highlightedPeerId = node.peerId;
+                pinnedNode = node;
+                // Don't show the small map tooltip — the big peer popup is being used instead
                 highlightTableRow(node.peerId);
             },
             resetMapZoom: function () {

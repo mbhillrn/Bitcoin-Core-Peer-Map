@@ -271,35 +271,36 @@ body.donut-focused .as-focused-close {
    ========================================================== */
 .as-insight-rect {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 260px;
-    height: 260px;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.9);
+    width: 320px;
+    height: 190px;
     z-index: 10;
     pointer-events: auto;
     opacity: 0;
-    transform: scale(0.9);
     transition: opacity 0.35s ease, transform 0.35s ease;
     display: none;
 }
 .as-insight-rect.visible {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(-50%) scale(1);
     display: block;
 }
 .as-insight-rect-inner {
     position: relative;
     width: 100%;
     height: 100%;
-    border: 2px solid var(--warn, #d29922);
+    border: 3px solid #d4a017;
     border-radius: 10px;
-    background: rgba(22, 27, 34, 0.92);
+    background: rgba(22, 27, 34, 0.94);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: center;
+    box-shadow: 0 0 8px rgba(212, 160, 23, 0.25), inset 0 0 12px rgba(212, 160, 23, 0.06);
 }
 /* "Score & Insights" badge at top */
 .as-insight-rect-badge {
@@ -308,7 +309,7 @@ body.donut-focused .as-focused-close {
     left: 50%;
     transform: translateX(-50%);
     background: rgba(22, 27, 34, 0.95);
-    border: 1px solid var(--warn, #d29922);
+    border: 2px solid #d4a017;
     border-radius: 10px;
     padding: 2px 14px;
     font-family: var(--font-display);
@@ -316,7 +317,7 @@ body.donut-focused .as-focused-close {
     font-weight: 700;
     letter-spacing: 1.2px;
     text-transform: uppercase;
-    color: var(--warn, #d29922);
+    color: #d4a017;
     white-space: nowrap;
     z-index: 2;
 }
@@ -325,7 +326,7 @@ body.donut-focused .as-focused-close {
     content: '\2605';
     margin-left: 4px;
     font-size: 10px;
-    color: var(--warn, #d29922);
+    color: #d4a017;
 }
 /* Close/back button for the rectangle */
 .as-insight-rect-close {
@@ -334,8 +335,8 @@ body.donut-focused .as-focused-close {
     right: 4px;
     z-index: 3;
     background: rgba(22, 27, 34, 0.85);
-    border: 1px solid rgba(88, 166, 255, 0.3);
-    color: var(--accent, #58a6ff);
+    border: 1px solid rgba(212, 160, 23, 0.4);
+    color: #d4a017;
     font-size: 14px;
     width: 22px;
     height: 22px;
@@ -348,24 +349,30 @@ body.donut-focused .as-focused-close {
     padding: 0;
 }
 .as-insight-rect-close:hover {
-    background: rgba(88, 166, 255, 0.15);
-    border-color: rgba(88, 166, 255, 0.6);
+    background: rgba(212, 160, 23, 0.15);
+    border-color: rgba(212, 160, 23, 0.7);
 }
-/* Content area */
+/* Content area — scrollable for ranks */
 .as-insight-rect-content {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     width: 100%;
-    height: 100%;
-    padding: 22px 14px 12px;
+    flex: 1;
+    padding: 18px 14px 8px;
     box-sizing: border-box;
     text-align: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
 }
+.as-insight-rect-content::-webkit-scrollbar { width: 4px; }
+.as-insight-rect-content::-webkit-scrollbar-track { background: transparent; }
+.as-insight-rect-content::-webkit-scrollbar-thumb { background: rgba(212, 160, 23, 0.3); border-radius: 2px; }
 .as-insight-rect-icon {
-    font-size: 26px;
-    margin-bottom: 4px;
+    font-size: 22px;
+    margin-bottom: 2px;
     line-height: 1;
 }
 .as-insight-rect-title {
@@ -375,7 +382,16 @@ body.donut-focused .as-focused-close {
     letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--text-primary, #e6edf3);
-    margin-bottom: 6px;
+    margin-bottom: 2px;
+}
+.as-insight-rect-rank {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #d4a017;
+    margin-bottom: 2px;
 }
 .as-insight-rect-provider {
     font-family: var(--font-display);
@@ -383,15 +399,21 @@ body.donut-focused .as-focused-close {
     font-weight: 800;
     line-height: 1.2;
     margin-bottom: 4px;
-    max-width: 220px;
+    max-width: 280px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: default;
+}
+.as-insight-rect-provider[title]:hover {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
 }
 .as-insight-rect-meta {
     font-family: var(--font-data);
-    font-size: 10px;
-    color: var(--text-muted, #8b949e);
+    font-size: 13px;
+    color: var(--text-secondary, #8b949e);
     line-height: 1.5;
 }
 .as-insight-rect-meta span {
@@ -401,17 +423,22 @@ body.donut-focused .as-focused-close {
     font-family: var(--font-data);
     font-size: 13px;
     font-weight: 700;
-    margin-top: 6px;
+    margin-top: 4px;
     line-height: 1.3;
 }
-.as-insight-rect-rank {
-    font-family: var(--font-data);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    color: var(--text-muted, #8b949e);
-    margin-bottom: 2px;
+/* Circle at bottom of insight rect — line origin point */
+.as-insight-rect-origin {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #d4a017;
+    background: #d4a017;
+    z-index: 5;
+    box-shadow: 0 0 6px rgba(212, 160, 23, 0.5);
 }
 
 /* ==========================================================
@@ -1389,12 +1416,12 @@ body.donut-focused .as-donut-others-list.visible {
    ========================================================== */
 .peer-detail-popup {
     position: fixed;
-    top: 80px;
+    top: 210px;
     left: 14px;
     transform: scale(0.95);
     transform-origin: top left;
     width: 320px;
-    max-height: calc(100vh - 100px);
+    max-height: calc(100vh - 230px);
     z-index: 1200;
     background: rgba(13, 17, 23, 0.97);
     border: 2px solid var(--accent, #58a6ff);
