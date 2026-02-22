@@ -861,10 +861,11 @@ window.ASDiversity = (function () {
     }
 
     /** Update the donut center label.
-     *  Layout: SCORE: heading | big number | quality word | peer count
+     *  Layout: DIVERSITY | SCORE: heading | big number | quality word
      *  When AS selected: peer count heading | AS name | percentage */
     function renderCenter() {
         if (!donutCenter) return;
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
         var headingEl = donutCenter.querySelector('.as-score-heading');
         var scoreVal = donutCenter.querySelector('.as-score-value');
         var qualityEl = donutCenter.querySelector('.as-score-quality');
@@ -878,6 +879,7 @@ window.ASDiversity = (function () {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
+                if (diversityEl) diversityEl.style.display = 'none';
                 if (headingEl) {
                     headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
                     headingEl.style.color = seg.color;
@@ -901,6 +903,7 @@ window.ASDiversity = (function () {
         // Reset any selected-mode styling
         scoreVal.className = 'as-score-value';
         scoreVal.style.color = '';
+        if (diversityEl) diversityEl.style.display = '';
         if (headingEl) {
             headingEl.style.color = '';
         }
@@ -910,6 +913,7 @@ window.ASDiversity = (function () {
 
         // Edge case: no locatable peers (all private/tor/i2p/cjdns)
         if (totalPeers === 0) {
+            if (diversityEl) diversityEl.style.display = 'none';
             if (headingEl) headingEl.textContent = '';
             if (qualityEl) {
                 qualityEl.textContent = '';
@@ -945,13 +949,10 @@ window.ASDiversity = (function () {
             qualityEl.className = 'as-score-quality ' + q.cls;
         }
 
-        scoreLbl.textContent = 'DIVERSITY SUMMARY';
-        scoreLbl.classList.add('as-summary-link');
-        if (summarySelected) {
-            scoreLbl.classList.add('as-summary-active');
-        } else {
-            scoreLbl.classList.remove('as-summary-active');
-        }
+        // Label just shows quality word below - no "DIVERSITY SUMMARY" text needed
+        scoreLbl.textContent = '';
+        scoreLbl.classList.remove('as-summary-link');
+        scoreLbl.classList.remove('as-summary-active');
     }
 
     /** Render the legend */

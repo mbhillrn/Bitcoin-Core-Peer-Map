@@ -31,7 +31,7 @@
 }
 
 /* ==========================================================
-   2b. DONUT TITLE — "SERVICE PROVIDER" / "Diversity" above donut
+   2b. DONUT TITLE — "PEER SERVICE PROVIDERS" above donut
    ========================================================== */
 .as-donut-title {
     font-family: var(--font-display);
@@ -45,14 +45,47 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
     margin-bottom: -6px;
     line-height: 1.1;
+    transition: opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease;
+    overflow: hidden;
+    max-height: 40px;
+}
+.as-title-peer {
+    color: var(--logo-primary);
 }
 .as-title-provider {
     color: var(--logo-primary);
 }
-.as-title-diversity {
-    color: var(--logo-accent);
-    font-size: 14px;
-    letter-spacing: 2px;
+
+/* ==========================================================
+   2c. FOCUSED MODE CLOSE BUTTON — back arrow near donut
+   ========================================================== */
+.as-focused-close {
+    display: none;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 100;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    color: var(--accent, #58a6ff);
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    line-height: 26px;
+    text-align: center;
+    padding: 0;
+}
+.as-focused-close:hover {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: rgba(88, 166, 255, 0.6);
+    transform: scale(1.1);
+}
+body.donut-focused .as-focused-close {
+    display: block;
 }
 
 /* ==========================================================
@@ -95,6 +128,18 @@
     text-align: center;
     pointer-events: auto;
     cursor: pointer;
+}
+/* "DIVERSITY" label inside donut, above SCORE */
+.as-score-diversity {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--logo-accent);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: 1px;
+    line-height: 1.2;
 }
 /* "SCORE:" heading above the number */
 .as-score-heading {
