@@ -86,7 +86,7 @@
 .as-focused-close:hover {
     background: rgba(88, 166, 255, 0.15);
     border-color: rgba(88, 166, 255, 0.6);
-    transform: translateX(2px) scale(1.1);
+    transform: translateX(-2px) scale(1.1);
 }
 body.donut-focused .as-focused-close {
     display: block;
@@ -1098,7 +1098,7 @@ body.theme-light .as-sub-sub-tooltip {
 
 /* --- Donut container: moves from upper-right to top-center --- */
 body.donut-focused .as-diversity-container {
-    top: 4px;
+    top: 14px;
     right: auto;
     left: 50%;
     transform: translateX(-50%) scale(0.82);
@@ -1234,4 +1234,178 @@ body.donut-focused .as-donut-others-list.visible {
     text-underline-offset: 3px;
     margin-bottom: 4px;
     padding-bottom: 2px;
+}
+
+/* ==========================================================
+   16. PEER DETAIL POPUP — Floating popup for individual peer info
+   ========================================================== */
+.peer-detail-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.95);
+    width: 340px;
+    max-height: 80vh;
+    z-index: 1200;
+    background: rgba(13, 17, 23, 0.97);
+    border: 2px solid var(--accent, #58a6ff);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 12px rgba(88, 166, 255, 0.15);
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: auto;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+}
+.peer-detail-popup.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* When AS panel is open, shift popup left so it doesn't cover the panel */
+body.as-panel-open .peer-detail-popup {
+    left: calc(50% - 160px);
+}
+
+/* --- Header --- */
+.peer-popup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.peer-popup-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+}
+.peer-popup-title {
+    flex: 1;
+    min-width: 0;
+}
+.peer-popup-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.peer-popup-addr {
+    font-size: 10px;
+    color: var(--text-secondary, #8b949e);
+    word-break: break-all;
+    margin-top: 1px;
+}
+.peer-popup-meta {
+    font-size: 9px;
+    color: var(--text-muted, #6e7681);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+/* --- Scrollable body --- */
+.peer-popup-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 14px 8px;
+    min-height: 0;
+}
+.peer-popup-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+.peer-popup-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.peer-popup-scroll::-webkit-scrollbar-thumb {
+    background: rgba(88, 166, 255, 0.2);
+    border-radius: 2px;
+}
+
+/* --- Sections --- */
+.peer-popup-section {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.peer-popup-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+.peer-popup-section-title {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent, #58a6ff);
+    margin-bottom: 3px;
+    opacity: 0.7;
+}
+
+/* Reuse as-detail-sub-row for key/value pairs */
+.peer-popup-section .as-detail-sub-row {
+    padding: 1px 0;
+}
+.peer-popup-section .as-detail-sub-label {
+    font-size: 10px;
+}
+.peer-popup-section .as-detail-sub-val {
+    font-size: 10px;
+}
+
+/* --- Fixed footer with buttons --- */
+.peer-popup-footer {
+    display: flex;
+    gap: 8px;
+    padding: 8px 14px 10px;
+    border-top: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.peer-popup-disconnect {
+    flex: 1;
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.4);
+    color: #f85149;
+    padding: 6px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    transition: background 0.2s, border-color 0.2s;
+}
+.peer-popup-disconnect:hover {
+    background: rgba(248, 81, 73, 0.3);
+    border-color: rgba(248, 81, 73, 0.7);
+}
+.peer-popup-disconnect.disconnected {
+    color: var(--ok, #3fb950);
+    border-color: rgba(63, 185, 80, 0.4);
+    background: rgba(63, 185, 80, 0.15);
+    cursor: default;
+}
+.peer-popup-close {
+    flex: 1;
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    color: var(--text-secondary, #8b949e);
+    padding: 6px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.peer-popup-close:hover {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--text-primary, #c9d1d9);
 }
