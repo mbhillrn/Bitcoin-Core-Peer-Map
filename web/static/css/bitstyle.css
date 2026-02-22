@@ -963,9 +963,9 @@ body.theme-light .ro-link:hover {
    6c. FOCUSED MODE — BTC price + map controls reposition
    ========================================================== */
 
-/* BTC price: shrinks and moves under system info on upper left */
+/* BTC price: shrinks and moves above system stats on upper left (under logo) */
 body.donut-focused .btc-price-bar {
-    top: 168px;
+    top: 52px;
     left: 18px;
     right: auto;
     transform: scale(0.82);
@@ -976,9 +976,14 @@ body.donut-focused .btc-price-bar {
                 opacity 0.3s ease;
 }
 
-/* Map controls: move below BTC price on the left */
+/* System stats: shift down to make room for BTC price above */
+body.donut-focused .map-overlay {
+    top: 82px;
+}
+
+/* Map controls: move below system stats on the left */
 body.donut-focused .map-controls {
-    top: 200px;
+    top: 230px;
     left: 18px;
     right: auto;
     transform: none;

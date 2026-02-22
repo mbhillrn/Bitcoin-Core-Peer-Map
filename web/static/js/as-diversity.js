@@ -1101,7 +1101,7 @@ window.ASDiversity = (function () {
         var html = '';
         html += '<div class="as-insight-rect-inner">';
         html += '<div class="as-insight-rect-badge">Score &amp; Insights</div>';
-        html += '<button class="as-insight-rect-close" title="Back">\u2715</button>';
+        html += '<button class="as-insight-rect-close" title="Back">\u2190</button>';
         html += '<div class="as-insight-rect-content">';
         html += '<div class="as-insight-rect-icon">' + icon + '</div>';
         html += '<div class="as-insight-rect-title">' + escHtml(title) + '</div>';
@@ -1286,6 +1286,36 @@ window.ASDiversity = (function () {
                 if (insData) showInsightRect(insightActiveType, insData);
             } else {
                 showFocusedCenterText(insightActiveAsNum);
+            }
+            return;
+        }
+
+        // If a summary sub-filter is active (e.g. IPv4, IPv6), show category info in donut center
+        if (donutFocused && summarySelected && subFilterPeerIds && subFilterLabel && !selectedAs) {
+            var diversityEl2 = donutCenter.querySelector('.as-score-diversity');
+            var headingEl2 = donutCenter.querySelector('.as-score-heading');
+            var scoreVal2 = donutCenter.querySelector('.as-score-value');
+            var qualityEl2 = donutCenter.querySelector('.as-score-quality');
+            var scoreLbl2 = donutCenter.querySelector('.as-score-label');
+            if (diversityEl2) diversityEl2.style.display = 'none';
+            if (headingEl2) {
+                headingEl2.textContent = subFilterPeerIds.length + ' PEER' + (subFilterPeerIds.length !== 1 ? 'S' : '');
+                headingEl2.style.color = 'var(--accent)';
+            }
+            if (scoreVal2) {
+                scoreVal2.textContent = subFilterLabel;
+                scoreVal2.className = 'as-score-value as-selected-mode';
+                scoreVal2.style.color = 'var(--text-primary)';
+                scoreVal2.title = subFilterLabel + ' — ' + subFilterPeerIds.length + ' peers';
+            }
+            if (qualityEl2) {
+                var pctOfTotal = totalPeers > 0 ? ((subFilterPeerIds.length / totalPeers) * 100).toFixed(1) : '0.0';
+                qualityEl2.textContent = pctOfTotal + '% of peers';
+                qualityEl2.className = 'as-score-quality';
+                qualityEl2.style.color = 'var(--text-secondary)';
+            }
+            if (scoreLbl2) {
+                scoreLbl2.textContent = '';
             }
             return;
         }
@@ -2073,9 +2103,14 @@ window.ASDiversity = (function () {
                     }
                 });
                 row.addEventListener('mouseleave', function () {
-                    // Keep the last-hovered peer's lines visible — don't restore to parent filter.
-                    // Lines will update when another peer is hovered or context changes.
-                    // Only restore donut center (not lines) so the label updates.
+                    hoveredPeerId = null;
+                    // Restore lines/filter to parent state (selected provider or summary sub-filter)
+                    if (summarySelected) {
+                        restoreSummaryFromPreview();
+                    } else if (selectedAs) {
+                        restoreProviderFromPreview();
+                    }
+                    // Restore donut center display
                     if (donutFocused) {
                         if (insightRectVisible) {
                             restoreInsightRectProvider();
@@ -2509,6 +2544,33 @@ window.ASDiversity = (function () {
         return html;
     }
 
+    /** Restore the donut visual state after a hover preview ends.
+     *  Checks for active sub-filters, insights, or selections and restores appropriately
+     *  instead of blindly reverting to the default diversity score display. */
+    function restoreDonutAfterPreview() {
+        if (!donutFocused) return;
+        if (insightActiveAsNum) {
+            // An insight is active (Most Stable, Fastest, etc.) — keep donut on that provider
+            if (insightRectVisible) {
+                restoreInsightRectProvider();
+            }
+            showFocusedCenterText(insightActiveAsNum);
+            animateDonutExpand(insightActiveAsNum);
+        } else if (subFilterCategory && subFilterCategory.indexOf('conn-') === 0 && subFilterLabel) {
+            // A conn-provider/conn-out/conn-in sub-filter is active — keep donut on that
+            showFocusedCenterText(subFilterLabel);
+            animateDonutExpand(subFilterLabel);
+        } else if (subFilterPeerIds && subFilterLabel && subFilterCategory === 'summary') {
+            // A summary category sub-filter is active (IPv4, etc.) — show category info
+            animateDonutRevert();
+            renderCenter();
+        } else {
+            // No active sub-filter — revert to default
+            animateDonutRevert();
+            renderCenter();
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════
     // HOVER PREVIEW HELPERS — draw lines and filter peer table
     // without changing sub-filter state, purely visual preview
@@ -2662,10 +2724,11 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned) {
                         restorePinnedSubTooltip();
                         restoreSummaryFromPreview();
-                        return;
+                    } else {
+                        hideSubTooltip();
+                        restoreSummaryFromPreview();
                     }
-                    hideSubTooltip();
-                    restoreSummaryFromPreview();
+                    restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -2723,11 +2786,7 @@ window.ASDiversity = (function () {
                 provRow.addEventListener('mouseleave', function () {
                     clearLegendFocus();
                     restoreSummaryFromPreview();
-                    // In focused mode, revert donut animation
-                    if (donutFocused) {
-                        animateDonutRevert();
-                        renderCenter();
-                    }
+                    restoreDonutAfterPreview();
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -2827,11 +2886,7 @@ window.ASDiversity = (function () {
                         hideSubTooltip();
                         restoreSummaryFromPreview();
                     }
-                    // In focused mode, revert donut animation
-                    if (donutFocused) {
-                        animateDonutRevert();
-                        renderCenter();
-                    }
+                    restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -2953,15 +3008,7 @@ window.ASDiversity = (function () {
                         hideSubTooltip();
                         restoreSummaryFromPreview();
                     }
-                    // In focused mode, revert donut animation unless insight is active
-                    if (donutFocused && !insightActiveAsNum) {
-                        animateDonutRevert();
-                        renderCenter();
-                    } else if (donutFocused && insightActiveAsNum) {
-                        // Restore to insight provider
-                        showFocusedCenterText(insightActiveAsNum);
-                        animateDonutExpand(insightActiveAsNum);
-                    }
+                    restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3055,14 +3102,7 @@ window.ASDiversity = (function () {
                         hideSubTooltip();
                         restoreSummaryFromPreview();
                     }
-                    // In focused mode, revert donut animation unless insight is active
-                    if (donutFocused && !insightActiveAsNum) {
-                        animateDonutRevert();
-                        renderCenter();
-                    } else if (donutFocused && insightActiveAsNum) {
-                        showFocusedCenterText(insightActiveAsNum);
-                        animateDonutExpand(insightActiveAsNum);
-                    }
+                    restoreDonutAfterPreview();
                 });
                 rowEl.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3132,14 +3172,7 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned) return;
                     clearLegendFocus();
                     restoreSummaryFromPreview();
-                    // In focused mode, revert donut animation unless insight is active
-                    if (donutFocused && !insightActiveAsNum) {
-                        animateDonutRevert();
-                        renderCenter();
-                    } else if (donutFocused && insightActiveAsNum) {
-                        showFocusedCenterText(insightActiveAsNum);
-                        animateDonutExpand(insightActiveAsNum);
-                    }
+                    restoreDonutAfterPreview();
                 });
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3292,14 +3325,7 @@ window.ASDiversity = (function () {
                     hideSubTooltip();
                     restoreSummaryFromPreview();
                 }
-                // In focused mode, revert donut if no insight is active
-                if (donutFocused && !insightActiveAsNum) {
-                    animateDonutRevert();
-                    renderCenter();
-                } else if (donutFocused && insightActiveAsNum) {
-                    showFocusedCenterText(insightActiveAsNum);
-                    animateDonutExpand(insightActiveAsNum);
-                }
+                restoreDonutAfterPreview();
             });
             fastestLink.addEventListener('click', function (e) {
                 e.stopPropagation();
@@ -3423,14 +3449,7 @@ window.ASDiversity = (function () {
                     hideSubTooltip();
                     restoreSummaryFromPreview();
                 }
-                // In focused mode, revert donut if no insight is active
-                if (donutFocused && !insightActiveAsNum) {
-                    animateDonutRevert();
-                    renderCenter();
-                } else if (donutFocused && insightActiveAsNum) {
-                    showFocusedCenterText(insightActiveAsNum);
-                    animateDonutExpand(insightActiveAsNum);
-                }
+                restoreDonutAfterPreview();
             });
             stableLink.addEventListener('click', function (e) {
                 e.stopPropagation();
@@ -3571,14 +3590,7 @@ window.ASDiversity = (function () {
                         hideSubTooltip();
                         restoreSummaryFromPreview();
                     }
-                    // In focused mode, revert donut if no insight is active
-                    if (donutFocused && !insightActiveAsNum) {
-                        animateDonutRevert();
-                        renderCenter();
-                    } else if (donutFocused && insightActiveAsNum) {
-                        showFocusedCenterText(insightActiveAsNum);
-                        animateDonutExpand(insightActiveAsNum);
-                    }
+                    restoreDonutAfterPreview();
                 });
                 el.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3980,6 +3992,8 @@ window.ASDiversity = (function () {
             _drawLinesForAllAs(groups);
         }
         highlightActiveSummaryRow();
+        // Zoom map out to world view when selecting a new category
+        if (_resetMapZoom) _resetMapZoom();
     }
 
     function clearSummarySubFilter() {
@@ -4120,6 +4134,8 @@ window.ASDiversity = (function () {
         if (containerEl) containerEl.classList.add('as-legend-visible');
         renderCenter();
         renderLegend();
+        // Zoom map out to world view when navigating to a new provider
+        if (_resetMapZoom) _resetMapZoom();
     }
 
     /** Navigate back — always returns to diversity summary */
@@ -4645,6 +4661,8 @@ window.ASDiversity = (function () {
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg && _drawLinesForAs) {
                 _drawLinesForAs(asNum, seg.peerIds, seg.color);
+                if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                if (_dimMapPeers) _dimMapPeers(seg.peerIds);
             }
         }
     }
@@ -4660,15 +4678,25 @@ window.ASDiversity = (function () {
             renderCenter();
         }
 
+        // If there's an active sub-filter, restore to that instead of showing all
+        if (summarySelected && subFilterPeerIds && subFilterPeerIds.length > 0 && !selectedAs) {
+            restoreSummaryFromPreview();
+            return;
+        }
+
         // If hoveredAll or summarySelected is active, restore all-lines state
         if ((hoveredAll || summarySelected) && !selectedAs) {
             activateHoverAll();
+            if (_filterPeerTable) _filterPeerTable(null);
+            if (_dimMapPeers) _dimMapPeers(null);
             return;
         }
 
         // ONLY clear lines if nothing is selected — selection keeps its lines
         if (!selectedAs) {
             if (_clearAsLines) _clearAsLines();
+            if (_filterPeerTable) _filterPeerTable(null);
+            if (_dimMapPeers) _dimMapPeers(null);
         }
     }
 
@@ -4792,6 +4820,8 @@ window.ASDiversity = (function () {
             if (containerEl) containerEl.classList.add('as-legend-visible');
             renderCenter();
             renderLegend();
+            // Zoom map out to world view when selecting a new provider
+            if (_resetMapZoom) _resetMapZoom();
         }
     }
 
@@ -5225,6 +5255,40 @@ window.ASDiversity = (function () {
         popup.addEventListener('click', function (e) {
             e.stopPropagation();
         });
+
+        // Make popup draggable by its header
+        (function () {
+            var header = popup.querySelector('.peer-popup-header');
+            if (!header) return;
+            header.style.cursor = 'grab';
+            var isDragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+            header.addEventListener('mousedown', function (e) {
+                if (e.target.closest('button, a, .peer-popup-back')) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                var rect = popup.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+                popup.classList.add('dragging');
+                header.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', function (e) {
+                if (!isDragging) return;
+                var dx = e.clientX - startX;
+                var dy = e.clientY - startY;
+                popup.style.left = (startLeft + dx) + 'px';
+                popup.style.top = (startTop + dy) + 'px';
+                popup.style.transform = 'none';
+            });
+            document.addEventListener('mouseup', function () {
+                if (!isDragging) return;
+                isDragging = false;
+                popup.classList.remove('dragging');
+                header.style.cursor = 'grab';
+            });
+        })();
 
         // Bind back button (returns to multi-peer list)
         var backBtn = popup.querySelector('.peer-popup-back');
