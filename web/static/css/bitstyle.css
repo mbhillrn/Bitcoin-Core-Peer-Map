@@ -756,7 +756,10 @@ html, body {
     cursor: pointer;
     user-select: none;
     padding: 4px 12px;
-    transition: opacity 0.3s ease, right 0.3s ease;
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
 }
 .btc-price-bar:hover { opacity: 0.85; }
 .mo-btc-symbol {
@@ -946,11 +949,39 @@ body.theme-light .ro-link:hover {
     top: 88px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 85;
+    z-index: 290;
     display: flex;
     gap: 4px;
     pointer-events: auto;
-    transition: right 0.3s ease;
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================
+   6c. FOCUSED MODE — BTC price + map controls reposition
+   ========================================================== */
+
+/* BTC price: shrinks and moves under system info on upper left */
+body.donut-focused .btc-price-bar {
+    top: 168px;
+    left: 18px;
+    right: auto;
+    transform: scale(0.82);
+    transform-origin: left center;
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
+}
+
+/* Map controls: move below BTC price on the left */
+body.donut-focused .map-controls {
+    top: 200px;
+    left: 18px;
+    right: auto;
+    transform: none;
 }
 
 /* ==========================================================

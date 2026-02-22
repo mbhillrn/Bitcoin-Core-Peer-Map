@@ -24,14 +24,18 @@
     pointer-events: none;
     user-select: none;
     opacity: 0.88;
-    transition: opacity 0.3s ease, right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
 }
 .as-diversity-container:hover {
     opacity: 1;
 }
 
 /* ==========================================================
-   2b. DONUT TITLE — "SERVICE PROVIDER" / "Diversity" above donut
+   2b. DONUT TITLE — "PEER SERVICE PROVIDERS" above donut
    ========================================================== */
 .as-donut-title {
     font-family: var(--font-display);
@@ -45,14 +49,47 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
     margin-bottom: -6px;
     line-height: 1.1;
+    transition: opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease;
+    overflow: hidden;
+    max-height: 40px;
+}
+.as-title-peer {
+    color: var(--logo-primary);
 }
 .as-title-provider {
     color: var(--logo-primary);
 }
-.as-title-diversity {
-    color: var(--logo-accent);
-    font-size: 14px;
-    letter-spacing: 2px;
+
+/* ==========================================================
+   2c. FOCUSED MODE CLOSE BUTTON — back arrow near donut
+   ========================================================== */
+.as-focused-close {
+    display: none;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 100;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    color: var(--accent, #58a6ff);
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    line-height: 26px;
+    text-align: center;
+    padding: 0;
+}
+.as-focused-close:hover {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: rgba(88, 166, 255, 0.6);
+    transform: translateX(2px) scale(1.1);
+}
+body.donut-focused .as-focused-close {
+    display: block;
 }
 
 /* ==========================================================
@@ -95,6 +132,18 @@
     text-align: center;
     pointer-events: auto;
     cursor: pointer;
+}
+/* "DIVERSITY" label inside donut, above SCORE */
+.as-score-diversity {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--logo-accent);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: 1px;
+    line-height: 1.2;
 }
 /* "SCORE:" heading above the number */
 .as-score-heading {
@@ -215,6 +264,181 @@
 @keyframes as-ring-pulse {
     0% { opacity: 0.6; r: inherit; }
     100% { opacity: 0; r: calc(inherit + 8px); }
+}
+
+/* ==========================================================
+   3b. INSIGHT RECTANGLE — replaces donut for Score & Insights
+   ========================================================== */
+.as-insight-rect {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.9);
+    width: 320px;
+    height: 190px;
+    z-index: 10;
+    pointer-events: auto;
+    opacity: 0;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    display: none;
+}
+.as-insight-rect.visible {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+    display: block;
+}
+.as-insight-rect-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: 3px solid #d4a017;
+    border-radius: 10px;
+    background: rgba(22, 27, 34, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 0 8px rgba(212, 160, 23, 0.25), inset 0 0 12px rgba(212, 160, 23, 0.06);
+}
+/* "Score & Insights" badge at top */
+.as-insight-rect-badge {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(22, 27, 34, 0.95);
+    border: 2px solid #d4a017;
+    border-radius: 10px;
+    padding: 2px 14px;
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #d4a017;
+    white-space: nowrap;
+    z-index: 2;
+}
+/* Star decoration next to badge */
+.as-insight-rect-badge::after {
+    content: '\2605';
+    margin-left: 4px;
+    font-size: 10px;
+    color: #d4a017;
+}
+/* Close/back button for the rectangle */
+.as-insight-rect-close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 3;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid rgba(212, 160, 23, 0.4);
+    color: #d4a017;
+    font-size: 14px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    line-height: 20px;
+    text-align: center;
+    padding: 0;
+}
+.as-insight-rect-close:hover {
+    background: rgba(212, 160, 23, 0.15);
+    border-color: rgba(212, 160, 23, 0.7);
+}
+/* Content area — scrollable for ranks */
+.as-insight-rect-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    flex: 1;
+    padding: 18px 14px 8px;
+    box-sizing: border-box;
+    text-align: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+.as-insight-rect-content::-webkit-scrollbar { width: 4px; }
+.as-insight-rect-content::-webkit-scrollbar-track { background: transparent; }
+.as-insight-rect-content::-webkit-scrollbar-thumb { background: rgba(212, 160, 23, 0.3); border-radius: 2px; }
+.as-insight-rect-icon {
+    font-size: 22px;
+    margin-bottom: 2px;
+    line-height: 1;
+}
+.as-insight-rect-title {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-primary, #e6edf3);
+    margin-bottom: 2px;
+}
+.as-insight-rect-rank {
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #d4a017;
+    margin-bottom: 2px;
+}
+.as-insight-rect-provider {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 4px;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+}
+.as-insight-rect-provider[title]:hover {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+.as-insight-rect-meta {
+    font-family: var(--font-data);
+    font-size: 13px;
+    color: var(--text-secondary, #8b949e);
+    line-height: 1.5;
+}
+.as-insight-rect-meta span {
+    display: inline-block;
+}
+.as-insight-rect-stat {
+    font-family: var(--font-data);
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+/* Circle at bottom of insight rect — line origin point */
+.as-insight-rect-origin {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #d4a017;
+    background: #d4a017;
+    z-index: 5;
+    box-shadow: 0 0 6px rgba(212, 160, 23, 0.5);
 }
 
 /* ==========================================================
@@ -394,7 +618,7 @@
     flex-direction: column;
     overflow: hidden;
     transform: translateX(100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .as-detail-panel.visible {
     transform: translateX(0);
@@ -1041,4 +1265,323 @@ body.theme-light .as-sub-tooltip {
 }
 body.theme-light .as-sub-sub-tooltip {
     border-color: rgba(88, 166, 255, 0.25);
+}
+
+/* ==========================================================
+   14. FOCUSED MODE — donut moves to top-center, layout rearranges
+   ========================================================== */
+
+/* --- Donut container: moves from upper-right to top-center --- */
+body.donut-focused .as-diversity-container {
+    top: 14px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%) scale(0.82);
+    opacity: 1;
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease;
+}
+
+/* When panel is also open in focused mode, center between system info and panel */
+body.donut-focused.as-panel-open .as-diversity-container {
+    left: calc((180px + (100vw - 320px)) / 2);
+    right: auto;
+}
+
+/* Override the default panel-open push for focused mode */
+body.donut-focused.as-panel-open #worldmap {
+    right: 0;
+}
+body.donut-focused.as-panel-open .peer-panel {
+    right: 320px;
+}
+
+/* --- Title: hides in focused mode --- */
+body.donut-focused .as-donut-title {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+    pointer-events: none;
+}
+
+/* --- Legend: ALWAYS hidden in focused mode (lines come from donut center) --- */
+body.donut-focused .as-legend {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    max-height: 0 !important;
+    transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+body.donut-focused .as-diversity-container.as-legend-visible .as-legend {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    max-height: 0 !important;
+}
+
+/* --- Donut center: larger clickable area in focused mode, cursor changes --- */
+body.donut-focused .as-donut-center {
+    cursor: default;
+}
+
+/* --- Focused mode donut center text adjustments for provider display --- */
+body.donut-focused .as-score-value.as-focused-provider {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: pre-line;
+    word-break: break-word;
+}
+
+/* --- Others scrollable list inside donut center --- */
+.as-donut-others-list {
+    display: none;
+    max-height: 140px;
+    overflow-y: auto;
+    text-align: left;
+    padding: 2px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent, #58a6ff) transparent;
+}
+.as-donut-others-list::-webkit-scrollbar {
+    width: 4px;
+}
+.as-donut-others-list::-webkit-scrollbar-thumb {
+    background: var(--accent, #58a6ff);
+    border-radius: 2px;
+}
+.as-donut-others-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+body.donut-focused .as-donut-others-list.visible {
+    display: block;
+}
+.as-donut-others-item {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: #58a6ff;
+    padding: 3px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.as-donut-others-item:hover {
+    background: rgba(88, 166, 255, 0.15);
+    color: #79c0ff;
+}
+.as-donut-others-back {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    transition: color 0.15s ease;
+}
+.as-donut-others-back:hover {
+    color: var(--accent, #58a6ff);
+}
+
+/* ==========================================================
+   15. PEER DETAIL PANEL — Section styles for full peer info
+   ========================================================== */
+.as-detail-section {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.as-detail-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+.as-detail-sub-title {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent, #58a6ff);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+}
+
+/* ==========================================================
+   16. PEER DETAIL POPUP — Floating popup for individual peer info
+   ========================================================== */
+.peer-detail-popup {
+    position: fixed;
+    top: 210px;
+    left: 14px;
+    transform: scale(0.95);
+    transform-origin: top left;
+    width: 320px;
+    max-height: calc(100vh - 230px);
+    z-index: 1200;
+    background: rgba(13, 17, 23, 0.97);
+    border: 2px solid var(--accent, #58a6ff);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 12px rgba(88, 166, 255, 0.15);
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: auto;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+}
+.peer-detail-popup.visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* When AS panel is open, keep popup on the left — already positioned there */
+body.as-panel-open .peer-detail-popup {
+    left: 14px;
+}
+
+/* --- Header --- */
+.peer-popup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.peer-popup-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+}
+.peer-popup-title {
+    flex: 1;
+    min-width: 0;
+}
+.peer-popup-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.peer-popup-addr {
+    font-size: 10px;
+    color: var(--text-secondary, #8b949e);
+    word-break: break-all;
+    margin-top: 1px;
+}
+.peer-popup-meta {
+    font-size: 9px;
+    color: var(--text-muted, #6e7681);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+/* --- Scrollable body --- */
+.peer-popup-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 14px 8px;
+    min-height: 0;
+}
+.peer-popup-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+.peer-popup-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.peer-popup-scroll::-webkit-scrollbar-thumb {
+    background: rgba(88, 166, 255, 0.2);
+    border-radius: 2px;
+}
+
+/* --- Sections --- */
+.peer-popup-section {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.06);
+}
+.peer-popup-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+.peer-popup-section-title {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent, #58a6ff);
+    margin-bottom: 3px;
+    opacity: 0.7;
+}
+
+/* Reuse as-detail-sub-row for key/value pairs */
+.peer-popup-section .as-detail-sub-row {
+    padding: 1px 0;
+}
+.peer-popup-section .as-detail-sub-label {
+    font-size: 10px;
+}
+.peer-popup-section .as-detail-sub-val {
+    font-size: 10px;
+}
+
+/* --- Fixed footer with buttons --- */
+.peer-popup-footer {
+    display: flex;
+    gap: 8px;
+    padding: 8px 14px 10px;
+    border-top: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.peer-popup-disconnect {
+    flex: 1;
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.4);
+    color: #f85149;
+    padding: 6px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    transition: background 0.2s, border-color 0.2s;
+}
+.peer-popup-disconnect:hover {
+    background: rgba(248, 81, 73, 0.3);
+    border-color: rgba(248, 81, 73, 0.7);
+}
+.peer-popup-disconnect.disconnected {
+    color: var(--ok, #3fb950);
+    border-color: rgba(63, 185, 80, 0.4);
+    background: rgba(63, 185, 80, 0.15);
+    cursor: default;
+}
+.peer-popup-close {
+    flex: 1;
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    color: var(--text-secondary, #8b949e);
+    padding: 6px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.peer-popup-close:hover {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: rgba(88, 166, 255, 0.4);
+    color: var(--text-primary, #c9d1d9);
 }
