@@ -60,6 +60,7 @@ window.ASDiversity = (function () {
     let donutAnimStartTime = 0;   // Animation start timestamp
     const DONUT_ANIM_DURATION = 400; // ms for expand/revert animation
     const DONUT_EXPAND_RATIO = 0.70; // expanded segment gets 70% of donut
+    let donutAnimSafetyTimer = null; // Safety timeout to force-end stuck animations
 
     // DOM refs (cached on init)
     let containerEl = null;
@@ -933,20 +934,41 @@ window.ASDiversity = (function () {
     /** Start donut expansion animation for a selected segment */
     function animateDonutExpand(asNum) {
         if (donutAnimFrame) cancelAnimationFrame(donutAnimFrame);
+        if (donutAnimSafetyTimer) clearTimeout(donutAnimSafetyTimer);
         donutAnimTarget = asNum;
         donutAnimState = 'expanding';
         donutAnimProgress = 0;
         donutAnimStartTime = performance.now();
         donutAnimFrame = requestAnimationFrame(donutAnimStep);
+        // Safety: force-complete if animation gets stuck
+        donutAnimSafetyTimer = setTimeout(function () {
+            if (donutAnimState === 'expanding') {
+                donutAnimState = 'expanded';
+                donutAnimProgress = 1;
+                donutAnimFrame = null;
+                renderDonut();
+            }
+        }, DONUT_ANIM_DURATION + 200);
     }
 
     /** Start donut revert animation (back to proportional) */
     function animateDonutRevert() {
         if (donutAnimFrame) cancelAnimationFrame(donutAnimFrame);
+        if (donutAnimSafetyTimer) clearTimeout(donutAnimSafetyTimer);
         donutAnimState = 'reverting';
         donutAnimProgress = 0;
         donutAnimStartTime = performance.now();
         donutAnimFrame = requestAnimationFrame(donutAnimStep);
+        // Safety: force-complete if animation gets stuck
+        donutAnimSafetyTimer = setTimeout(function () {
+            if (donutAnimState === 'reverting') {
+                donutAnimState = 'idle';
+                donutAnimTarget = null;
+                donutAnimProgress = 0;
+                donutAnimFrame = null;
+                renderDonut();
+            }
+        }, DONUT_ANIM_DURATION + 200);
     }
 
     /** Animation step — called each frame */
@@ -980,6 +1002,10 @@ window.ASDiversity = (function () {
             cancelAnimationFrame(donutAnimFrame);
             donutAnimFrame = null;
         }
+        if (donutAnimSafetyTimer) {
+            clearTimeout(donutAnimSafetyTimer);
+            donutAnimSafetyTimer = null;
+        }
         donutAnimState = 'idle';
         donutAnimTarget = null;
         donutAnimProgress = 0;
@@ -1010,6 +1036,9 @@ window.ASDiversity = (function () {
 
         // If peer detail panel is active, don't touch center text — showPeerInDonutCenter manages it
         if (peerDetailActive) return;
+
+        // If Others scrollable list is open, don't touch center — showOthersListInDonut manages it
+        if (othersListOpen) return;
 
         // In focused mode with hover active, preserve the hover display during data updates
         if (donutFocused && focusedHoverAs && !selectedAs) {
@@ -1780,12 +1809,29 @@ window.ASDiversity = (function () {
                     } else if (selectedAs) {
                         previewProviderLines([peerId]);
                     }
+                    // In focused mode, show peer ID + provider in donut center
+                    if (donutFocused) {
+                        var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
+                        if (peer) {
+                            var asNum = row.dataset.as || parseAsNumber(peer.as);
+                            var color = asNum ? getColorForAsNum(asNum) : '#6e7681';
+                            showPeerInDonutCenter(peer, color);
+                        }
+                    }
                 });
                 row.addEventListener('mouseleave', function () {
                     if (summarySelected) {
                         restoreSummaryFromPreview();
                     } else if (selectedAs) {
                         restoreProviderFromPreview();
+                    }
+                    // In focused mode, restore center to provider/score
+                    if (donutFocused) {
+                        if (selectedAs) {
+                            renderCenter();
+                        } else if (!othersListOpen) {
+                            renderCenter();
+                        }
                     }
                 });
             })(peerRows[pri]);
@@ -1797,14 +1843,21 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → zoom to peer, collapse subs, keep main panel
+        // Peer ID click → in focused mode open full peer detail; otherwise zoom
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
                 link.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
-                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                    if (isNaN(peerId)) return;
+                    if (donutFocused) {
+                        var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
+                        if (peer) {
+                            openPeerDetailPanel(peer, 'panel');
+                            if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
+                        }
+                    } else if (_zoomToPeerOnly) {
                         _zoomToPeerOnly(peerId);
                     }
                 });
@@ -2070,14 +2123,21 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → zoom to peer, collapse subs, keep main panel
+        // Peer ID click → in focused mode open full peer detail; otherwise zoom
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
                 link.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
-                    if (_zoomToPeerOnly && !isNaN(peerId)) {
+                    if (isNaN(peerId)) return;
+                    if (donutFocused) {
+                        var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
+                        if (peer) {
+                            openPeerDetailPanel(peer, 'panel');
+                            if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
+                        }
+                    } else if (_zoomToPeerOnly) {
                         _zoomToPeerOnly(peerId);
                     }
                 });
@@ -2353,10 +2413,20 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+                    // In focused mode, show provider in donut center + animate
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
                 provRow.addEventListener('mouseleave', function () {
                     clearLegendFocus();
                     restoreSummaryFromPreview();
+                    // In focused mode, revert donut animation
+                    if (donutFocused) {
+                        animateDonutRevert();
+                        renderCenter();
+                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -2441,6 +2511,11 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(peerIds);
                         if (_dimMapPeers) _dimMapPeers(peerIds);
                     }
+                    // In focused mode, show provider in donut center + animate
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
                 rowEl.addEventListener('mouseleave', function () {
                     clearLegendFocus();
@@ -2450,6 +2525,11 @@ window.ASDiversity = (function () {
                     } else {
                         hideSubTooltip();
                         restoreSummaryFromPreview();
+                    }
+                    // In focused mode, revert donut animation
+                    if (donutFocused) {
+                        animateDonutRevert();
+                        renderCenter();
                     }
                 });
                 rowEl.addEventListener('click', function (e) {
@@ -3079,10 +3159,20 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+                    // In focused mode, show provider in donut center + animate
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
                 provRow.addEventListener('mouseleave', function () {
                     clearLegendFocus();
                     restoreSummaryFromPreview();
+                    // In focused mode, revert donut animation
+                    if (donutFocused) {
+                        animateDonutRevert();
+                        renderCenter();
+                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3169,10 +3259,20 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+                    // In focused mode, show provider in donut center + animate
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
                 provRow.addEventListener('mouseleave', function () {
                     clearLegendFocus();
                     restoreSummaryFromPreview();
+                    // In focused mode, revert donut animation
+                    if (donutFocused) {
+                        animateDonutRevert();
+                        renderCenter();
+                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3437,8 +3537,10 @@ window.ASDiversity = (function () {
         if (_dimMapPeers) _dimMapPeers(peerIds);
         if (_drawLinesForAs) _drawLinesForAs(asNum, peerIds, color);
 
+        // Animate donut to expand this provider's segment
+        animateDonutExpand(asNum);
+
         if (containerEl) containerEl.classList.add('as-legend-visible');
-        renderDonut();
         renderCenter();
         renderLegend();
     }
@@ -3483,17 +3585,34 @@ window.ASDiversity = (function () {
             selectedAs = prev.asNumber;
             summarySelected = false;
             openPanel(prev.asNumber);
+            animateDonutExpand(prev.asNumber);
             var peerIds = getPeerIdsForAnyAs(prev.asNumber);
             var color = getColorForAsNum(prev.asNumber);
             if (_filterPeerTable) _filterPeerTable(peerIds);
             if (_dimMapPeers) _dimMapPeers(peerIds);
             if (_drawLinesForAs) _drawLinesForAs(prev.asNumber, peerIds, color);
             if (containerEl) containerEl.classList.add('as-legend-visible');
-            renderDonut();
             renderCenter();
             renderLegend();
             var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
             if (bodyEl) setTimeout(function () { bodyEl.scrollTop = prev.scrollTop || 0; }, 50);
+        } else if (prev.type === 'peer-detail') {
+            // Going back from "View Provider" to peer detail
+            var peer = lastPeersRaw.find(function (p) { return p.id === prev.peerId; });
+            if (peer) {
+                openPeerDetailPanel(peer, 'panel');
+            } else {
+                // Peer no longer in data — fall back to summary
+                selectedAs = null;
+                summarySelected = true;
+                openSummaryPanel();
+                animateDonutRevert();
+                activateHoverAll();
+                if (_filterPeerTable) _filterPeerTable(null);
+                if (_dimMapPeers) _dimMapPeers(null);
+                renderCenter();
+                renderLegend();
+            }
         }
     }
 
@@ -3576,15 +3695,22 @@ window.ASDiversity = (function () {
             return true; // handled — don't close main panel
         }
 
+        // Stage 1.5: If peer detail is active, go back through navigation
+        if (peerDetailActive) {
+            navigateBack();
+            return true;
+        }
+
         // Stage 2: If in a provider view, go back to summary
         if (selectedAs) {
             if (donutFocused) {
                 // In focused mode, go back to summary instead of closing
+                if (othersListOpen) closeOthersListInDonut();
                 panelHistory = [];
                 var wasAs = selectedAs;
                 selectedAs = null;
                 hoveredAs = null;
-                renderDonut();
+                animateDonutRevert();
                 renderCenter();
                 renderLegend();
                 selectSummary();
@@ -3804,6 +3930,110 @@ window.ASDiversity = (function () {
         }
     }
 
+    /** Show scrollable Others list inside the donut center (focused mode only).
+     *  Each item is hoverable (preview lines) and clickable (opens provider panel). */
+    function showOthersListInDonut() {
+        if (!donutCenter) return;
+        var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+        if (!othersSeg || !othersSeg._othersGroups) return;
+
+        othersListOpen = true;
+
+        // Hide normal center elements
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+        if (diversityEl) diversityEl.style.display = 'none';
+        if (headingEl) headingEl.style.display = 'none';
+        if (scoreVal) scoreVal.style.display = 'none';
+        if (qualityEl) qualityEl.style.display = 'none';
+        if (scoreLbl) scoreLbl.style.display = 'none';
+
+        // Remove any existing list
+        var existing = donutCenter.querySelector('.as-donut-others-list');
+        if (existing) existing.remove();
+
+        // Build scrollable list
+        var listDiv = document.createElement('div');
+        listDiv.className = 'as-donut-others-list visible';
+
+        // Back arrow
+        var backEl = document.createElement('div');
+        backEl.className = 'as-donut-others-back';
+        backEl.textContent = '\u2190 Back';
+        backEl.addEventListener('click', function (e) {
+            e.stopPropagation();
+            closeOthersListInDonut();
+        });
+        listDiv.appendChild(backEl);
+
+        // Provider items
+        var groups = othersSeg._othersGroups;
+        for (var i = 0; i < groups.length; i++) {
+            (function (g) {
+                var item = document.createElement('div');
+                item.className = 'as-donut-others-item';
+                var name = g.asShort || g.asName || g.asNumber;
+                if (name.length > 22) name = name.substring(0, 21) + '\u2026';
+                item.textContent = name + ' (' + g.peerCount + ')';
+                item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
+
+                // Hover: preview lines to this provider's peers
+                item.addEventListener('mouseenter', function () {
+                    if (_drawLinesForAs) _drawLinesForAs(g.asNumber, g.peerIds, othersSeg.color);
+                    if (_dimMapPeers) _dimMapPeers(g.peerIds);
+                });
+                item.addEventListener('mouseleave', function () {
+                    // Restore all-lines for Others
+                    if (selectedAs === 'Others') {
+                        if (_drawLinesForAs) _drawLinesForAs('Others', othersSeg.peerIds, othersSeg.color);
+                        if (_dimMapPeers) _dimMapPeers(othersSeg.peerIds);
+                    } else {
+                        activateHoverAll();
+                        if (_dimMapPeers) _dimMapPeers(null);
+                    }
+                });
+
+                // Click: navigate to this provider's panel
+                item.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    closeOthersListInDonut();
+                    navigateToProvider(g.asNumber);
+                    animateDonutExpand(g.asNumber);
+                });
+
+                listDiv.appendChild(item);
+            })(groups[i]);
+        }
+
+        donutCenter.appendChild(listDiv);
+    }
+
+    /** Close the Others list in donut center and restore normal display */
+    function closeOthersListInDonut() {
+        othersListOpen = false;
+        if (!donutCenter) return;
+
+        var listEl = donutCenter.querySelector('.as-donut-others-list');
+        if (listEl) listEl.remove();
+
+        // Restore center element visibility
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+        if (diversityEl) diversityEl.style.display = '';
+        if (headingEl) headingEl.style.display = '';
+        if (scoreVal) scoreVal.style.display = '';
+        if (qualityEl) qualityEl.style.display = '';
+        if (scoreLbl) scoreLbl.style.display = '';
+
+        renderCenter();
+    }
+
     /** Format a provider name to fit inside the donut center.
      *  Breaks long names at dashes or spaces. */
     function formatNameForDonut(name) {
@@ -3979,6 +4209,7 @@ window.ASDiversity = (function () {
         if (selectedAs === asNum) {
             // Deselect — go back to summary in focused mode
             if (donutFocused) {
+                if (othersListOpen) closeOthersListInDonut();
                 selectedAs = null;
                 subFilterPeerIds = null;
                 subFilterLabel = null;
@@ -4001,6 +4232,7 @@ window.ASDiversity = (function () {
             subFilterLabel = null;
             subFilterCategory = null;
             hideSubTooltip();
+            if (othersListOpen) closeOthersListInDonut();
             selectedAs = asNum;
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg) {
@@ -4008,6 +4240,11 @@ window.ASDiversity = (function () {
                 if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
                 if (_drawLinesForAs) _drawLinesForAs(asNum, seg.peerIds, seg.color);
+
+                // In focused mode, Others segment shows scrollable provider list inside donut
+                if (donutFocused && seg.isOthers) {
+                    showOthersListInDonut();
+                }
             }
             // Animate donut expansion
             animateDonutExpand(asNum);
@@ -4130,9 +4367,9 @@ window.ASDiversity = (function () {
     function exitFocusedMode() {
         if (!donutFocused) return;
         donutFocused = false;
-        othersListOpen = false;
         focusedHoverAs = null;
         peerDetailActive = false;
+        if (othersListOpen) closeOthersListInDonut();
         document.body.classList.remove('donut-focused');
 
         // Revert donut animation
