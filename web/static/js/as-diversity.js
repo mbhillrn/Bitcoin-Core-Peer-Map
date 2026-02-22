@@ -93,6 +93,9 @@ window.ASDiversity = (function () {
     let peerDetailActive = false;  // True when peer detail panel is shown (from peer list/map click)
     let insightActiveAsNum = null;  // AS number to show in donut when an insight is active (Most Stable, Fastest, etc.)
     let insightActiveType = null;   // Type of insight active: 'stable', 'fastest', 'data-bytessent', 'data-bytesrecv'
+    let insightRectEl = null;       // DOM ref for insight rectangle overlay
+    let insightRectVisible = false; // Whether the insight rectangle is currently shown
+    let hoveredPeerId = null;       // Peer ID currently being hovered in a subtooltip (for update preservation)
 
     // Integration hooks (set by bitapp.js)
     let _drawLinesForAs = null;    // fn(asNumber, peerIds, color) — draw lines on canvas
@@ -1037,6 +1040,198 @@ window.ASDiversity = (function () {
         donutAnimProgress = 0;
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // INSIGHT RECTANGLE — replaces donut for Score & Insights selections
+    // ═══════════════════════════════════════════════════════════
+
+    /** Show the insight rectangle overlay, hiding the donut SVG and center text.
+     *  @param {string} type — 'stable' | 'fastest' | 'data-bytessent' | 'data-bytesrecv'
+     *  @param {Object} data — insight-specific data */
+    function showInsightRect(type, data) {
+        if (!insightRectEl) return;
+
+        var provColor = data.color || '#d29922';
+        var borderColor = provColor;
+
+        // Build the title, icon, and content based on insight type
+        var icon = '', title = '', provName = '', statLine = '', metaLine = '';
+
+        if (type === 'stable') {
+            icon = '\u23f3';
+            title = 'Most Stable Network';
+            provName = data.provName || '';
+            var peerCount = data.peerIds ? data.peerIds.length : 0;
+            metaLine = peerCount + ' peer' + (peerCount !== 1 ? 's' : '') + ' \u00b7 ' + (data.asNumber || '');
+            statLine = 'avg ' + (data.durText || '');
+        } else if (type === 'fastest') {
+            icon = '\u26a1';
+            title = 'Fastest Connection';
+            provName = data.provName || '';
+            var peerCount = data.peerIds ? data.peerIds.length : 0;
+            metaLine = peerCount + ' peer' + (peerCount !== 1 ? 's' : '') + ' \u00b7 ' + (data.asNumber || '');
+            statLine = data.avgPing ? data.avgPing.toFixed(1) + ' ms avg' : '';
+            if (data.rank) {
+                statLine = 'Rank #' + data.rank + ' \u00b7 ' + statLine;
+            }
+        } else if (type === 'data-bytessent') {
+            icon = '\u2b06\ufe0f';
+            title = 'Most Data Sent To';
+            provName = data.provName || '';
+            var peerCount = data.peers ? data.peers.length : 0;
+            metaLine = peerCount + ' peer' + (peerCount !== 1 ? 's' : '') + ' \u00b7 ' + (data.asNumber || '');
+            statLine = fmtBytes(data.totalBytes || 0);
+            if (data.rank) {
+                statLine = 'Rank #' + data.rank + ' \u00b7 ' + statLine;
+            }
+        } else if (type === 'data-bytesrecv') {
+            icon = '\u2b07\ufe0f';
+            title = 'Most Data Recv By';
+            provName = data.provName || '';
+            var peerCount = data.peers ? data.peers.length : 0;
+            metaLine = peerCount + ' peer' + (peerCount !== 1 ? 's' : '') + ' \u00b7 ' + (data.asNumber || '');
+            statLine = fmtBytes(data.totalBytes || 0);
+            if (data.rank) {
+                statLine = 'Rank #' + data.rank + ' \u00b7 ' + statLine;
+            }
+        }
+
+        var html = '';
+        html += '<div class="as-insight-rect-inner" style="border-color:' + borderColor + '">';
+        html += '<div class="as-insight-rect-badge" style="border-color:' + borderColor + '; color:' + borderColor + '">Score &amp; Insights</div>';
+        html += '<button class="as-insight-rect-close" title="Back">\u2715</button>';
+        html += '<div class="as-insight-rect-content">';
+        html += '<div class="as-insight-rect-icon">' + icon + '</div>';
+        html += '<div class="as-insight-rect-title">' + escHtml(title) + '</div>';
+        html += '<div class="as-insight-rect-provider" style="color:' + provColor + '">' + escHtml(provName) + '</div>';
+        html += '<div class="as-insight-rect-meta">' + metaLine + '</div>';
+        if (statLine) {
+            html += '<div class="as-insight-rect-stat" style="color:' + provColor + '">' + statLine + '</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+
+        insightRectEl.innerHTML = html;
+
+        // Hide donut SVG and center, show rectangle
+        if (donutSvg) donutSvg.style.opacity = '0';
+        if (donutCenter) donutCenter.style.opacity = '0';
+        insightRectEl.classList.add('visible');
+        insightRectVisible = true;
+
+        // Bind close button
+        var closeBtn = insightRectEl.querySelector('.as-insight-rect-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                hideInsightRect();
+                // Clear the insight state and revert
+                insightActiveAsNum = null;
+                insightActiveType = null;
+                animateDonutRevert();
+                renderCenter();
+                // Restore summary all-lines
+                if (summarySelected) {
+                    clearSummarySubFilter();
+                }
+            });
+        }
+    }
+
+    /** Update the insight rectangle content for a specific peer (hover/select from submenu).
+     *  @param {Object} peer — raw peer data
+     *  @param {string} provColor — color for the provider */
+    function updateInsightRectForPeer(peer, provColor) {
+        if (!insightRectEl || !insightRectVisible) return;
+        var provEl = insightRectEl.querySelector('.as-insight-rect-provider');
+        var metaEl = insightRectEl.querySelector('.as-insight-rect-meta');
+        var statEl = insightRectEl.querySelector('.as-insight-rect-stat');
+
+        if (provEl) {
+            provEl.textContent = 'Peer #' + peer.id;
+            provEl.style.color = provColor;
+        }
+        if (metaEl) {
+            var peerProvName = peer.asname || parseAsOrg(peer.as) || '';
+            var asNum = parseAsNumber(peer.as) || '';
+            metaEl.textContent = peerProvName + ' \u00b7 ' + asNum;
+        }
+        if (statEl) {
+            var connSec = peer.conntime ? (Math.floor(Date.now() / 1000) - peer.conntime) : 0;
+            statEl.textContent = 'Uptime: ' + fmtDuration(connSec);
+            statEl.style.color = provColor;
+        }
+    }
+
+    /** Restore the insight rectangle to its original provider-level content.
+     *  Called when mouse leaves a peer in the submenu. */
+    function restoreInsightRectProvider() {
+        if (!insightRectVisible || !insightActiveType || !insightActiveAsNum) return;
+        // Rebuild the rect with the original data
+        var data = getInsightDataForActive();
+        if (data) showInsightRect(insightActiveType, data);
+    }
+
+    /** Get the current insight data for the active insight type/AS */
+    function getInsightDataForActive() {
+        if (!insightActiveAsNum || !insightActiveType) return null;
+        var sumData = computeSummaryData();
+        for (var i = 0; i < sumData.insights.length; i++) {
+            var ins = sumData.insights[i];
+            if (insightActiveType === 'stable' && ins.type === 'stable') {
+                return {
+                    provName: ins.provName,
+                    asNumber: ins.asNumber,
+                    peerIds: ins.peerIds,
+                    durText: ins.durText,
+                    color: getColorForAsNum(ins.asNumber)
+                };
+            }
+            if (insightActiveType === 'fastest' && ins.type === 'fastest' && ins.topProviders) {
+                for (var j = 0; j < ins.topProviders.length; j++) {
+                    if (ins.topProviders[j].asNumber === insightActiveAsNum) {
+                        return {
+                            provName: ins.topProviders[j].provName,
+                            asNumber: ins.topProviders[j].asNumber,
+                            peerIds: ins.topProviders[j].peerIds,
+                            avgPing: ins.topProviders[j].avgPing,
+                            rank: j + 1,
+                            color: ins.topProviders[j].color || getColorForAsNum(ins.topProviders[j].asNumber)
+                        };
+                    }
+                }
+            }
+            if (ins.type === 'data-providers' && ins.topProviders) {
+                var isRecv = insightActiveType === 'data-bytesrecv';
+                var isSent = insightActiveType === 'data-bytessent';
+                if ((isSent && ins.field === 'bytessent') || (isRecv && ins.field === 'bytesrecv')) {
+                    for (var j = 0; j < ins.topProviders.length; j++) {
+                        if (ins.topProviders[j].asNumber === insightActiveAsNum) {
+                            return {
+                                provName: ins.topProviders[j].provName,
+                                asNumber: ins.topProviders[j].asNumber,
+                                peers: ins.topProviders[j].peers,
+                                totalBytes: ins.topProviders[j].totalBytes,
+                                rank: j + 1,
+                                color: ins.topProviders[j].color || getColorForAsNum(ins.topProviders[j].asNumber)
+                            };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Hide the insight rectangle and restore the donut SVG + center text */
+    function hideInsightRect() {
+        if (!insightRectEl) return;
+        insightRectEl.classList.remove('visible');
+        insightRectVisible = false;
+        // Show donut SVG and center
+        if (donutSvg) donutSvg.style.opacity = '';
+        if (donutCenter) donutCenter.style.opacity = '';
+    }
+
     /** Get quality rating for a diversity score */
     function getQuality(score) {
         if (score >= 8) return { word: 'Excellent', cls: 'q-excellent' };
@@ -1073,9 +1268,15 @@ window.ASDiversity = (function () {
         }
 
         // If an insight is active (Most Stable, Fastest, etc.) and no AS is selected,
-        // show that insight's provider in the donut center
+        // refresh the insight rectangle (it replaces the donut)
         if (insightActiveAsNum && summarySelected && !selectedAs && donutFocused) {
-            showFocusedCenterText(insightActiveAsNum);
+            if (insightRectVisible) {
+                // Rect is already visible — refresh its data
+                var insData = getInsightDataForActive();
+                if (insData) showInsightRect(insightActiveType, insData);
+            } else {
+                showFocusedCenterText(insightActiveAsNum);
+            }
             return;
         }
 
@@ -1837,22 +2038,32 @@ window.ASDiversity = (function () {
                 row.addEventListener('mouseenter', function () {
                     var peerId = parseInt(row.dataset.peerId);
                     if (isNaN(peerId)) return;
+                    hoveredPeerId = peerId; // Track for update preservation
                     if (summarySelected) {
                         previewSummaryLines([peerId]);
                     } else if (selectedAs) {
                         previewProviderLines([peerId]);
                     }
-                    // In focused mode, show peer ID + provider in donut center
+                    // In focused mode, show peer info in donut center or update insight rect
                     if (donutFocused) {
                         var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
                         if (peer) {
                             var asNum = row.dataset.as || parseAsNumber(peer.as);
                             var color = asNum ? getColorForAsNum(asNum) : '#6e7681';
-                            showPeerInDonutCenter(peer, color);
+                            if (insightRectVisible) {
+                                updateInsightRectForPeer(peer, color);
+                            } else {
+                                showPeerInDonutCenter(peer, color);
+                                // Keep donut expanded for the provider context
+                                if (subFilterCategory && subFilterCategory.indexOf('conn-') === 0 && subFilterLabel) {
+                                    animateDonutExpand(subFilterLabel);
+                                }
+                            }
                         }
                     }
                 });
                 row.addEventListener('mouseleave', function () {
+                    hoveredPeerId = null; // Clear hover tracking
                     if (summarySelected) {
                         restoreSummaryFromPreview();
                     } else if (selectedAs) {
@@ -1860,7 +2071,13 @@ window.ASDiversity = (function () {
                     }
                     // In focused mode, restore center to provider/score
                     if (donutFocused) {
-                        if (selectedAs) {
+                        if (insightRectVisible) {
+                            restoreInsightRectProvider();
+                        } else if (subFilterCategory && subFilterCategory.indexOf('conn-') === 0 && subFilterLabel) {
+                            // Restore donut to show the provider (keep expanded)
+                            showFocusedCenterText(subFilterLabel);
+                            animateDonutExpand(subFilterLabel);
+                        } else if (selectedAs) {
                             renderCenter();
                         } else if (!othersListOpen) {
                             renderCenter();
@@ -1876,7 +2093,7 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → zoom to peer on map and show map tooltip (keep panel intact)
+        // Peer ID click → zoom to peer on map and open the large peer detail popup
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
@@ -1886,14 +2103,10 @@ window.ASDiversity = (function () {
                     if (isNaN(peerId)) return;
                     // Zoom to peer on map — panel stays open for navigation
                     if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
-                    // Draw line to just this peer
+                    // Find the peer data and open the large popup
                     var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
                     if (peer) {
-                        var asNum = parseAsNumber(peer.as);
-                        var color = asNum ? getColorForAsNum(asNum) : '#6e7681';
-                        if (_drawLinesForAs && asNum) _drawLinesForAs(asNum, [peerId], color);
-                        if (_filterPeerTable) _filterPeerTable([peerId]);
-                        if (_dimMapPeers) _dimMapPeers([peerId]);
+                        openPeerDetailPanel(peer, 'panel');
                     }
                 });
             })(idLinks[li]);
@@ -2158,7 +2371,7 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → zoom to peer on map and show map tooltip (keep panel intact)
+        // Peer ID click → zoom to peer on map and open the large peer detail popup
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
@@ -2168,14 +2381,10 @@ window.ASDiversity = (function () {
                     if (isNaN(peerId)) return;
                     // Zoom to peer on map — panel stays open for navigation
                     if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
-                    // Draw line to just this peer
+                    // Find the peer data and open the large popup
                     var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
                     if (peer) {
-                        var asNum = parseAsNumber(peer.as);
-                        var color = asNum ? getColorForAsNum(asNum) : '#6e7681';
-                        if (_drawLinesForAs && asNum) _drawLinesForAs(asNum, [peerId], color);
-                        if (_filterPeerTable) _filterPeerTable([peerId]);
-                        if (_dimMapPeers) _dimMapPeers([peerId]);
+                        openPeerDetailPanel(peer, 'panel');
                     }
                 });
             })(idLinks[li]);
@@ -2356,7 +2565,9 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
-                    if (donutFocused && asNum) {
+                    if (donutFocused && asNum && insightRectVisible) {
+                        restoreInsightRectProvider();
+                    } else if (donutFocused && asNum) {
                         showFocusedCenterText(asNum);
                         animateDonutExpand(asNum);
                     }
@@ -2378,7 +2589,9 @@ window.ASDiversity = (function () {
             }
             if (_filterPeerTable) _filterPeerTable(peerIds);
             if (_dimMapPeers) _dimMapPeers(peerIds);
-            if (donutFocused) {
+            if (donutFocused && insightRectVisible) {
+                restoreInsightRectProvider();
+            } else if (donutFocused) {
                 showFocusedCenterText(asNum);
                 animateDonutExpand(asNum);
             }
@@ -2632,6 +2845,15 @@ window.ASDiversity = (function () {
                     attachSubTooltipHandlers();
                     var tipEl = document.getElementById('as-sub-tooltip');
                     if (tipEl) attachProviderNavHandlers(tipEl);
+                    // Clear any active insight state when selecting a provider
+                    if (insightActiveAsNum || insightActiveType) {
+                        insightActiveAsNum = null;
+                        insightActiveType = null;
+                        hideInsightRect();
+                    }
+                    // Clear all highlights before setting new ones
+                    var activeBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                    if (activeBodyEl) { var prev = activeBodyEl.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
                     // Track sub-filter state for data refresh preservation
                     var asNum = rowEl.dataset.as;
                     subFilterPeerIds = peerIds;
@@ -2644,6 +2866,11 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+                    // Keep donut expanded for this provider while viewing its peers
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
             })(connProvRows[cpi]);
         }
@@ -2742,12 +2969,22 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
                     attachSubTooltipHandlers();
+                    // Clear insight state
+                    if (insightActiveAsNum || insightActiveType) { insightActiveAsNum = null; insightActiveType = null; hideInsightRect(); }
+                    var activeBodyOut = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                    if (activeBodyOut) { var prev = activeBodyOut.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
                     // Track sub-filter state for data refresh preservation
                     subFilterPeerIds = peerIds;
                     subFilterCategory = 'conn-out';
                     subFilterLabel = rowEl.dataset.as || '';
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+                    // Keep donut expanded for the parent provider
+                    var asNum = rowEl.dataset.as;
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
             })(connOutRows[coi]);
         }
@@ -2833,12 +3070,22 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     pinSubTooltip(html, rowEl, function (tip) { attachSubTooltipHandlers(); });
                     attachSubTooltipHandlers();
+                    // Clear insight state
+                    if (insightActiveAsNum || insightActiveType) { insightActiveAsNum = null; insightActiveType = null; hideInsightRect(); }
+                    var activeBodyIn = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                    if (activeBodyIn) { var prev = activeBodyIn.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
                     // Track sub-filter state for data refresh preservation
                     subFilterPeerIds = peerIds;
                     subFilterCategory = 'conn-in';
                     subFilterLabel = rowEl.dataset.as || '';
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+                    // Keep donut expanded for the parent provider
+                    var asNum = rowEl.dataset.as;
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
                 });
             })(connDirRows[cdi]);
         }
@@ -2986,7 +3233,7 @@ window.ASDiversity = (function () {
                 for (var pi = 0; pi < fastInsight.topProviders.length; pi++) {
                     var prov = fastInsight.topProviders[pi];
                     var peerIdsJson = JSON.stringify(prov.peerIds.slice(0, 20)).replace(/"/g, '&quot;');
-                    html += '<div class="as-sub-tt-peer as-provider-row as-fastest-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '">';
+                    html += '<div class="as-sub-tt-peer as-provider-row as-fastest-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '" data-rank="' + (pi + 1) + '" data-avg-ping="' + prov.avgPing.toFixed(1) + '">';
                     html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
                     html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
                     var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
@@ -3051,6 +3298,7 @@ window.ASDiversity = (function () {
                     subFilterLabel = null;
                     insightActiveAsNum = null;
                     insightActiveType = null;
+                    hideInsightRect();
                     if (donutFocused) animateDonutRevert();
                     if (_filterPeerTable) _filterPeerTable(null);
                     if (_dimMapPeers) _dimMapPeers(null);
@@ -3073,7 +3321,7 @@ window.ASDiversity = (function () {
                 subFilterPeerIds = [];
                 subFilterCategory = 'insight-fastest';
                 subFilterLabel = 'fastest';
-                // Activate insight donut state — morph to #1 fastest provider
+                // Activate insight donut state — show insight rectangle for #1 fastest provider
                 var insData = computeSummaryData();
                 for (var ij = 0; ij < insData.insights.length; ij++) {
                     if (insData.insights[ij].type === 'fastest' && insData.insights[ij].topProviders && insData.insights[ij].topProviders.length > 0) {
@@ -3081,8 +3329,14 @@ window.ASDiversity = (function () {
                         insightActiveAsNum = topProv.asNumber;
                         insightActiveType = 'fastest';
                         if (donutFocused) {
-                            showFocusedCenterText(topProv.asNumber);
-                            animateDonutExpand(topProv.asNumber);
+                            showInsightRect('fastest', {
+                                provName: topProv.provName,
+                                asNumber: topProv.asNumber,
+                                peerIds: topProv.peerIds,
+                                avgPing: topProv.avgPing,
+                                rank: 1,
+                                color: topProv.color || getColorForAsNum(topProv.asNumber)
+                            });
                         }
                         setLegendFocus(topProv.asNumber);
                         // Also draw lines for #1 provider immediately
@@ -3175,6 +3429,7 @@ window.ASDiversity = (function () {
                     subFilterLabel = null;
                     insightActiveAsNum = null;
                     insightActiveType = null;
+                    hideInsightRect();
                     if (donutFocused) animateDonutRevert();
                     if (_filterPeerTable) _filterPeerTable(null);
                     if (_dimMapPeers) _dimMapPeers(null);
@@ -3207,12 +3462,24 @@ window.ASDiversity = (function () {
                 if (_drawLinesForAs && result.asNum) {
                     _drawLinesForAs(result.asNum, result.peerIds, color);
                 }
-                // Activate insight donut state — morph donut to show this provider
+                // Activate insight donut state — show insight rectangle
                 insightActiveAsNum = result.asNum;
                 insightActiveType = 'stable';
                 if (donutFocused) {
-                    showFocusedCenterText(result.asNum);
-                    animateDonutExpand(result.asNum);
+                    var insData = computeSummaryData();
+                    var stableIns = null;
+                    for (var ij = 0; ij < insData.insights.length; ij++) {
+                        if (insData.insights[ij].type === 'stable') { stableIns = insData.insights[ij]; break; }
+                    }
+                    if (stableIns) {
+                        showInsightRect('stable', {
+                            provName: stableIns.provName,
+                            asNumber: stableIns.asNumber,
+                            peerIds: stableIns.peerIds,
+                            durText: stableIns.durText,
+                            color: color
+                        });
+                    }
                 }
                 setLegendFocus(result.asNum);
             });
@@ -3243,7 +3510,7 @@ window.ASDiversity = (function () {
                     for (var pi = 0; pi < insight.topProviders.length; pi++) {
                         var prov = insight.topProviders[pi];
                         var peerIdsJson = JSON.stringify(prov.peers.slice(0, 20).map(function (p) { return p.id; })).replace(/"/g, '&quot;');
-                        html += '<div class="as-sub-tt-peer as-provider-row as-data-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '" data-field="' + field + '">';
+                        html += '<div class="as-sub-tt-peer as-provider-row as-data-prov-row" data-as="' + prov.asNumber + '" data-peer-ids="' + peerIdsJson + '" data-field="' + field + '" data-rank="' + (pi + 1) + '" data-total-bytes="' + prov.totalBytes + '">';
                         html += '<span class="as-sub-tt-rank">#' + (pi + 1) + '</span>';
                         html += '<span class="as-grid-dot" style="background:' + prov.color + '"></span>';
                         var name = prov.provName.length > 14 ? prov.provName.substring(0, 13) + '\u2026' : prov.provName;
@@ -3309,6 +3576,7 @@ window.ASDiversity = (function () {
                         subFilterLabel = null;
                         insightActiveAsNum = null;
                         insightActiveType = null;
+                        hideInsightRect();
                         if (donutFocused) animateDonutRevert();
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
@@ -3332,15 +3600,22 @@ window.ASDiversity = (function () {
                     subFilterPeerIds = [];
                     subFilterCategory = 'insight-data-' + field;
                     subFilterLabel = field;
-                    // Activate insight donut state — morph to #1 data provider
+                    // Activate insight donut state — show insight rectangle for #1 data provider
                     var insDataResult = buildDataProviderHtml();
                     if (insDataResult && insDataResult.insight && insDataResult.insight.topProviders && insDataResult.insight.topProviders.length > 0) {
                         var topDataProv = insDataResult.insight.topProviders[0];
                         insightActiveAsNum = topDataProv.asNumber;
                         insightActiveType = 'data-' + field;
                         if (donutFocused) {
-                            showFocusedCenterText(topDataProv.asNumber);
-                            animateDonutExpand(topDataProv.asNumber);
+                            var rectType = field === 'bytesrecv' ? 'data-bytesrecv' : 'data-bytessent';
+                            showInsightRect(rectType, {
+                                provName: topDataProv.provName,
+                                asNumber: topDataProv.asNumber,
+                                peers: topDataProv.peers,
+                                totalBytes: topDataProv.totalBytes,
+                                rank: 1,
+                                color: topDataProv.color || getColorForAsNum(topDataProv.asNumber)
+                            });
                         }
                         setLegendFocus(topDataProv.asNumber);
                         var topDataPeerIds = topDataProv.peers.slice(0, 20).map(function (p) { return p.id; });
@@ -3363,6 +3638,7 @@ window.ASDiversity = (function () {
                 provRow.addEventListener('mouseenter', function () {
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    var rank = parseInt(provRow.dataset.rank) || 0;
                     // Focus legend on this provider
                     if (asNum) setLegendFocus(asNum);
                     if (peerIds.length > 0 && _drawLinesForAs && asNum) {
@@ -3370,20 +3646,37 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
-                    // In focused mode, show provider in donut center + animate
-                    if (donutFocused && asNum) {
+                    // In focused mode, update insight rect for this provider
+                    if (donutFocused && asNum && insightRectVisible) {
+                        var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+                        var avgPing = parseFloat(provRow.dataset.avgPing) || 0;
+                        showInsightRect('fastest', {
+                            provName: grp ? (grp.asShort || grp.asName || asNum) : asNum,
+                            asNumber: asNum,
+                            peerIds: peerIds,
+                            avgPing: avgPing,
+                            rank: rank,
+                            color: getColorForAsNum(asNum)
+                        });
+                        insightActiveAsNum = asNum;
+                    } else if (donutFocused && asNum) {
                         showFocusedCenterText(asNum);
                         animateDonutExpand(asNum);
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    // On leave, default to #1 ranked provider (not all)
-                    restoreSummaryFromPreview();
+                    // On leave, restore to the pinned insight provider
+                    if (insightRectVisible) {
+                        restoreInsightRectProvider();
+                    } else {
+                        restoreSummaryFromPreview();
+                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
                     var asNum = provRow.dataset.as;
+                    var rank = parseInt(provRow.dataset.rank) || 0;
 
                     // Keep legend focused on this provider while sub-sub is pinned
                     legendFocusAs = asNum;
@@ -3412,6 +3705,21 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+
+                    // Update insight rect to show selected provider
+                    if (donutFocused && insightRectVisible) {
+                        var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+                        var avgPing = parseFloat(provRow.dataset.avgPing) || 0;
+                        insightActiveAsNum = asNum;
+                        showInsightRect('fastest', {
+                            provName: grp ? (grp.asShort || grp.asName || asNum) : asNum,
+                            asNumber: asNum,
+                            peerIds: peerIds,
+                            avgPing: avgPing,
+                            rank: rank,
+                            color: getColorForAsNum(asNum)
+                        });
+                    }
                 });
             })(provRows[pi]);
         }
@@ -3458,6 +3766,7 @@ window.ASDiversity = (function () {
                 provRow.addEventListener('mouseenter', function () {
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
+                    var rank = parseInt(provRow.dataset.rank) || 0;
                     // Focus legend on this provider
                     if (asNum) setLegendFocus(asNum);
                     if (peerIds.length > 0 && _drawLinesForAs && asNum) {
@@ -3465,15 +3774,32 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
-                    // In focused mode, show provider in donut center + animate
-                    if (donutFocused && asNum) {
+                    // In focused mode, update insight rect for this provider
+                    if (donutFocused && asNum && insightRectVisible) {
+                        var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+                        var totalBytes = parseInt(provRow.dataset.totalBytes) || 0;
+                        var rectType = field === 'bytesrecv' ? 'data-bytesrecv' : 'data-bytessent';
+                        insightActiveAsNum = asNum;
+                        showInsightRect(rectType, {
+                            provName: grp ? (grp.asShort || grp.asName || asNum) : asNum,
+                            asNumber: asNum,
+                            peers: peerIds,
+                            totalBytes: totalBytes,
+                            rank: rank,
+                            color: getColorForAsNum(asNum)
+                        });
+                    } else if (donutFocused && asNum) {
                         showFocusedCenterText(asNum);
                         animateDonutExpand(asNum);
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    // On leave, default to #1 ranked provider (not all)
-                    restoreSummaryFromPreview();
+                    // On leave, restore to the pinned insight provider
+                    if (insightRectVisible) {
+                        restoreInsightRectProvider();
+                    } else {
+                        restoreSummaryFromPreview();
+                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3511,6 +3837,23 @@ window.ASDiversity = (function () {
                     }
                     if (_filterPeerTable) _filterPeerTable(peerIds);
                     if (_dimMapPeers) _dimMapPeers(peerIds);
+
+                    // Update insight rect to show selected data provider
+                    if (donutFocused && insightRectVisible) {
+                        var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+                        var totalBytes = parseInt(provRow.dataset.totalBytes) || 0;
+                        var rank = parseInt(provRow.dataset.rank) || 0;
+                        var rectType = rowField === 'bytesrecv' ? 'data-bytesrecv' : 'data-bytessent';
+                        insightActiveAsNum = asNum;
+                        showInsightRect(rectType, {
+                            provName: grp ? (grp.asShort || grp.asName || asNum) : asNum,
+                            asNumber: asNum,
+                            peers: peerIds,
+                            totalBytes: totalBytes,
+                            rank: rank,
+                            color: getColorForAsNum(asNum)
+                        });
+                    }
                 });
             })(provRows[pi]);
         }
@@ -3589,6 +3932,13 @@ window.ASDiversity = (function () {
             clearSummarySubFilter();
             return;
         }
+        // Clear any active insight state when switching to a different category
+        if (insightActiveAsNum || insightActiveType) {
+            insightActiveAsNum = null;
+            insightActiveType = null;
+            hideInsightRect();
+            if (donutFocused) animateDonutRevert();
+        }
         subFilterPeerIds = peerIds;
         subFilterCategory = 'summary';
         subFilterLabel = label;
@@ -3621,6 +3971,7 @@ window.ASDiversity = (function () {
         insightActiveAsNum = null;
         insightActiveType = null;
         hideSubTooltip();
+        hideInsightRect();
         // Restore to showing all peers
         if (_filterPeerTable) _filterPeerTable(null);
         if (_dimMapPeers) _dimMapPeers(null);
@@ -3637,12 +3988,14 @@ window.ASDiversity = (function () {
     function highlightActiveSummaryRow() {
         var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
         if (!bodyEl) return;
+        // Clear ALL highlights first (summary rows + insight rows + grid rows)
+        var allActive = bodyEl.querySelectorAll('.sub-filter-active');
+        for (var ai = 0; ai < allActive.length; ai++) allActive[ai].classList.remove('sub-filter-active');
+        // Re-apply highlight only to matching summary row
         var rows = bodyEl.querySelectorAll('.as-summary-row');
         for (var ri = 0; ri < rows.length; ri++) {
             if (subFilterLabel && rows[ri].dataset.catLabel === subFilterLabel) {
                 rows[ri].classList.add('sub-filter-active');
-            } else {
-                rows[ri].classList.remove('sub-filter-active');
             }
         }
     }
@@ -3679,6 +4032,7 @@ window.ASDiversity = (function () {
         insightActiveType = null;
         hideSubTooltip();
         hideSubSubTooltip();
+        hideInsightRect();
         closePanel();
         deactivateHoverAll();
         if (_filterPeerTable) _filterPeerTable(null);
@@ -3766,6 +4120,7 @@ window.ASDiversity = (function () {
         panelHistory = [];
         hideSubTooltip();
         hideSubSubTooltip();
+        hideInsightRect();
 
         if (donutFocused) {
             summarySelected = true;
@@ -4433,6 +4788,7 @@ window.ASDiversity = (function () {
         subFilterLabel = null;
         subFilterCategory = null;
         hideSubTooltip();
+        hideInsightRect();
         closePanel();
         if (containerEl) containerEl.classList.remove('as-legend-visible');
         if (_filterPeerTable) _filterPeerTable(null);
@@ -4546,6 +4902,7 @@ window.ASDiversity = (function () {
 
         // Revert donut animation
         stopDonutAnimation();
+        hideInsightRect();
 
         // Deselect everything
         if (summarySelected) deselectSummary();
@@ -4768,30 +5125,78 @@ window.ASDiversity = (function () {
             });
         }
 
-        // Bind disconnect button — same as existing disconnect in map tooltip
+        // Bind disconnect button — shows Disconnect Only / Disconnect + Ban 24h / Cancel dialog
         var disconnBtn = popup.querySelector('.peer-popup-disconnect');
         if (disconnBtn) {
             disconnBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var peerId = parseInt(disconnBtn.dataset.peerId);
                 if (isNaN(peerId)) return;
-                if (confirm('Disconnect peer #' + peerId + '?')) {
-                    fetch('/api/peer/disconnect', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ peer_id: peerId })
-                    }).then(function (resp) { return resp.json(); }).then(function (data) {
-                        if (data.success) {
-                            disconnBtn.textContent = '\u2714 Disconnected';
-                            disconnBtn.classList.add('disconnected');
-                            disconnBtn.disabled = true;
-                        } else {
-                            disconnBtn.textContent = 'Failed: ' + (data.error || 'unknown');
-                        }
-                    }).catch(function () {
-                        disconnBtn.textContent = 'Error \u2014 try again';
-                    });
-                }
+                var peerNet = (peer.network || 'ipv4').toLowerCase();
+                var canBan = (peerNet === 'ipv4' || peerNet === 'ipv6');
+                // Remove any existing dialog
+                var existingDlg = document.getElementById('disconnect-dialog');
+                if (existingDlg) existingDlg.remove();
+                // Create the dialog overlay
+                var overlay = document.createElement('div');
+                overlay.id = 'disconnect-dialog';
+                overlay.className = 'dialog-overlay';
+                overlay.innerHTML = '<div class="dialog-box">' +
+                    '<div class="dialog-title">Disconnect Peer ' + peerId + '</div>' +
+                    '<div class="dialog-text">Choose an action for this peer:</div>' +
+                    '<div class="dialog-actions">' +
+                    '<button class="dialog-btn dialog-btn-disconnect" data-choice="disconnect">Disconnect Only</button>' +
+                    (canBan ? '<button class="dialog-btn dialog-btn-ban" data-choice="ban">Disconnect + Ban 24h</button>' : '') +
+                    '<button class="dialog-btn dialog-btn-cancel" data-choice="cancel">Cancel</button>' +
+                    '</div></div>';
+                document.body.appendChild(overlay);
+                overlay.addEventListener('click', function (ev) {
+                    var btn = ev.target.closest('.dialog-btn');
+                    if (!btn && ev.target === overlay) { overlay.remove(); return; }
+                    if (!btn) return;
+                    var choice = btn.dataset.choice;
+                    overlay.remove();
+                    if (choice === 'cancel') return;
+                    if (choice === 'ban') {
+                        fetch('/api/peer/ban', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ peer_id: peerId })
+                        }).then(function (r) { return r.json(); }).then(function (banData) {
+                            if (!banData.success) {
+                                disconnBtn.textContent = 'Ban failed: ' + (banData.error || '');
+                                return;
+                            }
+                            fetch('/api/peer/disconnect', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ peer_id: peerId })
+                            }).then(function (r) { return r.json(); }).then(function (dcData) {
+                                if (dcData.success) {
+                                    disconnBtn.textContent = '\u2714 Banned + Disconnected';
+                                    disconnBtn.classList.add('disconnected');
+                                    disconnBtn.disabled = true;
+                                } else {
+                                    disconnBtn.textContent = 'Banned but DC failed';
+                                }
+                            });
+                        }).catch(function () { disconnBtn.textContent = 'Error'; });
+                    } else {
+                        fetch('/api/peer/disconnect', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ peer_id: peerId })
+                        }).then(function (r) { return r.json(); }).then(function (data) {
+                            if (data.success) {
+                                disconnBtn.textContent = '\u2714 Disconnected';
+                                disconnBtn.classList.add('disconnected');
+                                disconnBtn.disabled = true;
+                            } else {
+                                disconnBtn.textContent = 'Failed: ' + (data.error || '');
+                            }
+                        }).catch(function () { disconnBtn.textContent = 'Error'; });
+                    }
+                });
             });
         }
     }
@@ -4874,6 +5279,7 @@ window.ASDiversity = (function () {
         panelEl = document.getElementById('as-detail-panel');
         loadingEl = containerEl ? containerEl.querySelector('.as-loading') : null;
         focusedCloseBtn = document.getElementById('as-focused-close');
+        insightRectEl = document.getElementById('as-insight-rect');
 
         // Hover-all: title triggers all-segments highlight; click enters focused mode
         if (titleEl) {
@@ -5104,9 +5510,16 @@ window.ASDiversity = (function () {
                         }
                         subSubFilterPeerIds = freshProvPeerIds;
                         var ssColor = subSubFilterColor || getColorForAsNum(subSubFilterAsNum);
-                        if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, freshProvPeerIds, ssColor);
-                        if (_filterPeerTable) _filterPeerTable(freshProvPeerIds);
-                        if (_dimMapPeers) _dimMapPeers(freshProvPeerIds);
+                        // If a peer is currently being hovered, preserve that single-peer view
+                        if (hoveredPeerId && freshProvPeerIds.indexOf(hoveredPeerId) >= 0) {
+                            if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, [hoveredPeerId], ssColor);
+                            if (_filterPeerTable) _filterPeerTable([hoveredPeerId]);
+                            if (_dimMapPeers) _dimMapPeers([hoveredPeerId]);
+                        } else {
+                            if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, freshProvPeerIds, ssColor);
+                            if (_filterPeerTable) _filterPeerTable(freshProvPeerIds);
+                            if (_dimMapPeers) _dimMapPeers(freshProvPeerIds);
+                        }
                     }
                 }
                 // PRIORITY 2: Sub-tooltip pinned at category level (e.g. "IPv6" showing providers)
@@ -5156,9 +5569,12 @@ window.ASDiversity = (function () {
                             if (_drawLinesForAs) _drawLinesForAs(subFilterLabel, provGroup.peerIds, color);
                             if (_filterPeerTable) _filterPeerTable(provGroup.peerIds);
                             if (_dimMapPeers) _dimMapPeers(provGroup.peerIds);
-                            // Preserve insight donut state
+                            // Preserve insight rect state
                             insightActiveAsNum = subFilterLabel;
-                            if (donutFocused) {
+                            if (donutFocused && insightRectVisible) {
+                                var insRectData = getInsightDataForActive();
+                                if (insRectData) showInsightRect(insightActiveType, insRectData);
+                            } else if (donutFocused) {
                                 showFocusedCenterText(subFilterLabel);
                                 animateDonutExpand(subFilterLabel);
                             }
@@ -5214,10 +5630,15 @@ window.ASDiversity = (function () {
                         }
                     }
                     // For insight-fastest, insight-data-*, all-providers: just preserve DOM, no filter change
-                    // But DO preserve donut state for insight providers
+                    // But DO preserve insight rect state for insight providers
                     if (insightActiveAsNum && donutFocused) {
-                        showFocusedCenterText(insightActiveAsNum);
-                        animateDonutExpand(insightActiveAsNum);
+                        if (insightRectVisible) {
+                            var insRectData = getInsightDataForActive();
+                            if (insRectData) showInsightRect(insightActiveType, insRectData);
+                        } else {
+                            showFocusedCenterText(insightActiveAsNum);
+                            animateDonutExpand(insightActiveAsNum);
+                        }
                         // Also re-draw lines for the insight provider (may have shifted after data refresh)
                         var insProvGroup = asGroups.find(function (g) { return g.asNumber === insightActiveAsNum; });
                         if (insProvGroup) {
@@ -5290,7 +5711,7 @@ window.ASDiversity = (function () {
                         activateHoverAll();
                     }
                 } else if (savedInsightAsNum) {
-                    // Insight was active (e.g. Most Stable, Fastest) — preserve its donut/line state
+                    // Insight was active (e.g. Most Stable, Fastest) — preserve its rect/line state
                     var insightPeerIds = getPeerIdsForAnyAs(savedInsightAsNum);
                     var insightColor = getColorForAsNum(savedInsightAsNum);
                     if (insightPeerIds.length > 0 && _drawLinesForAs) {
@@ -5300,8 +5721,13 @@ window.ASDiversity = (function () {
                     if (_dimMapPeers) _dimMapPeers(insightPeerIds);
                     setLegendFocus(savedInsightAsNum);
                     if (donutFocused) {
-                        showFocusedCenterText(savedInsightAsNum);
-                        animateDonutExpand(savedInsightAsNum);
+                        if (insightRectVisible) {
+                            var insRectData = getInsightDataForActive();
+                            if (insRectData) showInsightRect(insightActiveType, insRectData);
+                        } else {
+                            showFocusedCenterText(savedInsightAsNum);
+                            animateDonutExpand(savedInsightAsNum);
+                        }
                     }
                 } else {
                     activateHoverAll();
