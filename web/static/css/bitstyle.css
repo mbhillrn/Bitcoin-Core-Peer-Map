@@ -756,9 +756,9 @@ html, body {
     cursor: pointer;
     user-select: none;
     padding: 4px 12px;
-    transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 opacity 0.3s ease;
 }
 .btc-price-bar:hover { opacity: 0.85; }
@@ -949,14 +949,14 @@ body.theme-light .ro-link:hover {
     top: 88px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 85;
+    z-index: 290;
     display: flex;
     gap: 4px;
     pointer-events: auto;
-    transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ==========================================================
@@ -965,22 +965,22 @@ body.theme-light .ro-link:hover {
 
 /* BTC price: shrinks and moves under system info on upper left */
 body.donut-focused .btc-price-bar {
-    top: 185px;
+    top: 168px;
     left: 18px;
     right: auto;
     transform: scale(0.82);
     transform-origin: left center;
-    transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 opacity 0.3s ease;
 }
 
-/* Map controls: move to upper-right where donut title was */
+/* Map controls: move below BTC price on the left */
 body.donut-focused .map-controls {
-    top: 52px;
-    left: auto;
-    right: 14px;
+    top: 200px;
+    left: 18px;
+    right: auto;
     transform: none;
 }
 

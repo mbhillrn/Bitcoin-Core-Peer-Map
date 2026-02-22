@@ -17,7 +17,9 @@ window.ASDiversity = (function () {
     const MAX_SEGMENTS = 8;      // Top N ASes in the donut, rest = "Others"
     const DONUT_SIZE = 260;      // SVG viewBox size
     const DONUT_RADIUS = 116;    // Outer radius of the donut ring
-    const DONUT_WIDTH = 28;      // Width of the donut ring
+    const DONUT_WIDTH = 28;      // Width of the donut ring (default)
+    const DONUT_WIDTH_SELECTED = 40;  // Width when selected (thicker)
+    const DONUT_WIDTH_DIMMED = 14;    // Width when dimmed (thinner)
     const INNER_RADIUS = DONUT_RADIUS - DONUT_WIDTH;
 
     // Curated colour palette — 9 colours (8 AS + Others), distinct and accessible
@@ -894,13 +896,35 @@ window.ASDiversity = (function () {
                 angle += sweep + gap;
             }
 
+            // Calculate per-segment ring widths (animated: selected=thick, others=thin)
+            var segWidths = [];
+            var animT = 0;
+            if ((donutAnimState === 'expanding' || donutAnimState === 'expanded' || donutAnimState === 'reverting') && donutAnimTarget) {
+                animT = donutAnimState === 'reverting' ? (1 - donutAnimProgress) : donutAnimProgress;
+                animT = animT < 0.5 ? 2 * animT * animT : 1 - Math.pow(-2 * animT + 2, 2) / 2;
+            }
+            for (var si = 0; si < donutSegments.length; si++) {
+                if (animT > 0 && donutAnimTarget) {
+                    if (donutSegments[si].asNumber === donutAnimTarget) {
+                        segWidths.push(DONUT_WIDTH + (DONUT_WIDTH_SELECTED - DONUT_WIDTH) * animT);
+                    } else {
+                        segWidths.push(DONUT_WIDTH + (DONUT_WIDTH_DIMMED - DONUT_WIDTH) * animT);
+                    }
+                } else {
+                    segWidths.push(DONUT_WIDTH);
+                }
+            }
+
             // Group for shadow on all segments
             html += '<g filter="url(#donut-shadow)">';
             for (var si = 0; si < donutSegments.length; si++) {
                 var seg = donutSegments[si];
                 if (!segAngles[si] || sweeps[si] <= 0) continue;
 
-                var d = describeArc(cx, cy, DONUT_RADIUS, INNER_RADIUS, segAngles[si].start, segAngles[si].end);
+                var segW = segWidths[si];
+                var segOuter = DONUT_RADIUS - (DONUT_WIDTH - segW) / 2;
+                var segInner = segOuter - segW;
+                var d = describeArc(cx, cy, segOuter, segInner, segAngles[si].start, segAngles[si].end);
 
                 var cls = ['as-donut-segment'];
                 if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
@@ -1843,7 +1867,7 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → in focused mode open full peer detail; otherwise zoom
+        // Peer ID click → zoom to peer on map and show map tooltip (keep panel intact)
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
@@ -1851,14 +1875,16 @@ window.ASDiversity = (function () {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
                     if (isNaN(peerId)) return;
-                    if (donutFocused) {
-                        var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
-                        if (peer) {
-                            openPeerDetailPanel(peer, 'panel');
-                            if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
-                        }
-                    } else if (_zoomToPeerOnly) {
-                        _zoomToPeerOnly(peerId);
+                    // Zoom to peer on map — panel stays open for navigation
+                    if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
+                    // Draw line to just this peer
+                    var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
+                    if (peer) {
+                        var asNum = parseAsNumber(peer.as);
+                        var color = asNum ? getColorForAsNum(asNum) : '#6e7681';
+                        if (_drawLinesForAs && asNum) _drawLinesForAs(asNum, [peerId], color);
+                        if (_filterPeerTable) _filterPeerTable([peerId]);
+                        if (_dimMapPeers) _dimMapPeers([peerId]);
                     }
                 });
             })(idLinks[li]);
@@ -2123,7 +2149,7 @@ window.ASDiversity = (function () {
         var tip = document.getElementById('as-sub-sub-tooltip');
         if (!tip) return;
 
-        // Peer ID click → in focused mode open full peer detail; otherwise zoom
+        // Peer ID click → zoom to peer on map and show map tooltip (keep panel intact)
         var idLinks = tip.querySelectorAll('.as-sub-tt-id-link');
         for (var li = 0; li < idLinks.length; li++) {
             (function (link) {
@@ -2131,14 +2157,16 @@ window.ASDiversity = (function () {
                     e.stopPropagation();
                     var peerId = parseInt(link.dataset.peerId);
                     if (isNaN(peerId)) return;
-                    if (donutFocused) {
-                        var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
-                        if (peer) {
-                            openPeerDetailPanel(peer, 'panel');
-                            if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
-                        }
-                    } else if (_zoomToPeerOnly) {
-                        _zoomToPeerOnly(peerId);
+                    // Zoom to peer on map — panel stays open for navigation
+                    if (_zoomToPeerOnly) _zoomToPeerOnly(peerId);
+                    // Draw line to just this peer
+                    var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
+                    if (peer) {
+                        var asNum = parseAsNumber(peer.as);
+                        var color = asNum ? getColorForAsNum(asNum) : '#6e7681';
+                        if (_drawLinesForAs && asNum) _drawLinesForAs(asNum, [peerId], color);
+                        if (_filterPeerTable) _filterPeerTable([peerId]);
+                        if (_dimMapPeers) _dimMapPeers([peerId]);
                     }
                 });
             })(idLinks[li]);
@@ -2305,6 +2333,31 @@ window.ASDiversity = (function () {
         } else if (subFilterPeerIds && subFilterPeerIds.length > 0) {
             // Was showing a category filter (e.g. IPv6)
             previewSummaryLines(subFilterPeerIds);
+        } else if (subTooltipPinned && (subFilterCategory === 'insight-fastest' || (subFilterCategory && subFilterCategory.indexOf('insight-data-') === 0))) {
+            // Rank list pinned — default to showing #1 ranked provider
+            var tip = document.getElementById('as-sub-tooltip');
+            if (tip) {
+                var firstRow = tip.querySelector('.as-fastest-prov-row, .as-data-prov-row');
+                if (firstRow) {
+                    var asNum = firstRow.dataset.as;
+                    var peerIds = JSON.parse(firstRow.dataset.peerIds || '[]');
+                    if (asNum) setLegendFocus(asNum);
+                    if (peerIds.length > 0 && _drawLinesForAs && asNum) {
+                        _drawLinesForAs(asNum, peerIds, getColorForAsNum(asNum));
+                    }
+                    if (_filterPeerTable) _filterPeerTable(peerIds);
+                    if (_dimMapPeers) _dimMapPeers(peerIds);
+                    if (donutFocused && asNum) {
+                        showFocusedCenterText(asNum);
+                        animateDonutExpand(asNum);
+                    }
+                    return;
+                }
+            }
+            // Fallback: show all
+            if (_filterPeerTable) _filterPeerTable(null);
+            if (_dimMapPeers) _dimMapPeers(null);
+            activateHoverAll();
         } else {
             // No filter — show all
             if (_filterPeerTable) _filterPeerTable(null);
@@ -3166,13 +3219,8 @@ window.ASDiversity = (function () {
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    clearLegendFocus();
+                    // On leave, default to #1 ranked provider (not all)
                     restoreSummaryFromPreview();
-                    // In focused mode, revert donut animation
-                    if (donutFocused) {
-                        animateDonutRevert();
-                        renderCenter();
-                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3266,13 +3314,8 @@ window.ASDiversity = (function () {
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    clearLegendFocus();
+                    // On leave, default to #1 ranked provider (not all)
                     restoreSummaryFromPreview();
-                    // In focused mode, revert donut animation
-                    if (donutFocused) {
-                        animateDonutRevert();
-                        renderCenter();
-                    }
                 });
                 provRow.addEventListener('click', function (e) {
                     e.stopPropagation();
@@ -3625,7 +3668,7 @@ window.ASDiversity = (function () {
                 existing = document.createElement('button');
                 existing.className = 'as-detail-back';
                 existing.title = 'Back';
-                existing.innerHTML = '\u2190';
+                existing.innerHTML = '\u2190';  // ← left arrow = back
                 existing.addEventListener('click', function (e) {
                     e.stopPropagation();
                     navigateBack();
@@ -4472,7 +4515,10 @@ window.ASDiversity = (function () {
         bodyHtml += '<div class="as-detail-section">';
         bodyHtml += '<div class="as-detail-sub-title">Performance</div>';
         bodyHtml += peerDetailRow('Ping', peer.ping_ms ? peer.ping_ms + ' ms' : '\u2014');
+        bodyHtml += peerDetailRow('Min Ping', peer.minping ? (peer.minping * 1000).toFixed(1) + ' ms' : '\u2014');
         bodyHtml += peerDetailRow('Connected', peer.conntime_fmt || fmtDuration(peer.conntime ? (Math.floor(Date.now() / 1000) - peer.conntime) : 0));
+        bodyHtml += peerDetailRow('Last Send', peer.lastsend ? fmtDuration(Math.floor(Date.now() / 1000) - peer.lastsend) + ' ago' : '\u2014');
+        bodyHtml += peerDetailRow('Last Recv', peer.lastrecv ? fmtDuration(Math.floor(Date.now() / 1000) - peer.lastrecv) + ' ago' : '\u2014');
         bodyHtml += peerDetailRow('Bytes Sent', peer.bytessent_fmt || fmtBytes(peer.bytessent));
         bodyHtml += peerDetailRow('Bytes Recv', peer.bytesrecv_fmt || fmtBytes(peer.bytesrecv));
         bodyHtml += '</div>';
@@ -4483,6 +4529,11 @@ window.ASDiversity = (function () {
         bodyHtml += peerDetailRow('Version', peer.subver || '\u2014');
         bodyHtml += peerDetailRow('Protocol', peer.version || '\u2014');
         bodyHtml += peerDetailRow('Services', expandServiceFlags(peer.services_abbrev || ''));
+        bodyHtml += peerDetailRow('Starting Height', peer.startingheight || '\u2014');
+        bodyHtml += peerDetailRow('Synced Headers', peer.synced_headers || '\u2014');
+        bodyHtml += peerDetailRow('Synced Blocks', peer.synced_blocks || '\u2014');
+        if (peer.transport_protocol_type) bodyHtml += peerDetailRow('Transport', peer.transport_protocol_type);
+        if (peer.session_id) bodyHtml += peerDetailRow('Session ID', '<span style="font-size:9px;word-break:break-all">' + escHtml(peer.session_id) + '</span>');
         bodyHtml += '</div>';
 
         // Location section
@@ -4493,21 +4544,32 @@ window.ASDiversity = (function () {
         bodyHtml += peerDetailRow('City', peer.city || '\u2014');
         bodyHtml += peerDetailRow('ISP', peer.isp || '\u2014');
         bodyHtml += peerDetailRow('AS', asNum ? (asNum + ' ' + (asOrg || asShort || '')) : '\u2014');
+        if (peer.mapped_as) bodyHtml += peerDetailRow('Mapped AS', 'AS' + peer.mapped_as);
         bodyHtml += '</div>';
 
         // Status section
         bodyHtml += '<div class="as-detail-section">';
         bodyHtml += '<div class="as-detail-sub-title">Status</div>';
         bodyHtml += peerDetailRow('In Addrman', peer.in_addrman ? 'Yes' : 'No');
+        bodyHtml += peerDetailRow('Addr Processed', peer.addr_processed || '\u2014');
+        bodyHtml += peerDetailRow('Addr Relay Enabled', peer.addr_relay_enabled != null ? (peer.addr_relay_enabled ? 'Yes' : 'No') : '\u2014');
         bodyHtml += peerDetailRow('Location Status', peer.location_status || '\u2014');
+        bodyHtml += peerDetailRow('BIP152 HC Mode', peer.bip152_hb_from ? 'From: Yes' : 'From: No');
         if (peer.hosting) bodyHtml += peerDetailRow('Hosting', 'Cloud/Hosting');
         if (peer.proxy) bodyHtml += peerDetailRow('Proxy', 'VPN/Proxy detected');
         if (peer.mobile) bodyHtml += peerDetailRow('Mobile', 'Mobile network');
         bodyHtml += '</div>';
 
+        // Disconnect button
+        bodyHtml += '<div class="as-detail-section" style="text-align:center;padding:8px 0 4px">';
+        bodyHtml += '<button class="as-peer-disconnect-btn" data-peer-id="' + peer.id + '" style="background:rgba(248,81,73,0.15);border:1px solid rgba(248,81,73,0.4);color:#f85149;padding:6px 18px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;transition:background 0.2s,border-color 0.2s">';
+        bodyHtml += '\u2716 Disconnect Peer #' + peer.id;
+        bodyHtml += '</button>';
+        bodyHtml += '</div>';
+
         // Open provider panel link
         if (asNum) {
-            bodyHtml += '<div class="as-detail-section" style="text-align:center;padding:12px 0">';
+            bodyHtml += '<div class="as-detail-section" style="text-align:center;padding:6px 0 12px">';
             bodyHtml += '<span class="as-peer-provider-link" data-as="' + asNum + '" style="color:' + provColor + ';cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:1px">';
             bodyHtml += '\u2192 View Provider: ' + escHtml(asShort || asOrg || asNum);
             bodyHtml += '</span>';
@@ -4528,6 +4590,44 @@ window.ASDiversity = (function () {
         if (closeBtn) {
             closeBtn.addEventListener('click', function () {
                 navigateBack();
+            });
+        }
+
+        // Bind disconnect button
+        var disconnBtn = panelEl.querySelector('.as-peer-disconnect-btn');
+        if (disconnBtn) {
+            disconnBtn.addEventListener('mouseenter', function () {
+                disconnBtn.style.background = 'rgba(248,81,73,0.3)';
+                disconnBtn.style.borderColor = 'rgba(248,81,73,0.7)';
+            });
+            disconnBtn.addEventListener('mouseleave', function () {
+                disconnBtn.style.background = 'rgba(248,81,73,0.15)';
+                disconnBtn.style.borderColor = 'rgba(248,81,73,0.4)';
+            });
+            disconnBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var peerId = parseInt(disconnBtn.dataset.peerId);
+                if (isNaN(peerId)) return;
+                if (confirm('Disconnect peer #' + peerId + '?')) {
+                    // Call the disconnect API
+                    fetch('/api/peer/disconnect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peer_id: peerId })
+                    }).then(function (resp) { return resp.json(); }).then(function (data) {
+                        if (data.success) {
+                            disconnBtn.textContent = '\u2714 Disconnected';
+                            disconnBtn.style.color = 'var(--ok)';
+                            disconnBtn.style.borderColor = 'rgba(63,185,80,0.4)';
+                            disconnBtn.style.background = 'rgba(63,185,80,0.15)';
+                            disconnBtn.disabled = true;
+                        } else {
+                            disconnBtn.textContent = 'Failed: ' + (data.error || 'unknown');
+                        }
+                    }).catch(function () {
+                        disconnBtn.textContent = 'Error — try again';
+                    });
+                }
             });
         }
 
@@ -5064,6 +5164,9 @@ window.ASDiversity = (function () {
      *  - If asNum is in the "Others" group, returns the "Others" legend dot.
      *  - Final fallback: donut center (only when legend genuinely not rendered). */
     function getLineOriginForAs(asNum) {
+        // In focused mode, lines always come from donut center (legend is hidden)
+        if (donutFocused) return getDonutCenter();
+
         // First: direct legend dot match (works for top-8 and selected AS)
         var direct = getLegendDotPosition(asNum);
         if (direct) return direct;
