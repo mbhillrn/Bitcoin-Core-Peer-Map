@@ -4899,12 +4899,42 @@
                         clearMapDotFilter();
                         ASD.closePeerPopup();
                     } else {
-                        // Single peer: open peer detail panel + animate donut
+                        // Single peer: zoom in, open peer detail panel + animate donut
                         pinnedNode = node;
                         highlightedPeerId = node.peerId;
                         groupedNodes = null;
                         mapFilterPeerIds = new Set([node.peerId]);
                         renderPeerTable();
+
+                        // Zoom to peer (offset east/west so peer isn't hidden behind popup or donut)
+                        const p = project(node.lon, node.lat);
+                        const topbarH = 40;
+                        const panelH = panelEl.classList.contains('collapsed') ? 32 : 340;
+                        const visibleTop = topbarH;
+                        const visibleBot = H - panelH;
+                        const visibleH = visibleBot - visibleTop;
+                        const targetScreenY = visibleTop + visibleH * 0.45;
+                        const yTop = project(0, 85).y;
+                        const yBot = project(0, -85).y;
+                        let z = 3;
+                        for (; z <= CFG.maxZoom; z += 0.2) {
+                            const ofc = (H / 2 - targetScreenY) / z;
+                            const cY = (p.y - 0.5) * H - ofc;
+                            const mnY = (yTop - 0.5) * H + H / (2 * z);
+                            const mxY = (yBot - 0.5) * H - H / (2 * z);
+                            if (mnY < mxY && cY >= mnY && cY <= mxY) break;
+                        }
+                        z = Math.min(z, CFG.maxZoom);
+                        const ofc = (H / 2 - targetScreenY) / z;
+                        // Offset X slightly east (right) so peer isn't hidden behind left-side popup
+                        const xOffset = (W * 0.12) / z;
+                        view.x = (p.x - 0.5) * W - xOffset;
+                        view.y = 0;
+                        view.zoom = 1;
+                        targetView.x = (p.x - 0.5) * W - xOffset;
+                        targetView.y = (p.y - 0.5) * H - ofc;
+                        targetView.zoom = z;
+
                         // [AS-DIVERSITY] Open full peer detail in right panel
                         if (ASD) {
                             const rawPeers = ASD.getLastPeersRaw();
@@ -6228,7 +6258,7 @@
                 const visibleTop = topbarH;
                 const visibleBot = H - panelH;
                 const visibleH = visibleBot - visibleTop;
-                const targetScreenY = visibleTop + visibleH * 0.30;
+                const targetScreenY = visibleTop + visibleH * 0.45;
                 const yTop = project(0, 85).y;
                 const yBot = project(0, -85).y;
                 let z = 3;
@@ -6241,10 +6271,12 @@
                 }
                 z = Math.min(z, CFG.maxZoom);
                 const offsetFromCenter = (H / 2 - targetScreenY) / z;
-                view.x = (p.x - 0.5) * W;
+                // Offset X slightly so peer isn't hidden behind left-side popup or center donut
+                const xOff = (W * 0.12) / z;
+                view.x = (p.x - 0.5) * W - xOff;
                 view.y = 0;
                 view.zoom = 1;
-                targetView.x = (p.x - 0.5) * W;
+                targetView.x = (p.x - 0.5) * W - xOff;
                 targetView.y = (p.y - 0.5) * H - offsetFromCenter;
                 targetView.zoom = z;
                 highlightedPeerId = node.peerId;

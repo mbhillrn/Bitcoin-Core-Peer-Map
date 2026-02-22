@@ -1428,11 +1428,11 @@ body.donut-focused .as-donut-others-list.visible {
 .peer-detail-popup {
     position: fixed;
     top: 180px;
-    left: 40px;
+    left: 80px;
     transform: scale(0.95);
     transform-origin: top left;
-    width: 320px;
-    max-height: calc(100vh - 200px);
+    width: 310px;
+    max-height: min(420px, calc(100vh - 220px));
     z-index: 1200;
     background: rgba(13, 17, 23, 0.97);
     border: 2px solid var(--accent, #58a6ff);
@@ -1457,7 +1457,11 @@ body.donut-focused .as-donut-others-list.visible {
 
 /* When AS panel is open, keep popup offset from left */
 body.as-panel-open .peer-detail-popup {
-    left: 40px;
+    left: 80px;
+}
+.peer-detail-popup.peer-popup-previewing .peer-popup-name {
+    font-style: italic;
+    opacity: 0.85;
 }
 
 /* --- Header --- */
@@ -1507,14 +1511,22 @@ body.as-panel-open .peer-detail-popup {
     min-height: 0;
 }
 .peer-popup-scroll::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
 }
 .peer-popup-scroll::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(88, 166, 255, 0.05);
+    border-radius: 3px;
 }
 .peer-popup-scroll::-webkit-scrollbar-thumb {
-    background: rgba(88, 166, 255, 0.2);
-    border-radius: 2px;
+    background: rgba(88, 166, 255, 0.35);
+    border-radius: 3px;
+}
+.peer-popup-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(88, 166, 255, 0.55);
+}
+.peer-popup-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(88, 166, 255, 0.35) rgba(88, 166, 255, 0.05);
 }
 
 /* --- Sections --- */

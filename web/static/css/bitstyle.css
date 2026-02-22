@@ -694,7 +694,7 @@ html, body {
    ========================================================== */
 .map-overlay {
     position: fixed;
-    top: 56px;
+    top: 88px;
     left: 18px;
     z-index: 50;
     display: flex;
@@ -746,8 +746,9 @@ html, body {
 .btc-price-bar {
     position: fixed;
     top: 52px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 18px;
+    transform: none;
+    transform-origin: left center;
     z-index: 85;
     display: inline-flex;
     align-items: center;
@@ -755,7 +756,7 @@ html, body {
     pointer-events: auto;
     cursor: pointer;
     user-select: none;
-    padding: 4px 12px;
+    padding: 4px 0;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -943,12 +944,12 @@ body.theme-light .ro-link:hover {
     text-shadow: none;
 }
 
-/* Map controls — centered below BTC price */
+/* Map controls — below system stats on the left */
 .map-controls {
     position: fixed;
-    top: 88px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 210px;
+    left: 18px;
+    transform: none;
     z-index: 290;
     display: flex;
     gap: 4px;
@@ -963,30 +964,23 @@ body.theme-light .ro-link:hover {
    6c. FOCUSED MODE — BTC price + map controls reposition
    ========================================================== */
 
-/* BTC price: shrinks and moves above system stats on upper left (under logo) */
+/* BTC price: already on the left — just scale down slightly in focused mode */
 body.donut-focused .btc-price-bar {
-    top: 52px;
-    left: 18px;
-    right: auto;
     transform: scale(0.82);
-    transform-origin: left center;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 opacity 0.3s ease;
 }
 
-/* System stats: shift down to make room for BTC price above */
+/* System stats: slightly shift down for scaled BTC in focused mode */
 body.donut-focused .map-overlay {
-    top: 82px;
+    top: 84px;
 }
 
-/* Map controls: move below system stats on the left */
+/* Map controls: adjust for focused mode stats shift */
 body.donut-focused .map-controls {
-    top: 230px;
-    left: 18px;
-    right: auto;
-    transform: none;
+    top: 206px;
 }
 
 /* ==========================================================
@@ -2770,7 +2764,7 @@ body.donut-focused .map-controls {
    ========================================================== */
 .currency-dropdown {
     position: fixed;
-    z-index: 250;
+    z-index: 300;
     background: var(--bg-surface);
     border: 1px solid rgba(88, 166, 255, 0.2);
     border-radius: var(--radius);
