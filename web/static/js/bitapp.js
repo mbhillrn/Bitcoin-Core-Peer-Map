@@ -3385,8 +3385,16 @@
                     // Filter table to just this one peer
                     mapFilterPeerIds = new Set([peerId]);
                     renderPeerTable();
-                    // Show single-peer detail with back navigation
-                    showPinnedPeerDetail(node, mx, my, true);
+                    // [AS-DIVERSITY] Open full peer detail in right panel
+                    const ASD = window.ASDiversity;
+                    if (ASD) {
+                        const rawPeers = ASD.getLastPeersRaw();
+                        const peerData = rawPeers.find(p => p.id === peerId);
+                        if (peerData) {
+                            ASD.openPeerDetailPanel(peerData, 'map');
+                        }
+                    }
+                    hideTooltip(); // close the group list tooltip
                     if (!panelEl.classList.contains('collapsed')) {
                         highlightTableRow(peerId, true);
                     }
@@ -4450,6 +4458,16 @@
             mapFilterPeerIds = new Set([node.peerId]);
             renderPeerTable();
 
+            // [AS-DIVERSITY] Open full peer detail in right panel + animate donut
+            const ASD = window.ASDiversity;
+            if (ASD) {
+                const rawPeers = ASD.getLastPeersRaw();
+                const peerData = rawPeers.find(p => p.id === peerId);
+                if (peerData) {
+                    ASD.openPeerDetailPanel(peerData, 'peerlist');
+                }
+            }
+
             zoomToPeer(node);
             highlightTableRow(peerId, true);  // scroll into view on click
 
@@ -4817,14 +4835,22 @@
             const group = findNodesAtScreen(e.clientX, e.clientY);
             if (group.length > 0) {
                 if (group.length === 1) {
-                    // Single peer: pin tooltip + filter table to this peer
+                    // Single peer: open peer detail panel + animate donut
                     const node = group[0];
                     pinnedNode = node;
                     highlightedPeerId = node.peerId;
                     groupedNodes = null;
                     mapFilterPeerIds = new Set([node.peerId]);
                     renderPeerTable();
-                    showPinnedPeerDetail(node, e.clientX, e.clientY, false);
+                    // [AS-DIVERSITY] Open full peer detail in right panel
+                    const ASD = window.ASDiversity;
+                    if (ASD) {
+                        const rawPeers = ASD.getLastPeersRaw();
+                        const peerData = rawPeers.find(p => p.id === node.peerId);
+                        if (peerData) {
+                            ASD.openPeerDetailPanel(peerData, 'map');
+                        }
+                    }
                     if (!panelEl.classList.contains('collapsed')) {
                         highlightTableRow(node.peerId, true);
                     }
@@ -6121,6 +6147,17 @@
                 }
                 zoomToPeer(node);
                 highlightTableRow(node.peerId);
+            },
+            resetMapZoom: function () {
+                // Smoothly zoom the map back to default view
+                targetView.x = 0;
+                targetView.y = 0;
+                targetView.zoom = 1;
+                // Clear pinned node and tooltip
+                pinnedNode = null;
+                highlightedPeerId = null;
+                hideTooltip();
+                clearMapDotFilter();
             },
         });
 

@@ -97,6 +97,7 @@ window.ASDiversity = (function () {
     let _getWorldToScreen = null;  // fn(lon, lat) => {x, y}
     let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID (full deselect)
     let _zoomToPeerOnly = null;    // fn(peerId) — zoom to peer without deselecting AS panel
+    let _resetMapZoom = null;      // fn() — smoothly zoom the map back to default view
 
     // Service flag definitions (mirrored from bitapp.js for hover expansion)
     var SERVICE_FLAGS = {
@@ -4118,6 +4119,9 @@ window.ASDiversity = (function () {
         hoveredAll = false;
         deactivateHoverAll();
 
+        // Auto zoom-out to default map view
+        if (_resetMapZoom) _resetMapZoom();
+
         // Reset center display
         renderDonut();
         renderCenter();
@@ -4127,6 +4131,229 @@ window.ASDiversity = (function () {
     /** Check if focused mode is active */
     function isFocusedMode() {
         return donutFocused;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PEER DETAIL PANEL — Full peer info in right panel
+    // ═══════════════════════════════════════════════════════════
+
+    /** Open the right panel showing full peer detail info.
+     *  Called when peer is clicked from peer list or map dot.
+     *  @param {Object} peer — raw peer data from lastPeersRaw
+     *  @param {string} source — 'peerlist' | 'map' */
+    function openPeerDetailPanel(peer, source) {
+        if (!panelEl) return;
+
+        // Find the provider for this peer
+        var asNum = parseAsNumber(peer.as);
+        var asOrg = parseAsOrg(peer.as);
+        var asShort = peer.asname || '';
+        var provColor = asNum ? getColorForAsNum(asNum) : '#6e7681';
+
+        // Enter focused mode if not already
+        if (!donutFocused) {
+            donutFocused = true;
+            document.body.classList.add('donut-focused');
+        }
+
+        // Save current state to history for back navigation
+        if (summarySelected) {
+            panelHistory.push({ type: 'summary', scrollTop: panelEl.querySelector('.as-detail-body') ? panelEl.querySelector('.as-detail-body').scrollTop : 0 });
+        } else if (selectedAs) {
+            panelHistory.push({ type: 'provider', asNumber: selectedAs, scrollTop: panelEl.querySelector('.as-detail-body') ? panelEl.querySelector('.as-detail-body').scrollTop : 0 });
+        }
+
+        // Select the provider in the donut
+        summarySelected = false;
+        selectedAs = asNum;
+        if (asNum) {
+            animateDonutExpand(asNum);
+        }
+
+        // Draw a single line to this peer
+        if (_drawLinesForAs && asNum) {
+            _drawLinesForAs(asNum, [peer.id], provColor);
+        }
+        if (_filterPeerTable) _filterPeerTable([peer.id]);
+        if (_dimMapPeers) _dimMapPeers([peer.id]);
+
+        // Update donut center to show provider + peer ID
+        showPeerInDonutCenter(peer, provColor);
+
+        // Build panel content
+        var headerHtml = '';
+        headerHtml += '<div class="as-detail-header">';
+        headerHtml += '<div class="as-detail-header-info">';
+        headerHtml += '<div class="as-detail-asn" style="color:' + provColor + '">Peer #' + peer.id + '</div>';
+        headerHtml += '<div class="as-detail-org">' + escHtml(peer.addr || '') + '</div>';
+        headerHtml += '<div class="as-detail-meta">' + (peer.network || 'ipv4').toUpperCase() + ' &middot; ' + (peer.direction === 'IN' ? 'Inbound' : 'Outbound') + '</div>';
+        headerHtml += '</div>';
+        headerHtml += '<button class="as-detail-close" title="Close">&times;</button>';
+        headerHtml += '</div>';
+
+        var bodyHtml = '<div class="as-detail-body">';
+
+        // Identity section
+        bodyHtml += '<div class="as-detail-section">';
+        bodyHtml += '<div class="as-detail-sub-title">Identity</div>';
+        bodyHtml += peerDetailRow('Peer ID', '#' + peer.id);
+        bodyHtml += peerDetailRow('Address', peer.addr || '\u2014');
+        bodyHtml += peerDetailRow('IP', peer.ip || '\u2014');
+        bodyHtml += peerDetailRow('Port', peer.port || '\u2014');
+        bodyHtml += peerDetailRow('Network', (peer.network || 'ipv4').toUpperCase());
+        bodyHtml += peerDetailRow('Direction', peer.direction === 'IN' ? 'Inbound' : 'Outbound');
+        bodyHtml += peerDetailRow('Connection Type', CONN_TYPE_FULL[peer.connection_type] || peer.connection_type || '\u2014');
+        bodyHtml += '</div>';
+
+        // Performance section
+        bodyHtml += '<div class="as-detail-section">';
+        bodyHtml += '<div class="as-detail-sub-title">Performance</div>';
+        bodyHtml += peerDetailRow('Ping', peer.ping_ms ? peer.ping_ms + ' ms' : '\u2014');
+        bodyHtml += peerDetailRow('Connected', peer.conntime_fmt || fmtDuration(peer.conntime ? (Math.floor(Date.now() / 1000) - peer.conntime) : 0));
+        bodyHtml += peerDetailRow('Bytes Sent', peer.bytessent_fmt || fmtBytes(peer.bytessent));
+        bodyHtml += peerDetailRow('Bytes Recv', peer.bytesrecv_fmt || fmtBytes(peer.bytesrecv));
+        bodyHtml += '</div>';
+
+        // Software section
+        bodyHtml += '<div class="as-detail-section">';
+        bodyHtml += '<div class="as-detail-sub-title">Software</div>';
+        bodyHtml += peerDetailRow('Version', peer.subver || '\u2014');
+        bodyHtml += peerDetailRow('Protocol', peer.version || '\u2014');
+        bodyHtml += peerDetailRow('Services', expandServiceFlags(peer.services_abbrev || ''));
+        bodyHtml += '</div>';
+
+        // Location section
+        bodyHtml += '<div class="as-detail-section">';
+        bodyHtml += '<div class="as-detail-sub-title">Location</div>';
+        bodyHtml += peerDetailRow('Country', peer.country || '\u2014');
+        bodyHtml += peerDetailRow('Region', peer.regionName || '\u2014');
+        bodyHtml += peerDetailRow('City', peer.city || '\u2014');
+        bodyHtml += peerDetailRow('ISP', peer.isp || '\u2014');
+        bodyHtml += peerDetailRow('AS', asNum ? (asNum + ' ' + (asOrg || asShort || '')) : '\u2014');
+        bodyHtml += '</div>';
+
+        // Status section
+        bodyHtml += '<div class="as-detail-section">';
+        bodyHtml += '<div class="as-detail-sub-title">Status</div>';
+        bodyHtml += peerDetailRow('In Addrman', peer.in_addrman ? 'Yes' : 'No');
+        bodyHtml += peerDetailRow('Location Status', peer.location_status || '\u2014');
+        if (peer.hosting) bodyHtml += peerDetailRow('Hosting', 'Cloud/Hosting');
+        if (peer.proxy) bodyHtml += peerDetailRow('Proxy', 'VPN/Proxy detected');
+        if (peer.mobile) bodyHtml += peerDetailRow('Mobile', 'Mobile network');
+        bodyHtml += '</div>';
+
+        // Open provider panel link
+        if (asNum) {
+            bodyHtml += '<div class="as-detail-section" style="text-align:center;padding:12px 0">';
+            bodyHtml += '<span class="as-peer-provider-link" data-as="' + asNum + '" style="color:' + provColor + ';cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:1px">';
+            bodyHtml += '\u2192 View Provider: ' + escHtml(asShort || asOrg || asNum);
+            bodyHtml += '</span>';
+            bodyHtml += '</div>';
+        }
+
+        bodyHtml += '</div>';
+
+        panelEl.innerHTML = headerHtml + bodyHtml;
+        panelEl.classList.remove('hidden');
+        panelEl.classList.add('visible');
+        document.body.classList.add('as-panel-open');
+        document.body.classList.add('panel-focus-as');
+        document.body.classList.remove('panel-focus-peers');
+
+        // Bind close button
+        var closeBtn = panelEl.querySelector('.as-detail-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () {
+                navigateBack();
+            });
+        }
+
+        // Bind provider link
+        var provLink = panelEl.querySelector('.as-peer-provider-link');
+        if (provLink) {
+            provLink.addEventListener('click', function () {
+                var clickedAs = provLink.dataset.as;
+                if (clickedAs) {
+                    panelHistory.push({ type: 'peer-detail', peerId: peer.id });
+                    selectedAs = clickedAs;
+                    openPanel(clickedAs);
+                    var seg = donutSegments.find(function (s) { return s.asNumber === clickedAs; });
+                    if (seg) {
+                        if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                        if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                        if (_drawLinesForAs) _drawLinesForAs(clickedAs, seg.peerIds, seg.color);
+                    }
+                    renderCenter();
+                    renderLegend();
+                }
+            });
+        }
+
+        // Update donut visuals
+        renderDonut();
+        renderLegend();
+    }
+
+    /** Show peer ID and provider in donut center */
+    function showPeerInDonutCenter(peer, color) {
+        if (!donutCenter) return;
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+
+        if (diversityEl) diversityEl.style.display = 'none';
+        if (headingEl) {
+            headingEl.textContent = 'PEER #' + peer.id;
+            headingEl.style.color = color;
+        }
+        if (scoreVal) {
+            var provName = peer.asname || parseAsOrg(peer.as) || '';
+            scoreVal.textContent = formatNameForDonut(provName);
+            scoreVal.className = 'as-score-value as-focused-provider';
+            scoreVal.style.color = color;
+        }
+        if (qualityEl) {
+            qualityEl.textContent = parseAsNumber(peer.as) || '';
+            qualityEl.className = 'as-score-quality';
+            qualityEl.style.color = color;
+        }
+        if (scoreLbl) {
+            scoreLbl.textContent = '';
+            scoreLbl.classList.remove('as-summary-link');
+        }
+    }
+
+    /** Build a simple key-value row for peer detail panel */
+    function peerDetailRow(label, value) {
+        return '<div class="as-detail-sub-row"><span class="as-detail-sub-label">' + escHtml(label) + '</span><span class="as-detail-sub-val">' + value + '</span></div>';
+    }
+
+    /** HTML-escape a string */
+    function escHtml(s) {
+        if (!s) return '';
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** Expand service flag abbreviations to full descriptions */
+    function expandServiceFlags(abbrev) {
+        if (!abbrev || abbrev === '\u2014') return '\u2014';
+        var flags = abbrev.split('/');
+        var expanded = [];
+        for (var i = 0; i < flags.length; i++) {
+            var flag = flags[i].trim();
+            var found = false;
+            for (var key in SERVICE_FLAGS) {
+                if (SERVICE_FLAGS[key].abbr === flag) {
+                    expanded.push(SERVICE_FLAGS[key].desc);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) expanded.push(flag);
+        }
+        return expanded.join('<br>');
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -4218,6 +4445,7 @@ window.ASDiversity = (function () {
         _getWorldToScreen = hooks.getWorldToScreen || null;
         _selectPeerById = hooks.selectPeerById || null;
         _zoomToPeerOnly = hooks.zoomToPeerOnly || null;
+        _resetMapZoom = hooks.resetMapZoom || null;
     }
 
     /** Update with new peer data. Called after each fetchPeers(). */
@@ -4643,5 +4871,8 @@ window.ASDiversity = (function () {
         enterFocusedMode: enterFocusedMode,
         exitFocusedMode: exitFocusedMode,
         isFocusedMode: isFocusedMode,
+        // Peer detail (from peer list or map dot)
+        openPeerDetailPanel: openPeerDetailPanel,
+        getLastPeersRaw: function () { return lastPeersRaw; },
     };
 })();
