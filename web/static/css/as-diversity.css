@@ -91,6 +91,10 @@
 body.donut-focused .as-focused-close {
     display: block;
 }
+/* Hide blue back arrow when insight rect is showing (it has its own back arrow) */
+body.insight-rect-active .as-focused-close {
+    display: none !important;
+}
 
 /* ==========================================================
    3. DONUT CHART — SVG ring + center label (260px, 3D look)
@@ -271,7 +275,7 @@ body.donut-focused .as-focused-close {
    ========================================================== */
 .as-insight-rect {
     position: absolute;
-    top: 14px;
+    top: 22px;
     left: 50%;
     transform: translateX(-50%) scale(0.9);
     width: 320px;
@@ -974,6 +978,11 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 }
 .as-sub-tt-peer[data-peer-id]:hover {
     background: rgba(88, 166, 255, 0.12);
+}
+.as-sub-tt-peer-selected {
+    background: rgba(88, 166, 255, 0.18) !important;
+    outline: 1px solid rgba(88, 166, 255, 0.3);
+    outline-offset: -1px;
 }
 .as-sub-tt-id {
     color: var(--accent);

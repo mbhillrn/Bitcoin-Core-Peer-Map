@@ -97,6 +97,7 @@ window.ASDiversity = (function () {
     let insightRectEl = null;       // DOM ref for insight rectangle overlay
     let insightRectVisible = false; // Whether the insight rectangle is currently shown
     let hoveredPeerId = null;       // Peer ID currently being hovered in a subtooltip (for update preservation)
+    let selectedPeerId = null;      // Peer ID that was clicked/selected (persists through hover cycles)
 
     // Integration hooks (set by bitapp.js)
     let _drawLinesForAs = null;    // fn(asNumber, peerIds, color) — draw lines on canvas
@@ -1124,6 +1125,7 @@ window.ASDiversity = (function () {
         if (donutCenter) donutCenter.style.opacity = '0';
         insightRectEl.classList.add('visible');
         insightRectVisible = true;
+        document.body.classList.add('insight-rect-active');
 
         // Bind close button
         var closeBtn = insightRectEl.querySelector('.as-insight-rect-close');
@@ -1237,6 +1239,7 @@ window.ASDiversity = (function () {
         if (!insightRectEl) return;
         insightRectEl.classList.remove('visible');
         insightRectVisible = false;
+        document.body.classList.remove('insight-rect-active');
         // Show donut SVG and center
         if (donutSvg) donutSvg.style.opacity = '';
         if (donutCenter) donutCenter.style.opacity = '';
@@ -2104,6 +2107,29 @@ window.ASDiversity = (function () {
                 });
                 row.addEventListener('mouseleave', function () {
                     hoveredPeerId = null;
+
+                    // If a peer is selected (popup open), restore to that peer's state
+                    if (peerDetailActive && selectedPeerId) {
+                        var selPeer = lastPeersRaw.find(function (p) { return p.id === selectedPeerId; });
+                        if (selPeer) {
+                            var selAsNum = parseAsNumber(selPeer.as);
+                            var selColor = selAsNum ? getColorForAsNum(selAsNum) : '#6e7681';
+                            // Restore line/filter to selected peer
+                            if (_drawLinesForAs && selAsNum) _drawLinesForAs(selAsNum, [selectedPeerId], selColor);
+                            if (_filterPeerTable) _filterPeerTable([selectedPeerId]);
+                            if (_dimMapPeers) _dimMapPeers([selectedPeerId]);
+                            // Restore donut center / insight rect to selected peer
+                            if (donutFocused) {
+                                if (insightRectVisible) {
+                                    updateInsightRectForPeer(selPeer, selColor);
+                                } else {
+                                    showPeerInDonutCenter(selPeer, selColor);
+                                }
+                            }
+                        }
+                        return;
+                    }
+
                     // Restore lines/filter to parent state (selected provider or summary sub-filter)
                     if (summarySelected) {
                         restoreSummaryFromPreview();
@@ -2148,6 +2174,7 @@ window.ASDiversity = (function () {
                     var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
                     if (peer) {
                         openPeerDetailPanel(peer, 'panel');
+                        highlightSelectedPeerRow(peerId);
                     }
                 });
             })(idLinks[li]);
@@ -2426,6 +2453,7 @@ window.ASDiversity = (function () {
                     var peer = lastPeersRaw.find(function (p) { return p.id === peerId; });
                     if (peer) {
                         openPeerDetailPanel(peer, 'panel');
+                        highlightSelectedPeerRow(peerId);
                     }
                 });
             })(idLinks[li]);
@@ -2542,6 +2570,25 @@ window.ASDiversity = (function () {
             html += '<div class="as-sub-tt-more as-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
         }
         return html;
+    }
+
+    /** Highlight the selected peer row in both sub-tooltip and sub-sub-tooltip */
+    function highlightSelectedPeerRow(peerId) {
+        selectedPeerId = peerId;
+        // Remove previous selected highlights
+        var allSelected = document.querySelectorAll('.as-sub-tt-peer-selected');
+        for (var i = 0; i < allSelected.length; i++) allSelected[i].classList.remove('as-sub-tt-peer-selected');
+        // Add highlight to matching row(s)
+        var tips = [document.getElementById('as-sub-tooltip'), document.getElementById('as-sub-sub-tooltip')];
+        for (var ti = 0; ti < tips.length; ti++) {
+            if (!tips[ti]) continue;
+            var rows = tips[ti].querySelectorAll('.as-sub-tt-peer[data-peer-id]');
+            for (var ri = 0; ri < rows.length; ri++) {
+                if (parseInt(rows[ri].dataset.peerId) === peerId) {
+                    rows[ri].classList.add('as-sub-tt-peer-selected');
+                }
+            }
+        }
     }
 
     /** Restore the donut visual state after a hover preview ends.
@@ -4227,7 +4274,13 @@ window.ASDiversity = (function () {
      *    1st click: close sub-panels
      *    2nd click: close main panel */
     function onMapClick() {
-        // Stage 1: If sub-tooltips are visible, close them
+        // Stage 1: If peer detail popup is active, close it (and any sub-tooltips) in one click
+        if (peerDetailActive) {
+            closePeerPopup();
+            return true;
+        }
+
+        // Stage 1.5: If sub-tooltips are visible, close them
         if (subTooltipPinned || subSubTooltipPinned) {
             hideSubTooltip();
             hideSubSubTooltip();
@@ -4249,12 +4302,6 @@ window.ASDiversity = (function () {
                 clearSubFilter();
             }
             return true; // handled — don't close main panel
-        }
-
-        // Stage 1.5: If peer detail popup is active, close it
-        if (peerDetailActive) {
-            closePeerPopup();
-            return true;
         }
 
         // Stage 2: If in a provider view, go back to summary
@@ -4981,6 +5028,7 @@ window.ASDiversity = (function () {
     /** Close the peer detail popup */
     function closePeerPopup() {
         peerDetailActive = false;
+        selectedPeerId = null;
         multiPeerGroupIds = null;
         if (peerPopupEl) {
             peerPopupEl.classList.remove('visible');
@@ -5019,6 +5067,11 @@ window.ASDiversity = (function () {
             if (_clearAsLines) _clearAsLines();
             renderCenter();
         }
+        // Zoom map back out when closing peer detail
+        if (_resetMapZoom) _resetMapZoom();
+        // Clear selected peer highlight
+        var allSelected = document.querySelectorAll('.as-sub-tt-peer-selected');
+        for (var i = 0; i < allSelected.length; i++) allSelected[i].classList.remove('as-sub-tt-peer-selected');
     }
 
     /** Open a floating popup showing the list of peers at a multi-peer dot.
@@ -5119,6 +5172,7 @@ window.ASDiversity = (function () {
         }
 
         peerDetailActive = true;
+        selectedPeerId = peer.id;
 
         // Find the provider for this peer
         var asNum = parseAsNumber(peer.as);
@@ -5520,6 +5574,17 @@ window.ASDiversity = (function () {
         // Escape key
         document.addEventListener('keydown', onKeyDown);
 
+        // Clear donut hover state when mouse leaves the browser window
+        document.addEventListener('mouseleave', function () {
+            if (hoveredAs && !subTooltipPinned) {
+                onSegmentLeave();
+            }
+            if (focusedHoverAs && !selectedAs) {
+                focusedHoverAs = null;
+                renderCenter();
+            }
+        });
+
         // Always active — show immediately
         isActive = true;
     }
@@ -5565,6 +5630,13 @@ window.ASDiversity = (function () {
         diversityScore = calcDiversityScore(asGroups);
         donutSegments = buildDonutSegments(asGroups);
 
+        // If peer detail popup is open, skip all visual re-rendering to preserve
+        // the donut expansion, lines, and center text for the selected peer.
+        // Data is updated above so it's fresh when the popup is eventually closed.
+        if (peerDetailActive) {
+            return;
+        }
+
         // Toggle no-data state on the container
         if (containerEl) {
             if (totalPeers === 0 && !isGeoLoading) containerEl.classList.add('no-data');
@@ -5581,13 +5653,6 @@ window.ASDiversity = (function () {
             legendFocusAs = null;
         }
         renderLegend();
-
-        // If peer detail popup is open, don't rebuild filters/lines — popup manages its own state
-        // But still allow the underlying panel (summary/provider) to update if needed.
-        if (peerDetailActive) {
-            // Keep the popup lines/filter for the single peer intact
-            return;
-        }
 
         // If a selection is active, refresh the panel + filter + keep lines
         if (selectedAs) {

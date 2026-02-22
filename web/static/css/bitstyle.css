@@ -1151,6 +1151,11 @@ body.donut-focused .map-controls {
 .tt-group-row { gap: 6px; }
 .tt-group-clickable { cursor: pointer; padding: 3px 0; border-radius: 3px; transition: background 0.1s ease; }
 .tt-group-clickable:hover { background: rgba(88, 166, 255, 0.1); }
+.tt-group-close {
+    cursor: pointer; font-size: 11px; color: var(--text-muted); padding: 2px 4px;
+    border-radius: 3px; transition: color 0.15s, background 0.15s; line-height: 1;
+}
+.tt-group-close:hover { color: var(--err); background: rgba(248, 81, 73, 0.12); }
 
 /* ==========================================================
    11. PEER PANEL — Bottom panel, open by default

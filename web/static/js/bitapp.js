@@ -1405,12 +1405,16 @@
         if (el) el.addEventListener('click', (e) => { e.stopPropagation(); openSystemInfoModal(); });
     });
 
-    // BTC price bar: click anywhere opens currency selector
+    // BTC price bar: click toggles currency selector
     const btcPriceBar = document.getElementById('btc-price-bar');
     if (btcPriceBar) {
         btcPriceBar.addEventListener('click', (e) => {
             e.stopPropagation();
-            openCurrencyDropdown();
+            if (currencyDropdownEl) {
+                closeCurrencyDropdown();
+            } else {
+                openCurrencyDropdown();
+            }
         });
     }
 
@@ -3353,7 +3357,7 @@
     /** Display pinned selection list for a multi-peer dot (clickable rows). */
     function showGroupSelectionList(group, mx, my) {
         let html = '';
-        html += `<div class="tt-header"><span class="tt-peer-id" style="text-align:center;flex:1">${group.length} peers at this location</span></div>`;
+        html += `<div class="tt-header"><span class="tt-peer-id" style="text-align:center;flex:1">${group.length} peers at this location</span><span class="tt-group-close" title="Close">\u2715</span></div>`;
         html += `<div class="tt-section tt-group-list">`;
         group.forEach((node, i) => {
             const netLabel = NET_DISPLAY[node.net] || node.net.toUpperCase();
@@ -3372,6 +3376,20 @@
         tooltipEl.classList.add('pinned');
         tooltipEl.style.pointerEvents = 'auto';
         positionTooltip(mx, my);
+
+        // Bind close button
+        const closeBtn = tooltipEl.querySelector('.tt-group-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                pinnedNode = null;
+                groupedNodes = null;
+                highlightedPeerId = null;
+                hideTooltip();
+                highlightTableRow(null);
+                clearMapDotFilter();
+            });
+        }
 
         // Bind click on each row to drill into that peer
         tooltipEl.querySelectorAll('.tt-group-clickable').forEach(row => {
@@ -4884,17 +4902,12 @@
                         highlightTableRow(node.peerId, true);
                     }
                 } else {
-                    // Multi-peer dot: show list in the big peer info popup with back button
+                    // Multi-peer dot: show small pinned selection list near the dot
                     pinnedNode = null;  // no single peer pinned yet
                     groupedNodes = group;
                     mapFilterPeerIds = new Set(group.map(n => n.peerId));
                     renderPeerTable();
-                    const ASD = window.ASDiversity;
-                    if (ASD) {
-                        ASD.openMultiPeerPopup(group.map(n => n.peerId));
-                    } else {
-                        showGroupSelectionList(group, e.clientX, e.clientY);
-                    }
+                    showGroupSelectionList(group, e.clientX, e.clientY);
                 }
             } else {
                 // Clicked empty space — unpin tooltip + clear map filter
@@ -4913,6 +4926,16 @@
             }
         }
         dragging = false;
+    });
+
+    // ── Clear hover state when mouse leaves the browser window ──
+    document.addEventListener('mouseleave', () => {
+        if (hoveredNode && !pinnedNode && !groupedNodes) {
+            hideTooltip();
+            highlightTableRow(null);
+            canvas.style.cursor = 'grab';
+            hoveredNode = null;
+        }
     });
 
     // ── Mouse wheel zoom (zooms toward cursor position) ──
