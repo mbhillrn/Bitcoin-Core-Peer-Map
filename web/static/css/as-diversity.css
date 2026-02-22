@@ -24,7 +24,11 @@
     pointer-events: none;
     user-select: none;
     opacity: 0.88;
-    transition: opacity 0.3s ease, right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.3s ease;
 }
 .as-diversity-container:hover {
     opacity: 1;
@@ -1086,4 +1090,123 @@ body.theme-light .as-sub-tooltip {
 }
 body.theme-light .as-sub-sub-tooltip {
     border-color: rgba(88, 166, 255, 0.25);
+}
+
+/* ==========================================================
+   14. FOCUSED MODE — donut moves to top-center, layout rearranges
+   ========================================================== */
+
+/* --- Donut container: moves from upper-right to top-center --- */
+body.donut-focused .as-diversity-container {
+    top: 48px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%) scale(0.78);
+    opacity: 1;
+    transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.3s ease;
+}
+
+/* When panel is also open in focused mode, center between system info and panel */
+body.donut-focused.as-panel-open .as-diversity-container {
+    left: calc((180px + (100vw - 320px)) / 2);
+    right: auto;
+}
+
+/* Override the default panel-open push for focused mode */
+body.donut-focused.as-panel-open #worldmap {
+    right: 0;
+}
+body.donut-focused.as-panel-open .peer-panel {
+    right: 320px;
+}
+
+/* --- Title: hides in focused mode --- */
+body.donut-focused .as-donut-title {
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: 0;
+    pointer-events: none;
+}
+
+/* --- Legend: hidden by default in focused mode, visible on interaction --- */
+body.donut-focused .as-legend {
+    opacity: 0;
+    pointer-events: none;
+    max-height: 0;
+    transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+body.donut-focused .as-diversity-container.as-legend-visible .as-legend {
+    opacity: 1;
+    pointer-events: auto;
+    max-height: 400px;
+}
+
+/* --- Donut center: larger clickable area in focused mode, cursor changes --- */
+body.donut-focused .as-donut-center {
+    cursor: default;
+}
+
+/* --- Focused mode donut center text adjustments for provider display --- */
+body.donut-focused .as-score-value.as-focused-provider {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: pre-line;
+    word-break: break-word;
+}
+
+/* --- Others scrollable list inside donut center --- */
+.as-donut-others-list {
+    display: none;
+    max-height: 140px;
+    overflow-y: auto;
+    text-align: left;
+    padding: 2px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent, #58a6ff) transparent;
+}
+.as-donut-others-list::-webkit-scrollbar {
+    width: 4px;
+}
+.as-donut-others-list::-webkit-scrollbar-thumb {
+    background: var(--accent, #58a6ff);
+    border-radius: 2px;
+}
+.as-donut-others-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+body.donut-focused .as-donut-others-list.visible {
+    display: block;
+}
+.as-donut-others-item {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: #58a6ff;
+    padding: 3px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.as-donut-others-item:hover {
+    background: rgba(88, 166, 255, 0.15);
+    color: #79c0ff;
+}
+.as-donut-others-back {
+    font-family: var(--font-data);
+    font-size: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+    transition: color 0.15s ease;
+}
+.as-donut-others-back:hover {
+    color: var(--accent, #58a6ff);
 }

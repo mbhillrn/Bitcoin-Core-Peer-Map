@@ -48,6 +48,9 @@ window.ASDiversity = (function () {
     let totalPeers = 0;
     let hasRenderedOnce = false;   // Track if we've ever rendered data
     let legendFocusAs = null;      // AS number to exclusively show in legend during panel hover
+    let donutFocused = false;      // True when in focused mode (donut at top-center)
+    let focusedHoverAs = null;     // AS hovered in focused mode (for center text display)
+    let othersListOpen = false;    // True when Others scrollable list is showing in donut center
 
     // DOM refs (cached on init)
     let containerEl = null;
@@ -59,6 +62,7 @@ window.ASDiversity = (function () {
     let tooltipEl = null;
     let panelEl = null;
     let loadingEl = null;
+    let focusedCloseBtn = null;
 
     // Sub-filter state: when user clicks a sub-row (software, service, country, conn type, others provider)
     let subFilterPeerIds = null;   // Array of peer IDs for the active sub-filter, or null
@@ -3374,9 +3378,13 @@ window.ASDiversity = (function () {
         }
     }
 
-    /** Handle map click — two-stage collapse:
-     *  1st click: close sub-panels, keep main panel selection
-     *  2nd click: close main panel entirely */
+    /** Handle map click — gradual collapse:
+     *  In focused mode:
+     *    1st click: close sub-panels, back to panel top level
+     *    2nd click: exit focused mode entirely
+     *  In default mode:
+     *    1st click: close sub-panels
+     *    2nd click: close main panel */
     function onMapClick() {
         // Stage 1: If sub-tooltips are visible, close them
         if (subTooltipPinned || subSubTooltipPinned) {
@@ -3402,16 +3410,41 @@ window.ASDiversity = (function () {
             return true; // handled — don't close main panel
         }
 
-        // Stage 2: Close main panel
-        if (summarySelected) {
-            deselectSummary();
-            return true;
-        }
+        // Stage 2: If in a provider view, go back to summary
         if (selectedAs) {
-            panelHistory = []; // clear navigation history
+            if (donutFocused) {
+                // In focused mode, go back to summary instead of closing
+                panelHistory = [];
+                var wasAs = selectedAs;
+                selectedAs = null;
+                hoveredAs = null;
+                renderDonut();
+                renderCenter();
+                renderLegend();
+                selectSummary();
+                return true;
+            }
+            panelHistory = [];
             deselect();
             return true;
         }
+
+        // Stage 3: Close summary / exit focused mode
+        if (summarySelected) {
+            if (donutFocused) {
+                exitFocusedMode();
+            } else {
+                deselectSummary();
+            }
+            return true;
+        }
+
+        // Stage 4: If just in focused mode with nothing selected, exit it
+        if (donutFocused) {
+            exitFocusedMode();
+            return true;
+        }
+
         return false;
     }
 
@@ -3562,6 +3595,92 @@ window.ASDiversity = (function () {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // FOCUSED MODE CENTER TEXT
+    // ═══════════════════════════════════════════════════════════
+
+    /** Show provider name in donut center during focused mode hover.
+     *  Handles multi-line display for long names with dashes. */
+    function showFocusedCenterText(asNum) {
+        if (!donutCenter) return;
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        if (!seg) return;
+
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+
+        if (diversityEl) diversityEl.style.display = 'none';
+
+        // Build display name — smart line-breaking for names with dashes
+        var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
+        var displayLines = formatNameForDonut(name);
+
+        if (headingEl) {
+            headingEl.textContent = seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '');
+            headingEl.style.color = seg.color;
+        }
+        if (scoreVal) {
+            scoreVal.textContent = displayLines;
+            scoreVal.className = 'as-score-value as-focused-provider';
+            scoreVal.style.color = seg.color;
+            scoreVal.title = (seg.asName || seg.asNumber) + '\n' + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
+        }
+        if (qualityEl) {
+            qualityEl.textContent = seg.asNumber === 'Others' ? (seg.asName || '') : seg.asNumber;
+            qualityEl.className = 'as-score-quality';
+            qualityEl.style.color = seg.color;
+        }
+        if (scoreLbl) {
+            scoreLbl.textContent = '';
+            scoreLbl.classList.remove('as-summary-link');
+        }
+    }
+
+    /** Format a provider name to fit inside the donut center.
+     *  Breaks long names at dashes or spaces. */
+    function formatNameForDonut(name) {
+        if (!name) return '';
+        // If it fits, just return it
+        if (name.length <= 12) return name;
+        // Try breaking at dashes first
+        if (name.indexOf('-') !== -1) {
+            var parts = name.split('-');
+            var lines = [];
+            var current = parts[0];
+            for (var i = 1; i < parts.length; i++) {
+                if ((current + '-' + parts[i]).length <= 12) {
+                    current += '-' + parts[i];
+                } else {
+                    lines.push(current);
+                    current = parts[i];
+                }
+            }
+            lines.push(current);
+            return lines.join('\n');
+        }
+        // Try breaking at spaces
+        if (name.indexOf(' ') !== -1) {
+            var words = name.split(' ');
+            var lines = [];
+            var current = words[0];
+            for (var i = 1; i < words.length; i++) {
+                if ((current + ' ' + words[i]).length <= 14) {
+                    current += ' ' + words[i];
+                } else {
+                    lines.push(current);
+                    current = words[i];
+                }
+            }
+            lines.push(current);
+            return lines.join('\n');
+        }
+        // Last resort: just return truncated
+        return name.length > 16 ? name.substring(0, 15) + '\u2026' : name;
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // EVENT HANDLERS
     // ═══════════════════════════════════════════════════════════
 
@@ -3573,6 +3692,12 @@ window.ASDiversity = (function () {
         hoveredAs = asNum;
         // No floating tooltip — legend highlighting replaces it
         highlightLegendItem(asNum);
+
+        // In focused mode, show provider name in donut center on hover
+        if (donutFocused && !selectedAs) {
+            focusedHoverAs = asNum;
+            showFocusedCenterText(asNum);
+        }
 
         // Temporarily remove all-hovered highlight so only this segment is bright
         if ((hoveredAll || summarySelected) && containerEl) {
@@ -3592,6 +3717,12 @@ window.ASDiversity = (function () {
         if (subTooltipPinned) return;
         hoveredAs = null;
         clearLegendHighlight();
+
+        // In focused mode, restore center text to default score display
+        if (donutFocused && !selectedAs) {
+            focusedHoverAs = null;
+            renderCenter();
+        }
 
         // If hoveredAll or summarySelected is active, restore all-lines state
         if ((hoveredAll || summarySelected) && !selectedAs) {
@@ -3668,14 +3799,35 @@ window.ASDiversity = (function () {
         var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
 
+        // Auto-enter focused mode if not already
+        if (!donutFocused) {
+            donutFocused = true;
+            document.body.classList.add('donut-focused');
+        }
+
         // If summary is active, close it and select this AS
         if (summarySelected) {
             deselectSummary();
         }
 
         if (selectedAs === asNum) {
-            // Deselect
-            deselect();
+            // Deselect — go back to summary in focused mode
+            if (donutFocused) {
+                selectedAs = null;
+                subFilterPeerIds = null;
+                subFilterLabel = null;
+                subFilterCategory = null;
+                hideSubTooltip();
+                closePanel();
+                if (_filterPeerTable) _filterPeerTable(null);
+                if (_dimMapPeers) _dimMapPeers(null);
+                selectSummary();
+                renderDonut();
+                renderCenter();
+                renderLegend();
+            } else {
+                deselect();
+            }
         } else {
             // Select this AS — clear any sub-filter from previous selection
             subFilterPeerIds = null;
@@ -3761,13 +3913,68 @@ window.ASDiversity = (function () {
                 return;
             }
             if (summarySelected) {
-                deselectSummary();
+                if (donutFocused) {
+                    exitFocusedMode();
+                } else {
+                    deselectSummary();
+                }
                 return;
             }
             if (selectedAs) {
                 deselect();
+                return;
+            }
+            if (donutFocused) {
+                exitFocusedMode();
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FOCUSED MODE — Donut moves to top-center, layout rearranges
+    // ═══════════════════════════════════════════════════════════
+
+    /** Enter focused mode: donut to top-center, BTC price to left, map controls to right */
+    function enterFocusedMode() {
+        if (donutFocused) return;
+        donutFocused = true;
+        document.body.classList.add('donut-focused');
+
+        // Hide the legend (top 8 list) — it only shows in default mode or on interaction
+        if (legendEl) {
+            legendEl.style.display = '';
+        }
+
+        // Activate hover-all to show lines from donut center in focused mode
+        hoveredAll = false;
+        activateHoverAll();
+
+        // Open summary panel automatically
+        selectSummary();
+    }
+
+    /** Exit focused mode: everything returns to default positions */
+    function exitFocusedMode() {
+        if (!donutFocused) return;
+        donutFocused = false;
+        othersListOpen = false;
+        focusedHoverAs = null;
+        document.body.classList.remove('donut-focused');
+
+        // Deselect everything
+        if (summarySelected) deselectSummary();
+        if (selectedAs) deselect();
+        hoveredAll = false;
+        deactivateHoverAll();
+
+        // Reset center display
+        renderCenter();
+        renderLegend();
+    }
+
+    /** Check if focused mode is active */
+    function isFocusedMode() {
+        return donutFocused;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3785,14 +3992,20 @@ window.ASDiversity = (function () {
         tooltipEl = document.getElementById('as-tooltip');
         panelEl = document.getElementById('as-detail-panel');
         loadingEl = containerEl ? containerEl.querySelector('.as-loading') : null;
+        focusedCloseBtn = document.getElementById('as-focused-close');
 
-        // Hover-all: title and SUMMARY ANALYSIS label trigger all-segments highlight
+        // Hover-all: title triggers all-segments highlight; click enters focused mode
         if (titleEl) {
             titleEl.addEventListener('mouseenter', onTitleEnter);
             titleEl.addEventListener('mouseleave', onTitleLeave);
-            titleEl.addEventListener('click', onSummaryClick);
+            titleEl.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (!donutFocused) {
+                    enterFocusedMode();
+                }
+            });
         }
-        // Donut center: hover previews all lines, click opens summary
+        // Donut center: hover previews all lines, click enters focused mode
         // NOTE: We intentionally do NOT add separate mouseenter/mouseleave on as-score-label,
         // because donutCenter already covers it. Adding handlers on the child causes
         // lines to disappear when the mouse moves from the label to the score value
@@ -3800,13 +4013,32 @@ window.ASDiversity = (function () {
         if (donutCenter) {
             donutCenter.addEventListener('mouseenter', onTitleEnter);
             donutCenter.addEventListener('mouseleave', onTitleLeave);
-            donutCenter.addEventListener('click', onSummaryClick);
+            donutCenter.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (!donutFocused) {
+                    enterFocusedMode();
+                }
+            });
         }
 
-        // Close button on detail panel
+        // Focused mode close button (back arrow near donut)
+        if (focusedCloseBtn) {
+            focusedCloseBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                exitFocusedMode();
+            });
+        }
+
+        // Close button on detail panel — exit fully
         var closeBtn = panelEl ? panelEl.querySelector('.as-detail-close') : null;
         if (closeBtn) {
-            closeBtn.addEventListener('click', deselect);
+            closeBtn.addEventListener('click', function () {
+                if (donutFocused) {
+                    exitFocusedMode();
+                } else {
+                    deselect();
+                }
+            });
         }
 
         // Clicking the AS detail panel brings it to front
@@ -4255,5 +4487,9 @@ window.ASDiversity = (function () {
         getColorForAs: getColorForAs,
         getSegments: getSegments,
         collapseToMainPanel: collapseToMainPanel,
+        // Focused mode
+        enterFocusedMode: enterFocusedMode,
+        exitFocusedMode: exitFocusedMode,
+        isFocusedMode: isFocusedMode,
     };
 })();
