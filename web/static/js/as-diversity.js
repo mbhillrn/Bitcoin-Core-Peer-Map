@@ -87,6 +87,7 @@ window.ASDiversity = (function () {
     let pinnedSubTooltipSetup = null; // fn(tip) — re-attach handlers when restoring pinned tooltip
     let lastPeersRaw = [];         // Raw peers from last update (for summary computation)
     let panelHistory = [];         // Navigation stack [{type:'summary'|'provider', asNumber?, scrollTop?}]
+    let peerDetailActive = false;  // True when peer detail panel is shown (from peer list/map click)
 
     // Integration hooks (set by bitapp.js)
     let _drawLinesForAs = null;    // fn(asNumber, peerIds, color) — draw lines on canvas
@@ -98,6 +99,7 @@ window.ASDiversity = (function () {
     let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID (full deselect)
     let _zoomToPeerOnly = null;    // fn(peerId) — zoom to peer without deselecting AS panel
     let _resetMapZoom = null;      // fn() — smoothly zoom the map back to default view
+    let _hideMapTooltip = null;    // fn() — hide the map peer tooltip
 
     // Service flag definitions (mirrored from bitapp.js for hover expansion)
     var SERVICE_FLAGS = {
@@ -1006,6 +1008,9 @@ window.ASDiversity = (function () {
     function renderCenter() {
         if (!donutCenter) return;
 
+        // If peer detail panel is active, don't touch center text — showPeerInDonutCenter manages it
+        if (peerDetailActive) return;
+
         // In focused mode with hover active, preserve the hover display during data updates
         if (donutFocused && focusedHoverAs && !selectedAs) {
             showFocusedCenterText(focusedHoverAs);
@@ -1270,6 +1275,7 @@ window.ASDiversity = (function () {
 
     function openPanel(asNum) {
         if (!panelEl) return;
+        peerDetailActive = false;
         var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         var fullGroup;
 
@@ -1494,6 +1500,7 @@ window.ASDiversity = (function () {
     /** Open the Summary Analysis panel (reuses the same #as-detail-panel) */
     function openSummaryPanel() {
         if (!panelEl) return;
+        peerDetailActive = false;
         var data = computeSummaryData();
 
         // Render back button (hidden for summary unless navigated from provider)
@@ -3398,6 +3405,9 @@ window.ASDiversity = (function () {
 
     /** Navigate to a provider's panel (with back button to return) */
     function navigateToProvider(asNum) {
+        // Close any open map peer tooltip when navigating
+        if (_hideMapTooltip) _hideMapTooltip();
+
         // Save current panel state to history
         var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
         var scrollTop = bodyEl ? bodyEl.scrollTop : 0;
@@ -3435,9 +3445,21 @@ window.ASDiversity = (function () {
 
     /** Navigate back to the previous panel */
     function navigateBack() {
-        if (panelHistory.length === 0) return;
+        // Close any open map peer tooltip when navigating back
+        if (_hideMapTooltip) _hideMapTooltip();
+
+        if (panelHistory.length === 0) {
+            // No history — exit focused mode or deselect
+            if (donutFocused) {
+                exitFocusedMode();
+            } else {
+                deselect();
+            }
+            return;
+        }
         var prev = panelHistory.pop();
 
+        peerDetailActive = false;
         subFilterPeerIds = null;
         subFilterLabel = null;
         subFilterCategory = null;
@@ -3448,12 +3470,13 @@ window.ASDiversity = (function () {
             selectedAs = null;
             summarySelected = true;
             openSummaryPanel();
+            animateDonutRevert();
             activateHoverAll();
             if (_filterPeerTable) _filterPeerTable(null);
             if (_dimMapPeers) _dimMapPeers(null);
-            renderDonut();
             renderCenter();
             renderLegend();
+            if (_resetMapZoom) _resetMapZoom(); // zoom out when going back
             var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
             if (bodyEl) setTimeout(function () { bodyEl.scrollTop = prev.scrollTop || 0; }, 50);
         } else if (prev.type === 'provider') {
@@ -4000,6 +4023,7 @@ window.ASDiversity = (function () {
             deselectSummary();
             return;
         }
+        peerDetailActive = false;
         selectedAs = null;
         subFilterPeerIds = null;
         subFilterLabel = null;
@@ -4108,6 +4132,7 @@ window.ASDiversity = (function () {
         donutFocused = false;
         othersListOpen = false;
         focusedHoverAs = null;
+        peerDetailActive = false;
         document.body.classList.remove('donut-focused');
 
         // Revert donut animation
@@ -4143,6 +4168,7 @@ window.ASDiversity = (function () {
      *  @param {string} source — 'peerlist' | 'map' */
     function openPeerDetailPanel(peer, source) {
         if (!panelEl) return;
+        peerDetailActive = true;
 
         // Find the provider for this peer
         var asNum = parseAsNumber(peer.as);
@@ -4446,6 +4472,7 @@ window.ASDiversity = (function () {
         _selectPeerById = hooks.selectPeerById || null;
         _zoomToPeerOnly = hooks.zoomToPeerOnly || null;
         _resetMapZoom = hooks.resetMapZoom || null;
+        _hideMapTooltip = hooks.hideMapTooltip || null;
     }
 
     /** Update with new peer data. Called after each fetchPeers(). */
@@ -4491,6 +4518,12 @@ window.ASDiversity = (function () {
             legendFocusAs = null;
         }
         renderLegend();
+
+        // If peer detail panel is open, don't rebuild anything — just keep current state
+        if (peerDetailActive) {
+            // Just keep the peer detail panel and current line/filter state intact
+            return;
+        }
 
         // If a selection is active, refresh the panel + filter + keep lines
         if (selectedAs) {

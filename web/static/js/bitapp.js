@@ -6159,6 +6159,11 @@
                 hideTooltip();
                 clearMapDotFilter();
             },
+            hideMapTooltip: function () {
+                // Hide the map peer tooltip without changing zoom
+                pinnedNode = null;
+                hideTooltip();
+            },
         });
 
         // Donut is always active — feed it initial data if available
