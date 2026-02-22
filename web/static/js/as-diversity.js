@@ -110,6 +110,7 @@ window.ASDiversity = (function () {
     let _selectPeerById = null;    // fn(peerId) — select a peer on the map by ID (full deselect)
     let _zoomToPeerOnly = null;    // fn(peerId) — zoom to peer without deselecting AS panel
     let _resetMapZoom = null;      // fn() — smoothly zoom the map back to default view
+    let _clearPeerSelection = null; // fn() — clear peer selection without zoom reset
     let _hideMapTooltip = null;    // fn() — hide the map peer tooltip
 
     // Service flag definitions (mirrored from bitapp.js for hover expansion)
@@ -4108,6 +4109,11 @@ window.ASDiversity = (function () {
     /** Handle click on title, donut center, or SUMMARY ANALYSIS text */
     function onSummaryClick(e) {
         e.stopPropagation();
+        // Close peer detail popup if open — skip zoom reset since summary
+        // will set its own lines/view
+        if (peerDetailActive) {
+            closePeerPopup(true);
+        }
         if (summarySelected) {
             deselectSummary();
         } else {
@@ -4796,6 +4802,12 @@ window.ASDiversity = (function () {
         var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
 
+        // Close peer detail popup if open (user clicked a different segment)
+        // Skip zoom reset — the segment view will set its own lines/filters
+        if (peerDetailActive) {
+            closePeerPopup(true);
+        }
+
         // Auto-enter focused mode if not already
         if (!donutFocused) {
             donutFocused = true;
@@ -5054,8 +5066,10 @@ window.ASDiversity = (function () {
         peerPopupEl.classList.remove('peer-popup-previewing');
     }
 
-    /** Close the peer detail popup */
-    function closePeerPopup() {
+    /** Close the peer detail popup.
+     *  @param {boolean} [skipZoomReset] - if true, skip resetting map zoom (used when
+     *         transitioning to another view like a donut segment, not a full close) */
+    function closePeerPopup(skipZoomReset) {
         peerDetailActive = false;
         selectedPeerId = null;
         selectedPeerData = null;
@@ -5100,8 +5114,13 @@ window.ASDiversity = (function () {
             if (_clearAsLines) _clearAsLines();
             renderCenter();
         }
-        // Zoom map back out when closing peer detail
-        if (_resetMapZoom) _resetMapZoom();
+        // Zoom map back out when closing peer detail (unless caller says skip)
+        if (!skipZoomReset && _resetMapZoom) {
+            _resetMapZoom();
+        } else if (skipZoomReset && _clearPeerSelection) {
+            // Clear selection state without resetting zoom (navigating to another view)
+            _clearPeerSelection();
+        }
         // Clear selected peer highlight
         var allSelected = document.querySelectorAll('.as-sub-tt-peer-selected');
         for (var i = 0; i < allSelected.length; i++) allSelected[i].classList.remove('as-sub-tt-peer-selected');
@@ -5634,6 +5653,7 @@ window.ASDiversity = (function () {
         _selectPeerById = hooks.selectPeerById || null;
         _zoomToPeerOnly = hooks.zoomToPeerOnly || null;
         _resetMapZoom = hooks.resetMapZoom || null;
+        _clearPeerSelection = hooks.clearPeerSelection || null;
         _hideMapTooltip = hooks.hideMapTooltip || null;
     }
 

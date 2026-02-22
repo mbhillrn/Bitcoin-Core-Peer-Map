@@ -1428,7 +1428,7 @@ body.donut-focused .as-donut-others-list.visible {
 .peer-detail-popup {
     position: fixed;
     top: 180px;
-    left: 80px;
+    left: 210px;
     transform: scale(0.95);
     transform-origin: top left;
     width: 310px;
@@ -1457,7 +1457,7 @@ body.donut-focused .as-donut-others-list.visible {
 
 /* When AS panel is open, keep popup offset from left */
 body.as-panel-open .peer-detail-popup {
-    left: 80px;
+    left: 210px;
 }
 .peer-detail-popup.peer-popup-previewing .peer-popup-name {
     font-style: italic;
