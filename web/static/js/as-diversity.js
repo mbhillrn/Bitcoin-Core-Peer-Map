@@ -52,6 +52,15 @@ window.ASDiversity = (function () {
     let focusedHoverAs = null;     // AS hovered in focused mode (for center text display)
     let othersListOpen = false;    // True when Others scrollable list is showing in donut center
 
+    // Donut segment animation state
+    let donutAnimState = 'idle';   // 'idle' | 'expanding' | 'expanded' | 'reverting'
+    let donutAnimTarget = null;    // AS number being expanded
+    let donutAnimProgress = 0;    // 0 to 1 progress
+    let donutAnimFrame = null;    // requestAnimationFrame ID
+    let donutAnimStartTime = 0;   // Animation start timestamp
+    const DONUT_ANIM_DURATION = 400; // ms for expand/revert animation
+    const DONUT_EXPAND_RATIO = 0.70; // expanded segment gets 70% of donut
+
     // DOM refs (cached on init)
     let containerEl = null;
     let titleEl = null;
@@ -804,25 +813,96 @@ window.ASDiversity = (function () {
         } else {
             var totalGap = gap * donutSegments.length;
             var available = 2 * Math.PI - totalGap;
-            var angle = -Math.PI / 2; // start at top
+
+            // Calculate sweeps — either normal (data-proportional) or animated (expanded)
+            var sweeps = [];
+            var normalSweeps = [];
+            for (var si = 0; si < donutSegments.length; si++) {
+                normalSweeps.push((donutSegments[si].peerCount / totalPeers) * available);
+            }
+
+            if ((donutAnimState === 'expanding' || donutAnimState === 'expanded' || donutAnimState === 'reverting') && donutAnimTarget) {
+                // Calculate expanded layout: target segment gets DONUT_EXPAND_RATIO, rest share the remainder
+                var expandedSweeps = [];
+                var targetIdx = -1;
+                for (var si = 0; si < donutSegments.length; si++) {
+                    if (donutSegments[si].asNumber === donutAnimTarget) {
+                        targetIdx = si;
+                        break;
+                    }
+                }
+                if (targetIdx >= 0) {
+                    var expandedSweep = available * DONUT_EXPAND_RATIO;
+                    var remainingSpace = available - expandedSweep;
+                    var otherTotal = totalPeers - donutSegments[targetIdx].peerCount;
+                    for (var si = 0; si < donutSegments.length; si++) {
+                        if (si === targetIdx) {
+                            expandedSweeps.push(expandedSweep);
+                        } else {
+                            var share = otherTotal > 0 ? (donutSegments[si].peerCount / otherTotal) : (1 / (donutSegments.length - 1));
+                            expandedSweeps.push(share * remainingSpace);
+                        }
+                    }
+                } else {
+                    expandedSweeps = normalSweeps.slice();
+                }
+
+                // Interpolate based on animation progress
+                var t = donutAnimState === 'reverting' ? (1 - donutAnimProgress) : donutAnimProgress;
+                // Smooth easing
+                t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                for (var si = 0; si < donutSegments.length; si++) {
+                    sweeps.push(normalSweeps[si] + (expandedSweeps[si] - normalSweeps[si]) * t);
+                }
+            } else {
+                sweeps = normalSweeps;
+            }
+
+            // Arrange segments: in expanded mode, non-target segments go to top, target at bottom
+            var renderOrder = [];
+            var targetIdx = -1;
+            if ((donutAnimState !== 'idle') && donutAnimTarget) {
+                for (var si = 0; si < donutSegments.length; si++) {
+                    if (donutSegments[si].asNumber === donutAnimTarget) {
+                        targetIdx = si;
+                    } else {
+                        renderOrder.push(si);
+                    }
+                }
+                if (targetIdx >= 0) renderOrder.push(targetIdx);
+            } else {
+                for (var si = 0; si < donutSegments.length; si++) renderOrder.push(si);
+            }
+
+            // Layout: others at top (starting at -PI/2), target fills bottom
+            var angle = -Math.PI / 2;
+
+            // If animating, re-order: non-target segments first (top), then target (bottom)
+            var segAngles = [];
+            for (var ri = 0; ri < renderOrder.length; ri++) {
+                var idx = renderOrder[ri];
+                var sweep = sweeps[idx];
+                if (sweep <= 0) {
+                    segAngles[idx] = { start: angle, end: angle };
+                    continue;
+                }
+                segAngles[idx] = { start: angle + gap / 2, end: angle + sweep + gap / 2 };
+                angle += sweep + gap;
+            }
 
             // Group for shadow on all segments
             html += '<g filter="url(#donut-shadow)">';
             for (var si = 0; si < donutSegments.length; si++) {
                 var seg = donutSegments[si];
-                var sweep = (seg.peerCount / totalPeers) * available;
-                if (sweep <= 0) continue;
+                if (!segAngles[si] || sweeps[si] <= 0) continue;
 
-                var startA = angle + gap / 2;
-                var endA = angle + sweep + gap / 2;
-                var d = describeArc(cx, cy, DONUT_RADIUS, INNER_RADIUS, startA, endA);
+                var d = describeArc(cx, cy, DONUT_RADIUS, INNER_RADIUS, segAngles[si].start, segAngles[si].end);
 
                 var cls = ['as-donut-segment'];
                 if (selectedAs && selectedAs !== seg.asNumber) cls.push('dimmed');
                 if (selectedAs === seg.asNumber) cls.push('selected');
 
                 html += '<path d="' + d + '" fill="' + seg.color + '" class="' + cls.join(' ') + '" data-as="' + seg.asNumber + '" />';
-                angle += sweep + gap;
             }
             html += '</g>';
 
@@ -847,6 +927,61 @@ window.ASDiversity = (function () {
         }
     }
 
+    /** Start donut expansion animation for a selected segment */
+    function animateDonutExpand(asNum) {
+        if (donutAnimFrame) cancelAnimationFrame(donutAnimFrame);
+        donutAnimTarget = asNum;
+        donutAnimState = 'expanding';
+        donutAnimProgress = 0;
+        donutAnimStartTime = performance.now();
+        donutAnimFrame = requestAnimationFrame(donutAnimStep);
+    }
+
+    /** Start donut revert animation (back to proportional) */
+    function animateDonutRevert() {
+        if (donutAnimFrame) cancelAnimationFrame(donutAnimFrame);
+        donutAnimState = 'reverting';
+        donutAnimProgress = 0;
+        donutAnimStartTime = performance.now();
+        donutAnimFrame = requestAnimationFrame(donutAnimStep);
+    }
+
+    /** Animation step — called each frame */
+    function donutAnimStep(now) {
+        var elapsed = now - donutAnimStartTime;
+        donutAnimProgress = Math.min(1, elapsed / DONUT_ANIM_DURATION);
+
+        renderDonut();
+
+        if (donutAnimProgress < 1) {
+            donutAnimFrame = requestAnimationFrame(donutAnimStep);
+        } else {
+            // Animation complete
+            donutAnimFrame = null;
+            if (donutAnimState === 'expanding') {
+                donutAnimState = 'expanded';
+                donutAnimProgress = 1;
+            } else if (donutAnimState === 'reverting') {
+                donutAnimState = 'idle';
+                donutAnimTarget = null;
+                donutAnimProgress = 0;
+                // Final render at idle state
+                renderDonut();
+            }
+        }
+    }
+
+    /** Force-stop any donut animation (safety) */
+    function stopDonutAnimation() {
+        if (donutAnimFrame) {
+            cancelAnimationFrame(donutAnimFrame);
+            donutAnimFrame = null;
+        }
+        donutAnimState = 'idle';
+        donutAnimTarget = null;
+        donutAnimProgress = 0;
+    }
+
     /** Get quality rating for a diversity score */
     function getQuality(score) {
         if (score >= 8) return { word: 'Excellent', cls: 'q-excellent' };
@@ -869,6 +1004,13 @@ window.ASDiversity = (function () {
      *  When AS selected: peer count heading | AS name | percentage */
     function renderCenter() {
         if (!donutCenter) return;
+
+        // In focused mode with hover active, preserve the hover display during data updates
+        if (donutFocused && focusedHoverAs && !selectedAs) {
+            showFocusedCenterText(focusedHoverAs);
+            return;
+        }
+
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
         var headingEl = donutCenter.querySelector('.as-score-heading');
         var scoreVal = donutCenter.querySelector('.as-score-value');
@@ -3821,11 +3963,12 @@ window.ASDiversity = (function () {
                 closePanel();
                 if (_filterPeerTable) _filterPeerTable(null);
                 if (_dimMapPeers) _dimMapPeers(null);
+                animateDonutRevert();
                 selectSummary();
-                renderDonut();
                 renderCenter();
                 renderLegend();
             } else {
+                animateDonutRevert();
                 deselect();
             }
         } else {
@@ -3842,9 +3985,10 @@ window.ASDiversity = (function () {
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
                 if (_drawLinesForAs) _drawLinesForAs(asNum, seg.peerIds, seg.color);
             }
+            // Animate donut expansion
+            animateDonutExpand(asNum);
             // Keep legend visible while selected
             if (containerEl) containerEl.classList.add('as-legend-visible');
-            renderDonut();
             renderCenter();
             renderLegend();
         }
@@ -3865,7 +4009,11 @@ window.ASDiversity = (function () {
         if (_filterPeerTable) _filterPeerTable(null);
         if (_dimMapPeers) _dimMapPeers(null);
         if (_clearAsLines) _clearAsLines();
-        renderDonut();
+        if (donutAnimState !== 'idle' && donutAnimState !== 'reverting') {
+            animateDonutRevert();
+        } else {
+            renderDonut();
+        }
         renderCenter();
         renderLegend();
     }
@@ -3961,6 +4109,9 @@ window.ASDiversity = (function () {
         focusedHoverAs = null;
         document.body.classList.remove('donut-focused');
 
+        // Revert donut animation
+        stopDonutAnimation();
+
         // Deselect everything
         if (summarySelected) deselectSummary();
         if (selectedAs) deselect();
@@ -3968,6 +4119,7 @@ window.ASDiversity = (function () {
         deactivateHoverAll();
 
         // Reset center display
+        renderDonut();
         renderCenter();
         renderLegend();
     }
