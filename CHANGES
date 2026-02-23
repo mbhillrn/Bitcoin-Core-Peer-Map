@@ -1,3 +1,5 @@
+v7.5.4 — Added network badge, resize handle, and 20 new getpeerinfo fields to the peer detail popup. Rewrote README opening and added full peer popup documentation with new screenshot.
+
 v7.5.3 — Fixed donut chart not updating immediately when clicking category rows or toggling connection grid items. Others popup now stays open when selecting a sub-provider for easy switching, with proper map line restoration on hover.
 
 v7.5.2 — Fixed ISP panel scroll reset on data refresh, replaced oval donut morph with a floating popup for Others sub-providers, and fixed broken drill-down interactivity for all Others provider panels. Added "← Others" back navigation in the donut center and service flag descriptions to the Summary panel tooltips.
