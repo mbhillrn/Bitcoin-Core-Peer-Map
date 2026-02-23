@@ -1224,6 +1224,29 @@ async def api_peers():
             'location': location,
             'location_status': location_status,
             'addr': addr,
+
+            # Additional getpeerinfo fields (previously missing)
+            'minping': peer.get('minping'),
+            'lastsend': peer.get('lastsend'),
+            'lastrecv': peer.get('lastrecv'),
+            'startingheight': peer.get('startingheight'),
+            'synced_headers': peer.get('synced_headers'),
+            'synced_blocks': peer.get('synced_blocks'),
+            'transport_protocol_type': peer.get('transport_protocol_type', ''),
+            'session_id': peer.get('session_id', ''),
+            'addr_relay_enabled': peer.get('addr_relay_enabled'),
+            'bip152_hb_from': peer.get('bip152_hb_from', False),
+            'bip152_hb_to': peer.get('bip152_hb_to', False),
+            'relaytxes': peer.get('relaytxes'),
+            'last_transaction': peer.get('last_transaction', 0),
+            'last_block': peer.get('last_block', 0),
+            'timeoffset': peer.get('timeoffset', 0),
+            'addrlocal': peer.get('addrlocal', ''),
+            'permissions': peer.get('permissions', []),
+            'minfeefilter': peer.get('minfeefilter'),
+            'addr_processed': peer.get('addr_processed', 0),
+            'addr_rate_limited': peer.get('addr_rate_limited', 0),
+            'mapped_as': peer.get('mapped_as'),
         })
 
     return result
