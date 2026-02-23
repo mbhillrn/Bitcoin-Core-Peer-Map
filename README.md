@@ -261,6 +261,7 @@ The **network type badge** sits at the top of the popup border, showing IPv4, IP
   - **Manual** -- A peer you manually connected to via `addnode`
   - **Address Fetch** -- A short-lived connection to learn about other peers' addresses
   - **Feeler** -- A short-lived connection to test if an address in the address manager is reachable
+- **Your Addr** -- Your node's external IP address as seen by this peer (when available)
 
 **Performance:**
 - **Ping** -- Current round-trip latency to this peer in milliseconds
@@ -268,8 +269,11 @@ The **network type badge** sits at the top of the popup border, showing IPv4, IP
 - **Connected** -- How long you have been connected to this peer
 - **Last Send** -- Time since your node last sent data to this peer
 - **Last Recv** -- Time since your node last received data from this peer
+- **Last Block** -- Time since the last block was communicated with this peer
+- **Last Tx** -- Time since the last transaction was communicated with this peer (shows nothing for block-relay-only connections)
 - **Bytes Sent** -- Total data sent to this peer
 - **Bytes Recv** -- Total data received from this peer
+- **Time Offset** -- Clock difference between your node and this peer in seconds (0s means synced)
 
 **Software:**
 - **Version** -- The peer's user agent string (e.g. `/Satoshi:28.0.0/`)
@@ -280,6 +284,7 @@ The **network type badge** sits at the top of the popup border, showing IPv4, IP
 - **Synced Blks** -- Last block height your node has synced in common with this peer
 - **Transport** -- v1 (legacy) or v2 (BIP324 encrypted) transport protocol, when available
 - **Session ID** -- The BIP324 session identifier for v2 encrypted connections
+- **Min Fee Filter** -- The minimum fee rate (in sat/kvB) this peer will accept for transaction relay
 
 **Location:**
 - **Country**, **Region**, **City** -- Geographic location from the GeoIP database
@@ -288,9 +293,12 @@ The **network type badge** sits at the top of the popup border, showing IPv4, IP
 - **Mapped AS** -- The mapped AS number if your node has the asmap configured
 
 **Status:**
+- **Relay Txs** -- Whether this peer relays transactions (No for block-relay-only connections)
 - **Addrman** -- Whether this peer's address is stored in your node's address manager
 - **Addr Relay** -- Whether address relay is enabled for this peer
-- **BIP152 HB** -- BIP152 high-bandwidth compact block relay status. When a peer is in high-bandwidth mode, it proactively sends you compact blocks immediately upon receiving them rather than waiting for you to request them, reducing block propagation delay
+- **Addr Stats** -- Number of address messages processed from this peer and how many were rate-limited (shown when non-zero)
+- **BIP152 HB** -- BIP152 high-bandwidth compact block relay status in both directions. "From" means this peer proactively sends you compact blocks; "To" means your node proactively sends compact blocks to them. High-bandwidth mode reduces block propagation delay by sending compact blocks immediately rather than waiting for a request
+- **Permissions** -- Any special permissions granted to this peer (e.g. `noban`, `relay`, `download`), shown when applicable
 - **Hosting** -- Flags whether the peer is on a known cloud/hosting provider
 - **Proxy** -- Flags whether the peer is using a VPN or proxy
 - **Mobile** -- Flags whether the peer is on a mobile network
