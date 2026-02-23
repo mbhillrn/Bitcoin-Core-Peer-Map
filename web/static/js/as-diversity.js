@@ -52,8 +52,7 @@ window.ASDiversity = (function () {
     let legendFocusAs = null;      // AS number to exclusively show in legend during panel hover
     let donutFocused = false;      // True when in focused mode (donut at top-center)
     let focusedHoverAs = null;     // AS hovered in focused mode (for center text display)
-    let othersListOpen = false;    // True when Others scrollable list is showing in donut center
-    let othersOvalActive = false;  // True when donut is in oval mode (Others expansion)
+    let othersListOpen = false;    // True when Others popup is showing next to the donut
 
     // Donut segment animation state
     let donutAnimState = 'idle';   // 'idle' | 'expanding' | 'expanded' | 'reverting'
@@ -1288,8 +1287,6 @@ window.ASDiversity = (function () {
         // If peer detail panel is active, don't touch center text — showPeerInDonutCenter manages it
         if (peerDetailActive) return;
 
-        // If Others scrollable list is open, don't touch center — showOthersListInDonut manages it
-        if (othersListOpen) return;
 
         // In focused mode with hover active, preserve the hover display during data updates
         if (donutFocused && focusedHoverAs && !selectedAs) {
@@ -2171,7 +2168,7 @@ window.ASDiversity = (function () {
                             animateDonutExpand(subFilterLabel);
                         } else if (selectedAs) {
                             renderCenter();
-                        } else if (!othersListOpen) {
+                        } else {
                             renderCenter();
                         }
                     }
@@ -4194,7 +4191,6 @@ window.ASDiversity = (function () {
         insightActiveAsNum = null; insightActiveData = null;
         insightActiveType = null;
         panelHistory = [];
-        revertOvalMode();
         hideSubTooltip();
         hideSubSubTooltip();
         hideInsightRect();
@@ -4529,55 +4525,42 @@ window.ASDiversity = (function () {
         }
     }
 
-    /** Show scrollable Others list inside the donut center (focused mode only).
+    /** Show scrollable Others provider list as a floating popup to the right of the donut.
      *  Each item is hoverable (preview lines) and clickable (opens provider panel). */
     function showOthersListInDonut() {
-        if (!donutCenter) return;
         var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
         if (!othersSeg || !othersSeg._othersGroups) return;
 
         othersListOpen = true;
-        enableOvalMode();
 
-        // Hide normal center elements
-        var diversityEl = donutCenter.querySelector('.as-score-diversity');
-        var headingEl = donutCenter.querySelector('.as-score-heading');
-        var scoreVal = donutCenter.querySelector('.as-score-value');
-        var qualityEl = donutCenter.querySelector('.as-score-quality');
-        var scoreLbl = donutCenter.querySelector('.as-score-label');
-        if (diversityEl) diversityEl.style.display = 'none';
-        if (headingEl) headingEl.style.display = 'none';
-        if (scoreVal) scoreVal.style.display = 'none';
-        if (qualityEl) qualityEl.style.display = 'none';
-        if (scoreLbl) scoreLbl.style.display = 'none';
-
-        // Remove any existing list
-        var existing = donutCenter.querySelector('.as-donut-others-list');
+        // Remove any existing popup
+        var existing = document.getElementById('as-others-popup');
         if (existing) existing.remove();
 
-        // Build scrollable list
+        // Build popup container
+        var popup = document.createElement('div');
+        popup.id = 'as-others-popup';
+        popup.className = 'as-others-popup';
+
+        // Header
+        var header = document.createElement('div');
+        header.className = 'as-others-popup-header';
+        header.textContent = 'Others (' + othersSeg._othersGroups.length + ' providers)';
+        popup.appendChild(header);
+
+        // Scrollable list
         var listDiv = document.createElement('div');
-        listDiv.className = 'as-donut-others-list visible';
+        listDiv.className = 'as-others-popup-list';
 
-        // Back arrow
-        var backEl = document.createElement('div');
-        backEl.className = 'as-donut-others-back';
-        backEl.textContent = '\u2190 Back';
-        backEl.addEventListener('click', function (e) {
-            e.stopPropagation();
-            closeOthersListInDonut();
-        });
-        listDiv.appendChild(backEl);
-
-        // Provider items
         var groups = othersSeg._othersGroups;
         for (var i = 0; i < groups.length; i++) {
             (function (g) {
                 var item = document.createElement('div');
-                item.className = 'as-donut-others-item';
+                item.className = 'as-others-popup-item';
                 var name = g.asShort || g.asName || g.asNumber;
-                if (name.length > 22) name = name.substring(0, 21) + '\u2026';
-                item.textContent = name + ' (' + g.peerCount + ')';
+                if (name.length > 24) name = name.substring(0, 23) + '\u2026';
+                item.innerHTML = '<span class="as-others-popup-name">' + name + '</span>' +
+                    '<span class="as-others-popup-count">' + g.peerCount + '</span>';
                 item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
 
                 // Hover: preview lines to this provider's peers
@@ -4596,10 +4579,10 @@ window.ASDiversity = (function () {
                     }
                 });
 
-                // Click: navigate to this provider's panel (keep oval since still in Others)
+                // Click: navigate to this provider's panel
                 item.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    closeOthersListInDonut(true);
+                    closeOthersListInDonut();
                     navigateToProvider(g.asNumber);
                     animateDonutExpand(g.asNumber);
                 });
@@ -4608,47 +4591,21 @@ window.ASDiversity = (function () {
             })(groups[i]);
         }
 
-        donutCenter.appendChild(listDiv);
+        popup.appendChild(listDiv);
+
+        // Position next to the donut wrap
+        if (donutWrapEl) {
+            donutWrapEl.appendChild(popup);
+        } else {
+            document.body.appendChild(popup);
+        }
     }
 
-    /** Close the Others list in donut center and restore normal display.
-     *  @param {boolean} keepOval - If true, keep oval shape (e.g. drilling into sub-provider) */
-    function closeOthersListInDonut(keepOval) {
+    /** Close the Others popup list */
+    function closeOthersListInDonut() {
         othersListOpen = false;
-        if (!keepOval) revertOvalMode();
-        if (!donutCenter) return;
-
-        var listEl = donutCenter.querySelector('.as-donut-others-list');
-        if (listEl) listEl.remove();
-
-        // Restore center element visibility
-        var diversityEl = donutCenter.querySelector('.as-score-diversity');
-        var headingEl = donutCenter.querySelector('.as-score-heading');
-        var scoreVal = donutCenter.querySelector('.as-score-value');
-        var qualityEl = donutCenter.querySelector('.as-score-quality');
-        var scoreLbl = donutCenter.querySelector('.as-score-label');
-        if (diversityEl) diversityEl.style.display = '';
-        if (headingEl) headingEl.style.display = '';
-        if (scoreVal) scoreVal.style.display = '';
-        if (qualityEl) qualityEl.style.display = '';
-        if (scoreLbl) scoreLbl.style.display = '';
-
-        renderCenter();
-    }
-
-    /** Enable oval mode — stretch donut horizontally for Others expansion */
-    function enableOvalMode() {
-        othersOvalActive = true;
-        if (donutWrapEl) donutWrapEl.classList.add('others-oval');
-        if (donutSvg) donutSvg.setAttribute('preserveAspectRatio', 'none');
-    }
-
-    /** Revert oval mode — restore circular donut */
-    function revertOvalMode() {
-        if (!othersOvalActive) return;
-        othersOvalActive = false;
-        if (donutWrapEl) donutWrapEl.classList.remove('others-oval');
-        if (donutSvg) donutSvg.removeAttribute('preserveAspectRatio');
+        var popup = document.getElementById('as-others-popup');
+        if (popup) popup.remove();
     }
 
     /** Format a provider name to fit inside the donut center.
@@ -4845,7 +4802,6 @@ window.ASDiversity = (function () {
             // Deselect — go back to summary in focused mode
             if (donutFocused) {
                 if (othersListOpen) closeOthersListInDonut();
-                revertOvalMode();
                 selectedAs = null;
                 subFilterPeerIds = null;
                 subFilterLabel = null;
@@ -4869,7 +4825,6 @@ window.ASDiversity = (function () {
             subFilterCategory = null;
             hideSubTooltip();
             if (othersListOpen) closeOthersListInDonut();
-            revertOvalMode();
             selectedAs = asNum;
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg) {
@@ -4904,7 +4859,7 @@ window.ASDiversity = (function () {
         subFilterPeerIds = null;
         subFilterLabel = null;
         subFilterCategory = null;
-        revertOvalMode();
+        if (othersListOpen) closeOthersListInDonut();
         hideSubTooltip();
         hideInsightRect();
         closePanel();
