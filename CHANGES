@@ -1,1 +1,3 @@
+v7.5.1 — Fixed peer focus being lost on auto-refresh: clicking a map dot now correctly stays zoomed and focused on the selected peer through data update cycles instead of resetting to show all lines. Summary and provider panels now scroll back to the top when reopened.
+
 v7.5.0 — Complete overhaul of peer selection, zoom, and panel interaction behavior. Clicking any peer (map dot, multi-peer group, or table row) now consistently zooms to the peer, opens the detail popup, draws a single connection line, and persists through 10-second data refreshes. Fixed hover-preview vs click-select state separation so hovering other items previews them without losing the active selection.
