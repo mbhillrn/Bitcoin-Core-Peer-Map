@@ -5388,6 +5388,8 @@ window.ASDiversity = (function () {
             'cjdns': 'var(--net-cjdns, #bc8cff)'
         };
         var netColor = netColors[(peer.network || 'ipv4').toLowerCase()] || 'var(--accent, #58a6ff)';
+        var netLabelMap = { 'ipv4': 'IPv4', 'ipv6': 'IPv6', 'onion': 'Tor', 'tor': 'Tor', 'i2p': 'I2P', 'cjdns': 'CJDNS' };
+        var netLabel = netLabelMap[(peer.network || 'ipv4').toLowerCase()] || (peer.network || 'IPv4').toUpperCase();
 
         // Enter focused mode if not already (for line drawing)
         if (!donutFocused) {
@@ -5419,6 +5421,7 @@ window.ASDiversity = (function () {
         // Build popup HTML
         var hasBackNav = (source === 'map-group' && multiPeerGroupIds);
         var html = '';
+        html += '<div class="peer-popup-badge" style="border-color:' + netColor + ';color:' + netColor + '">' + netLabel + '</div>';
         html += '<div class="peer-popup-header">';
         if (hasBackNav) {
             html += '<span class="peer-popup-back" style="cursor:pointer;color:var(--accent);font-size:11px;font-weight:600;margin-right:4px">\u2190 List</span>';
@@ -5441,6 +5444,7 @@ window.ASDiversity = (function () {
         html += peerDetailRow('Network', (peer.network || 'ipv4').toUpperCase());
         html += peerDetailRow('Direction', peer.direction === 'IN' ? 'Inbound' : 'Outbound');
         html += peerDetailRow('Conn Type', CONN_TYPE_FULL[peer.connection_type] || peer.connection_type || '\u2014');
+        if (peer.addrlocal) html += peerDetailRow('Your Addr', peer.addrlocal);
         html += '</div>';
 
         // Performance section
@@ -5451,8 +5455,11 @@ window.ASDiversity = (function () {
         html += peerDetailRow('Connected', peer.conntime_fmt || fmtDuration(peer.conntime ? (Math.floor(Date.now() / 1000) - peer.conntime) : 0));
         html += peerDetailRow('Last Send', peer.lastsend ? fmtDuration(Math.floor(Date.now() / 1000) - peer.lastsend) + ' ago' : '\u2014');
         html += peerDetailRow('Last Recv', peer.lastrecv ? fmtDuration(Math.floor(Date.now() / 1000) - peer.lastrecv) + ' ago' : '\u2014');
+        html += peerDetailRow('Last Block', peer.last_block ? fmtDuration(Math.floor(Date.now() / 1000) - peer.last_block) + ' ago' : '\u2014');
+        html += peerDetailRow('Last Tx', peer.last_transaction ? fmtDuration(Math.floor(Date.now() / 1000) - peer.last_transaction) + ' ago' : '\u2014');
         html += peerDetailRow('Bytes Sent', peer.bytessent_fmt || fmtBytes(peer.bytessent));
         html += peerDetailRow('Bytes Recv', peer.bytesrecv_fmt || fmtBytes(peer.bytesrecv));
+        html += peerDetailRow('Time Offset', peer.timeoffset != null ? (peer.timeoffset === 0 ? '0s (synced)' : peer.timeoffset + 's') : '\u2014');
         html += '</div>';
 
         // Software section
@@ -5464,8 +5471,9 @@ window.ASDiversity = (function () {
         html += peerDetailRow('Start Height', peer.startingheight || '\u2014');
         html += peerDetailRow('Synced Hdrs', peer.synced_headers || '\u2014');
         html += peerDetailRow('Synced Blks', peer.synced_blocks || '\u2014');
-        if (peer.transport_protocol_type) html += peerDetailRow('Transport', peer.transport_protocol_type);
+        if (peer.transport_protocol_type) html += peerDetailRow('Transport', peer.transport_protocol_type === 'v2' ? 'v2 (BIP324 encrypted)' : peer.transport_protocol_type);
         if (peer.session_id) html += peerDetailRow('Session ID', '<span style="font-size:9px;word-break:break-all">' + escHtml(peer.session_id) + '</span>');
+        if (peer.minfeefilter != null) html += peerDetailRow('Min Fee Filter', peer.minfeefilter > 0 ? (peer.minfeefilter * 100000000).toFixed(0) + ' sat/kvB' : 'None');
         html += '</div>';
 
         // Location section
@@ -5482,9 +5490,15 @@ window.ASDiversity = (function () {
         // Status section
         html += '<div class="peer-popup-section">';
         html += '<div class="peer-popup-section-title">Status</div>';
+        html += peerDetailRow('Relay Txs', peer.relaytxes != null ? (peer.relaytxes ? 'Yes' : 'No') : '\u2014');
         html += peerDetailRow('Addrman', peer.in_addrman ? 'Yes' : 'No');
         html += peerDetailRow('Addr Relay', peer.addr_relay_enabled != null ? (peer.addr_relay_enabled ? 'Yes' : 'No') : '\u2014');
-        html += peerDetailRow('BIP152 HB', peer.bip152_hb_from ? 'From: Yes' : 'From: No');
+        if (peer.addr_processed || peer.addr_rate_limited) html += peerDetailRow('Addr Stats', (peer.addr_processed || 0) + ' processed, ' + (peer.addr_rate_limited || 0) + ' limited');
+        var hbParts = [];
+        if (peer.bip152_hb_from) hbParts.push('From: Yes');
+        if (peer.bip152_hb_to) hbParts.push('To: Yes');
+        html += peerDetailRow('BIP152 HB', hbParts.length > 0 ? hbParts.join(', ') : 'No');
+        if (peer.permissions && peer.permissions.length > 0) html += peerDetailRow('Permissions', peer.permissions.join(', '));
         if (peer.hosting) html += peerDetailRow('Hosting', 'Cloud/Hosting');
         if (peer.proxy) html += peerDetailRow('Proxy', 'VPN/Proxy');
         if (peer.mobile) html += peerDetailRow('Mobile', 'Mobile network');
@@ -5497,6 +5511,7 @@ window.ASDiversity = (function () {
         html += '<button class="peer-popup-disconnect" data-peer-id="' + peer.id + '">\u2716 Disconnect</button>';
         html += '<button class="peer-popup-close">Close</button>';
         html += '</div>';
+        html += '<div class="peer-popup-resize-handle"></div>';
 
         // Create popup element
         var popup = document.createElement('div');
@@ -5547,6 +5562,37 @@ window.ASDiversity = (function () {
                 isDragging = false;
                 popup.classList.remove('dragging');
                 header.style.cursor = 'grab';
+            });
+        })();
+
+        // Make popup resizable by bottom-right handle
+        (function () {
+            var handle = popup.querySelector('.peer-popup-resize-handle');
+            if (!handle) return;
+            var isResizing = false, startX, startY, startW, startH;
+            handle.addEventListener('mousedown', function (e) {
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                var rect = popup.getBoundingClientRect();
+                startW = rect.width;
+                startH = rect.height;
+                popup.classList.add('resizing');
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            document.addEventListener('mousemove', function (e) {
+                if (!isResizing) return;
+                var newW = Math.max(260, startW + (e.clientX - startX));
+                var newH = Math.max(200, startH + (e.clientY - startY));
+                popup.style.width = newW + 'px';
+                popup.style.maxHeight = 'none';
+                popup.style.height = newH + 'px';
+            });
+            document.addEventListener('mouseup', function () {
+                if (!isResizing) return;
+                isResizing = false;
+                popup.classList.remove('resizing');
             });
         })();
 
