@@ -1347,6 +1347,22 @@ window.ASDiversity = (function () {
         // If an AS is selected, show AS info instead of score
         if (selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            // Fallback for Others sub-providers not in donutSegments
+            if (!seg) {
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                    seg = {
+                        asNumber: grp.asNumber,
+                        asName: grp.asName,
+                        asShort: grp.asShort,
+                        peerCount: grp.peerCount,
+                        percentage: grp.percentage,
+                        color: othersSeg ? othersSeg.color : '#58a6ff',
+                        isOthers: false,
+                    };
+                }
+            }
             if (seg) {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
@@ -2030,6 +2046,10 @@ window.ASDiversity = (function () {
                 var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
                 if (grp) allPeers = grp.peers;
             }
+        } else if (selectedAs) {
+            // Fallback for Others sub-providers not in donutSegments
+            var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+            if (grp) allPeers = grp.peers;
         }
 
         var idSet = {};
@@ -2536,6 +2556,18 @@ window.ASDiversity = (function () {
         var html = '';
         html += '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
         html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + catLabel + '</div>';
+        // For service flag categories, expand abbreviations to full descriptions
+        if (catLabel) {
+            var abbrs = catLabel.split(/\s+/);
+            for (var ai = 0; ai < abbrs.length; ai++) {
+                for (var fk in SERVICE_FLAGS) {
+                    if (SERVICE_FLAGS.hasOwnProperty(fk) && SERVICE_FLAGS[fk].abbr === abbrs[ai]) {
+                        html += '<div class="as-sub-tt-flag" style="font-size:10px; color:var(--text-secondary)">' + abbrs[ai] + ' = ' + SERVICE_FLAGS[fk].desc + '</div>';
+                        break;
+                    }
+                }
+            }
+        }
         html += '</div>';
 
         html += '<div class="as-sub-tt-scroll">';
@@ -4490,6 +4522,22 @@ window.ASDiversity = (function () {
     function showFocusedCenterText(asNum) {
         if (!donutCenter) return;
         var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        // Fallback for Others sub-providers not in donutSegments
+        if (!seg) {
+            var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+            if (grp) {
+                var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                seg = {
+                    asNumber: grp.asNumber,
+                    asName: grp.asName,
+                    asShort: grp.asShort,
+                    peerCount: grp.peerCount,
+                    percentage: grp.percentage,
+                    color: othersSeg ? othersSeg.color : '#58a6ff',
+                    isOthers: false,
+                };
+            }
+        }
         if (!seg) return;
 
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
@@ -5082,6 +5130,13 @@ window.ASDiversity = (function () {
             renderCenter();
         } else if (selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (!seg) {
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                    seg = { asNumber: selectedAs, peerIds: grp.peerIds, color: othersSeg ? othersSeg.color : '#58a6ff' };
+                }
+            }
             if (seg) {
                 if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
