@@ -694,7 +694,7 @@ html, body {
    ========================================================== */
 .map-overlay {
     position: fixed;
-    top: 56px;
+    top: 88px;
     left: 18px;
     z-index: 50;
     display: flex;
@@ -746,8 +746,9 @@ html, body {
 .btc-price-bar {
     position: fixed;
     top: 52px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 18px;
+    transform: none;
+    transform-origin: left center;
     z-index: 85;
     display: inline-flex;
     align-items: center;
@@ -755,7 +756,7 @@ html, body {
     pointer-events: auto;
     cursor: pointer;
     user-select: none;
-    padding: 4px 12px;
+    padding: 4px 0;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -943,12 +944,12 @@ body.theme-light .ro-link:hover {
     text-shadow: none;
 }
 
-/* Map controls — centered below BTC price */
+/* Map controls — below system stats on the left */
 .map-controls {
     position: fixed;
-    top: 88px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 210px;
+    left: 18px;
+    transform: none;
     z-index: 290;
     display: flex;
     gap: 4px;
@@ -963,25 +964,23 @@ body.theme-light .ro-link:hover {
    6c. FOCUSED MODE — BTC price + map controls reposition
    ========================================================== */
 
-/* BTC price: shrinks and moves under system info on upper left */
+/* BTC price: already on the left — just scale down slightly in focused mode */
 body.donut-focused .btc-price-bar {
-    top: 168px;
-    left: 18px;
-    right: auto;
     transform: scale(0.82);
-    transform-origin: left center;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 opacity 0.3s ease;
 }
 
-/* Map controls: move below BTC price on the left */
+/* System stats: slightly shift down for scaled BTC in focused mode */
+body.donut-focused .map-overlay {
+    top: 84px;
+}
+
+/* Map controls: adjust for focused mode stats shift */
 body.donut-focused .map-controls {
-    top: 200px;
-    left: 18px;
-    right: auto;
-    transform: none;
+    top: 206px;
 }
 
 /* ==========================================================
@@ -1146,6 +1145,11 @@ body.donut-focused .map-controls {
 .tt-group-row { gap: 6px; }
 .tt-group-clickable { cursor: pointer; padding: 3px 0; border-radius: 3px; transition: background 0.1s ease; }
 .tt-group-clickable:hover { background: rgba(88, 166, 255, 0.1); }
+.tt-group-close {
+    cursor: pointer; font-size: 11px; color: var(--text-muted); padding: 2px 4px;
+    border-radius: 3px; transition: color 0.15s, background 0.15s; line-height: 1;
+}
+.tt-group-close:hover { color: var(--err); background: rgba(248, 81, 73, 0.12); }
 
 /* ==========================================================
    11. PEER PANEL — Bottom panel, open by default
@@ -1818,13 +1822,13 @@ body.donut-focused .map-controls {
    ========================================================== */
 .display-settings-popup {
     position: fixed;
-    z-index: 250;
+    z-index: 280;
     background: var(--bg-surface);
     border: 1px solid rgba(88, 166, 255, 0.2);
     border-radius: 8px;
     padding: 12px 14px;
-    min-width: 220px;
-    max-width: 280px;
+    min-width: 260px;
+    max-width: 320px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -1959,7 +1963,7 @@ body.donut-focused .map-controls {
    ========================================================== */
 .adv-panel {
     position: fixed;
-    z-index: 260;
+    z-index: 290;
     background: var(--bg-surface);
     border: 1px solid rgba(88, 166, 255, 0.2);
     border-radius: 8px;
@@ -2760,7 +2764,7 @@ body.donut-focused .map-controls {
    ========================================================== */
 .currency-dropdown {
     position: fixed;
-    z-index: 250;
+    z-index: 300;
     background: var(--bg-surface);
     border: 1px solid rgba(88, 166, 255, 0.2);
     border-radius: var(--radius);

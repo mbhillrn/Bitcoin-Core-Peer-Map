@@ -91,6 +91,10 @@
 body.donut-focused .as-focused-close {
     display: block;
 }
+/* Hide blue back arrow when insight rect is showing (it has its own back arrow) */
+body.insight-rect-active .as-focused-close {
+    display: none !important;
+}
 
 /* ==========================================================
    3. DONUT CHART — SVG ring + center label (260px, 3D look)
@@ -271,7 +275,7 @@ body.donut-focused .as-focused-close {
    ========================================================== */
 .as-insight-rect {
     position: absolute;
-    top: 14px;
+    top: 22px;
     left: 50%;
     transform: translateX(-50%) scale(0.9);
     width: 320px;
@@ -296,16 +300,16 @@ body.donut-focused .as-focused-close {
     background: rgba(22, 27, 34, 0.94);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     flex-direction: column;
     align-items: center;
     box-shadow: 0 0 8px rgba(212, 160, 23, 0.25), inset 0 0 12px rgba(212, 160, 23, 0.06);
 }
-/* "Score & Insights" badge at top */
+/* "Score & Insights" badge at top — integrates into the rect top border */
 .as-insight-rect-badge {
     position: absolute;
-    top: -1px;
+    top: -11px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(22, 27, 34, 0.95);
@@ -319,7 +323,7 @@ body.donut-focused .as-focused-close {
     text-transform: uppercase;
     color: #d4a017;
     white-space: nowrap;
-    z-index: 2;
+    z-index: 6;
 }
 /* Star decoration next to badge */
 .as-insight-rect-badge::after {
@@ -328,12 +332,12 @@ body.donut-focused .as-focused-close {
     font-size: 10px;
     color: #d4a017;
 }
-/* Close/back button for the rectangle */
+/* Close/back button — positioned just outside the rectangle to the right */
 .as-insight-rect-close {
     position: absolute;
-    top: 4px;
-    right: 4px;
-    z-index: 3;
+    top: -4px;
+    right: -28px;
+    z-index: 6;
     background: rgba(22, 27, 34, 0.85);
     border: 1px solid rgba(212, 160, 23, 0.4);
     color: #d4a017;
@@ -352,7 +356,7 @@ body.donut-focused .as-focused-close {
     background: rgba(212, 160, 23, 0.15);
     border-color: rgba(212, 160, 23, 0.7);
 }
-/* Content area — scrollable for ranks */
+/* Content area — scrollable for ranks, clips within rounded inner */
 .as-insight-rect-content {
     display: flex;
     flex-direction: column;
@@ -366,6 +370,7 @@ body.donut-focused .as-focused-close {
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
+    border-radius: 0 0 7px 7px;
 }
 .as-insight-rect-content::-webkit-scrollbar { width: 4px; }
 .as-insight-rect-content::-webkit-scrollbar-track { background: transparent; }
@@ -373,7 +378,9 @@ body.donut-focused .as-focused-close {
 .as-insight-rect-icon {
     font-size: 22px;
     margin-bottom: 2px;
+    margin-top: 6px;
     line-height: 1;
+    z-index: 1;
 }
 .as-insight-rect-title {
     font-family: var(--font-display);
@@ -426,19 +433,18 @@ body.donut-focused .as-focused-close {
     margin-top: 4px;
     line-height: 1.3;
 }
-/* Circle at bottom of insight rect — line origin point */
+/* Gold circle surround at bottom of insight rect — line origin point */
 .as-insight-rect-origin {
     position: absolute;
-    bottom: -8px;
+    bottom: -12px;
     left: 50%;
     transform: translateX(-50%);
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    border: 2px solid #d4a017;
-    background: #d4a017;
+    border: 3px solid #d4a017;
     z-index: 5;
-    box-shadow: 0 0 6px rgba(212, 160, 23, 0.5);
+    box-shadow: 0 0 8px rgba(212, 160, 23, 0.5), 0 0 16px rgba(212, 160, 23, 0.2);
 }
 
 /* ==========================================================
@@ -973,6 +979,11 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-sub-tt-peer[data-peer-id]:hover {
     background: rgba(88, 166, 255, 0.12);
 }
+.as-sub-tt-peer-selected {
+    background: rgba(88, 166, 255, 0.18) !important;
+    outline: 1px solid rgba(88, 166, 255, 0.3);
+    outline-offset: -1px;
+}
 .as-sub-tt-id {
     color: var(--accent);
     font-weight: 700;
@@ -1416,12 +1427,12 @@ body.donut-focused .as-donut-others-list.visible {
    ========================================================== */
 .peer-detail-popup {
     position: fixed;
-    top: 210px;
-    left: 14px;
+    top: 180px;
+    left: 210px;
     transform: scale(0.95);
     transform-origin: top left;
-    width: 320px;
-    max-height: calc(100vh - 230px);
+    width: 310px;
+    max-height: min(420px, calc(100vh - 220px));
     z-index: 1200;
     background: rgba(13, 17, 23, 0.97);
     border: 2px solid var(--accent, #58a6ff);
@@ -1433,15 +1444,24 @@ body.donut-focused .as-donut-others-list.visible {
     transition: opacity 0.2s ease, transform 0.2s ease;
     pointer-events: auto;
     font-family: var(--font-data, 'JetBrains Mono', monospace);
+    cursor: grab;
 }
 .peer-detail-popup.visible {
     opacity: 1;
     transform: scale(1);
 }
+.peer-detail-popup.dragging {
+    cursor: grabbing;
+    user-select: none;
+}
 
-/* When AS panel is open, keep popup on the left — already positioned there */
+/* When AS panel is open, keep popup offset from left */
 body.as-panel-open .peer-detail-popup {
-    left: 14px;
+    left: 210px;
+}
+.peer-detail-popup.peer-popup-previewing .peer-popup-name {
+    font-style: italic;
+    opacity: 0.85;
 }
 
 /* --- Header --- */
@@ -1491,14 +1511,22 @@ body.as-panel-open .peer-detail-popup {
     min-height: 0;
 }
 .peer-popup-scroll::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
 }
 .peer-popup-scroll::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(88, 166, 255, 0.05);
+    border-radius: 3px;
 }
 .peer-popup-scroll::-webkit-scrollbar-thumb {
-    background: rgba(88, 166, 255, 0.2);
-    border-radius: 2px;
+    background: rgba(88, 166, 255, 0.35);
+    border-radius: 3px;
+}
+.peer-popup-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(88, 166, 255, 0.55);
+}
+.peer-popup-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(88, 166, 255, 0.35) rgba(88, 166, 255, 0.05);
 }
 
 /* --- Sections --- */
