@@ -1401,7 +1401,10 @@ window.ASDiversity = (function () {
         // Reset any selected-mode styling
         scoreVal.className = 'as-score-value';
         scoreVal.style.color = '';
-        if (diversityEl) diversityEl.style.display = '';
+        if (diversityEl) {
+            diversityEl.textContent = 'DIVERSITY';
+            diversityEl.style.display = '';
+        }
         if (headingEl) {
             headingEl.style.color = '';
         }
@@ -4678,8 +4681,14 @@ window.ASDiversity = (function () {
                 item.className = 'as-others-popup-item';
                 var name = g.asShort || g.asName || g.asNumber;
                 if (name.length > 24) name = name.substring(0, 23) + '\u2026';
-                item.innerHTML = '<span class="as-others-popup-name">' + name + '</span>' +
-                    '<span class="as-others-popup-count">' + g.peerCount + '</span>';
+                var nameSpan = document.createElement('span');
+                nameSpan.className = 'as-others-popup-name';
+                nameSpan.textContent = name;
+                var countSpan = document.createElement('span');
+                countSpan.className = 'as-others-popup-count';
+                countSpan.textContent = g.peerCount;
+                item.appendChild(nameSpan);
+                item.appendChild(countSpan);
                 item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
 
                 // Hover: preview lines to this provider's peers
