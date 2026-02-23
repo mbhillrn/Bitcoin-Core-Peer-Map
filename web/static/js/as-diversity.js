@@ -1367,7 +1367,16 @@ window.ASDiversity = (function () {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
-                if (diversityEl) diversityEl.style.display = 'none';
+                // Show "← Others" back link for sub-providers inside the Others bucket
+                var isSubProv = isOthersSubProvider(selectedAs);
+                if (diversityEl) {
+                    if (isSubProv && donutFocused) {
+                        diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
+                        diversityEl.style.display = '';
+                    } else {
+                        diversityEl.style.display = 'none';
+                    }
+                }
                 if (headingEl) {
                     headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
                     headingEl.style.color = seg.color;
@@ -1384,6 +1393,7 @@ window.ASDiversity = (function () {
                 }
                 scoreLbl.textContent = seg.asNumber;
                 scoreLbl.classList.remove('as-summary-link');
+                attachOthersBackHandler();
                 return;
             }
         }
@@ -4517,6 +4527,50 @@ window.ASDiversity = (function () {
     // FOCUSED MODE CENTER TEXT
     // ═══════════════════════════════════════════════════════════
 
+    /** Check if an AS number belongs to an Others sub-provider (not in top-8 donut segments) */
+    function isOthersSubProvider(asNum) {
+        if (!asNum) return false;
+        var inDonut = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        if (inDonut) return false;
+        // Check if it exists in asGroups (it's a real provider, just not top-8)
+        var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+        return !!grp;
+    }
+
+    /** Go back from an Others sub-provider to the Others segment with popup open */
+    function backToOthersList() {
+        var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+        if (!othersSeg) return;
+        // Clear sub-filters
+        subFilterPeerIds = null;
+        subFilterLabel = null;
+        subFilterCategory = null;
+        hideSubTooltip();
+        // Select the Others segment
+        selectedAs = 'Others';
+        openPanel('Others');
+        if (_filterPeerTable) _filterPeerTable(othersSeg.peerIds);
+        if (_dimMapPeers) _dimMapPeers(othersSeg.peerIds);
+        if (_drawLinesForAs) _drawLinesForAs('Others', othersSeg.peerIds, othersSeg.color);
+        animateDonutExpand('Others');
+        renderCenter();
+        renderLegend();
+        // Re-open the popup list
+        showOthersListInDonut();
+    }
+
+    /** Attach click handler to the "← Others" back link in donut center */
+    function attachOthersBackHandler() {
+        if (!donutCenter) return;
+        var backLink = donutCenter.querySelector('.as-others-back-link');
+        if (backLink) {
+            backLink.addEventListener('click', function (e) {
+                e.stopPropagation();
+                backToOthersList();
+            });
+        }
+    }
+
     /** Show provider name in donut center during focused mode hover.
      *  Handles multi-line display for long names with dashes. */
     function showFocusedCenterText(asNum) {
@@ -4546,7 +4600,16 @@ window.ASDiversity = (function () {
         var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
 
-        if (diversityEl) diversityEl.style.display = 'none';
+        // Show "← Others" back link for sub-providers inside the Others bucket
+        var isSubProv = isOthersSubProvider(asNum);
+        if (diversityEl) {
+            if (isSubProv) {
+                diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
+                diversityEl.style.display = '';
+            } else {
+                diversityEl.style.display = 'none';
+            }
+        }
 
         // Build display name — smart line-breaking for names with dashes
         var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
@@ -4571,6 +4634,7 @@ window.ASDiversity = (function () {
             scoreLbl.textContent = '';
             scoreLbl.classList.remove('as-summary-link');
         }
+        attachOthersBackHandler();
     }
 
     /** Show scrollable Others provider list as a floating popup to the right of the donut.

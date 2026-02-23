@@ -149,6 +149,24 @@ body.insight-rect-active .as-focused-close {
     margin-bottom: 1px;
     line-height: 1.2;
 }
+/* "← Others" back link inside donut center for sub-providers */
+.as-others-back-link {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: none;
+    color: var(--accent, #58a6ff);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+    pointer-events: auto;
+}
+.as-others-back-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
 /* "SCORE:" heading above the number */
 .as-score-heading {
     font-family: var(--font-data);
