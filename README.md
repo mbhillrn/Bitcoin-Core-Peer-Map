@@ -248,11 +248,31 @@ Click on a service flag combination like **N W NL P** (Network, Witness, Network
 
 ### Peer Information Popup
 
-![Peer Information Popup](docs/images/peerinfopopup.png)
+![Peer Information Popup - IPv4](docs/images/peerinfopopup.png)
 
 Select any peer, whether from the map, the peer table, or any drill-down panel, to open its full detail popup. The popup is **draggable** (grab the header to move it) and **resizable** (drag the bottom-right corner to stretch it larger).
 
 The **network type badge** sits at the top of the popup border, showing IPv4, IPv6, Tor, I2P, or CJDNS. The border itself is color-coded to match the network type, so you can tell at a glance what kind of connection you're looking at. Only peers on public networks (IPv4 and IPv6) can be geolocated on the map. Peers on private networks (Tor, I2P, CJDNS) have their real locations hidden by design and are placed at Antarctic research stations for visualization (see [Private Networks (Antarctica)](#private-networks-antarctica)).
+
+#### IPv6 (Public Network)
+
+![Peer Information Popup - IPv6](docs/images/ipv6popup-publicnet.png)
+
+IPv6 peers are on a public network, so they have full geolocation data just like IPv4 peers. The popup shows Country, Region, City, ISP, and AS information. The network badge and border color distinguish it from IPv4 at a glance.
+
+#### Tor (Private Network)
+
+![Peer Information Popup - Tor](docs/images/torpopup-privatenet.png)
+
+#### I2P (Private Network)
+
+![Peer Information Popup - I2P](docs/images/i2ppopup-privatenet.png)
+
+#### CJDNS (Private Network)
+
+![Peer Information Popup - CJDNS](docs/images/cjdnspopup-privatenet.png)
+
+Tor, I2P, and CJDNS are **privacy networks**. Their addresses are routed through encrypted overlays, so the peer's real IP and physical location are never exposed. The Location section shows dashes for all fields (Country, Region, City, ISP, AS). These peers are placed at Antarctic research stations on the map purely for visualization. Notice that Tor peers show `127.0.0.1` as their address since traffic arrives through the local Tor daemon, I2P peers show long `.i2p` base32 addresses, and CJDNS peers show `fc00::/8` IPv6 addresses from the CJDNS address space.
 
 **Identity:**
 - Peer ID number, full IP address with port, network type (IPv4/IPv6/Tor/I2P/CJDNS), whether the peer is **Inbound** (they connected to you) or **Outbound** (your node connected to them), and the connection type. Outbound peers will show one of the following subtypes:
