@@ -246,31 +246,57 @@ Click on a service flag combination like **N W NL P** (Network, Witness, Network
 
 ---
 
-### Peer Detail: Full Information for Any Peer
+### Peer Information Popup
 
-![Peer Detail: Identity and Performance](docs/images/peer1.png)
+![Peer Information Popup](docs/images/peerinfopopup.png)
 
-![Peer Detail: Software, Location, and Status](docs/images/peer2.png)
+Select any peer, whether from the map, the peer table, or any drill-down panel, to open its full detail popup. The popup is **draggable** (grab the header to move it) and **resizable** (drag the bottom-right corner to stretch it larger).
 
-Select any peer, whether from the map, the peer table, or any drill-down panel, to open its full detail popup with comprehensive information:
+The **network type badge** sits at the top of the popup border, showing IPv4, IPv6, Tor, I2P, or CJDNS. The border itself is color-coded to match the network type, so you can tell at a glance what kind of connection you're looking at. Only peers on public networks (IPv4 and IPv6) can be geolocated on the map. Peers on private networks (Tor, I2P, CJDNS) have their real locations hidden by design and are placed at Antarctic research stations for visualization (see [Private Networks (Antarctica)](#private-networks-antarctica)).
 
 **Identity:**
-- Peer ID, IP address and port, network type (IPv4/IPv6/Tor/I2P/CJDNS), inbound or outbound direction, connection type (Full Relay, Block Relay Only, Manual, etc.)
+- Peer ID number, full IP address with port, network type (IPv4/IPv6/Tor/I2P/CJDNS), whether the peer is **Inbound** (they connected to you) or **Outbound** (your node connected to them), and the connection type. Outbound peers will show one of the following subtypes:
+  - **Outbound Full Relay** -- Your node connected for full block and transaction relay (most common outbound type)
+  - **Block Relay Only** -- Your node connected for blocks only, no transaction relay (improves privacy by creating eclipse-resistant connections)
+  - **Manual** -- A peer you manually connected to via `addnode`
+  - **Address Fetch** -- A short-lived connection to learn about other peers' addresses
+  - **Feeler** -- A short-lived connection to test if an address in the address manager is reachable
 
 **Performance:**
-- Ping time, minimum ping, connection duration, last send/receive time, bytes sent, bytes received
+- **Ping** -- Current round-trip latency to this peer in milliseconds
+- **Min Ping** -- Lowest ping ever recorded for this peer (when available)
+- **Connected** -- How long you have been connected to this peer
+- **Last Send** -- Time since your node last sent data to this peer
+- **Last Recv** -- Time since your node last received data from this peer
+- **Bytes Sent** -- Total data sent to this peer
+- **Bytes Recv** -- Total data received from this peer
 
 **Software:**
-- Bitcoin Core version string, protocol version, service flags with full descriptions, start height, synced headers, synced blocks, transport protocol type (v1/v2), session ID (for BIP324 v2 connections)
+- **Version** -- The peer's user agent string (e.g. `/Satoshi:28.0.0/`)
+- **Protocol** -- The peer's protocol version number
+- **Services** -- Full chain history, SegWit, compact filters, and other capability flags the peer advertises (see [Service Flags](#service-flags) for the full list)
+- **Start Height** -- The block height this peer reported when connecting
+- **Synced Hdrs** -- Last header height your node has synced in common with this peer
+- **Synced Blks** -- Last block height your node has synced in common with this peer
+- **Transport** -- v1 (legacy) or v2 (BIP324 encrypted) transport protocol, when available
+- **Session ID** -- The BIP324 session identifier for v2 encrypted connections
 
 **Location:**
-- Country, region, city, ISP, Autonomous System number and name, mapped AS
+- **Country**, **Region**, **City** -- Geographic location from the GeoIP database
+- **ISP** -- The peer's Internet Service Provider
+- **AS** -- Autonomous System number and organization name
+- **Mapped AS** -- The mapped AS number if your node has the asmap configured
 
 **Status:**
-- Whether the peer is in your node's address manager (addrman), addr relay status, BIP152 high-bandwidth block relay status, hosting type (Cloud/Hosting), proxy/VPN status, mobile network status
+- **Addrman** -- Whether this peer's address is stored in your node's address manager
+- **Addr Relay** -- Whether address relay is enabled for this peer
+- **BIP152 HB** -- BIP152 high-bandwidth compact block relay status. When a peer is in high-bandwidth mode, it proactively sends you compact blocks immediately upon receiving them rather than waiting for you to request them, reducing block propagation delay
+- **Hosting** -- Flags whether the peer is on a known cloud/hosting provider
+- **Proxy** -- Flags whether the peer is using a VPN or proxy
+- **Mobile** -- Flags whether the peer is on a mobile network
 
 **Actions:**
-- **Disconnect** or **Ban** the peer with a couple of clicks, directly from the popup. Exact location shown on the map with a connection line drawn to the provider chart.
+- At the bottom of the popup, click **Disconnect** to drop the connection. A confirmation dialog will appear offering two options: **Disconnect Only** (drops the connection but the peer can reconnect) or **Disconnect + Ban 24h** (drops the connection and bans the IP address for 24 hours). The ban option is available for IPv4 and IPv6 peers only, since Tor, I2P, and CJDNS addresses rotate and banning them has no practical effect.
 
 ---
 
