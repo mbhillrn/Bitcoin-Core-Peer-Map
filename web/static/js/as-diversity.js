@@ -53,6 +53,7 @@ window.ASDiversity = (function () {
     let donutFocused = false;      // True when in focused mode (donut at top-center)
     let focusedHoverAs = null;     // AS hovered in focused mode (for center text display)
     let othersListOpen = false;    // True when Others scrollable list is showing in donut center
+    let othersOvalActive = false;  // True when donut is in oval mode (Others expansion)
 
     // Donut segment animation state
     let donutAnimState = 'idle';   // 'idle' | 'expanding' | 'expanded' | 'reverting'
@@ -4193,6 +4194,7 @@ window.ASDiversity = (function () {
         insightActiveAsNum = null; insightActiveData = null;
         insightActiveType = null;
         panelHistory = [];
+        revertOvalMode();
         hideSubTooltip();
         hideSubSubTooltip();
         hideInsightRect();
@@ -4535,6 +4537,7 @@ window.ASDiversity = (function () {
         if (!othersSeg || !othersSeg._othersGroups) return;
 
         othersListOpen = true;
+        enableOvalMode();
 
         // Hide normal center elements
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
@@ -4593,10 +4596,10 @@ window.ASDiversity = (function () {
                     }
                 });
 
-                // Click: navigate to this provider's panel
+                // Click: navigate to this provider's panel (keep oval since still in Others)
                 item.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    closeOthersListInDonut();
+                    closeOthersListInDonut(true);
                     navigateToProvider(g.asNumber);
                     animateDonutExpand(g.asNumber);
                 });
@@ -4608,9 +4611,11 @@ window.ASDiversity = (function () {
         donutCenter.appendChild(listDiv);
     }
 
-    /** Close the Others list in donut center and restore normal display */
-    function closeOthersListInDonut() {
+    /** Close the Others list in donut center and restore normal display.
+     *  @param {boolean} keepOval - If true, keep oval shape (e.g. drilling into sub-provider) */
+    function closeOthersListInDonut(keepOval) {
         othersListOpen = false;
+        if (!keepOval) revertOvalMode();
         if (!donutCenter) return;
 
         var listEl = donutCenter.querySelector('.as-donut-others-list');
@@ -4629,6 +4634,21 @@ window.ASDiversity = (function () {
         if (scoreLbl) scoreLbl.style.display = '';
 
         renderCenter();
+    }
+
+    /** Enable oval mode — stretch donut horizontally for Others expansion */
+    function enableOvalMode() {
+        othersOvalActive = true;
+        if (donutWrapEl) donutWrapEl.classList.add('others-oval');
+        if (donutSvg) donutSvg.setAttribute('preserveAspectRatio', 'none');
+    }
+
+    /** Revert oval mode — restore circular donut */
+    function revertOvalMode() {
+        if (!othersOvalActive) return;
+        othersOvalActive = false;
+        if (donutWrapEl) donutWrapEl.classList.remove('others-oval');
+        if (donutSvg) donutSvg.removeAttribute('preserveAspectRatio');
     }
 
     /** Format a provider name to fit inside the donut center.
@@ -4825,6 +4845,7 @@ window.ASDiversity = (function () {
             // Deselect — go back to summary in focused mode
             if (donutFocused) {
                 if (othersListOpen) closeOthersListInDonut();
+                revertOvalMode();
                 selectedAs = null;
                 subFilterPeerIds = null;
                 subFilterLabel = null;
@@ -4848,6 +4869,7 @@ window.ASDiversity = (function () {
             subFilterCategory = null;
             hideSubTooltip();
             if (othersListOpen) closeOthersListInDonut();
+            revertOvalMode();
             selectedAs = asNum;
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg) {
@@ -4882,6 +4904,7 @@ window.ASDiversity = (function () {
         subFilterPeerIds = null;
         subFilterLabel = null;
         subFilterCategory = null;
+        revertOvalMode();
         hideSubTooltip();
         hideInsightRect();
         closePanel();
@@ -5748,7 +5771,11 @@ window.ASDiversity = (function () {
                     }
                 } else {
                     // No sub-tooltip pinned — safe to rebuild panel
+                    // Preserve scroll position across data refresh
+                    var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                    var savedScroll = bodyEl ? bodyEl.scrollTop : 0;
                     openPanel(selectedAs);
+                    if (bodyEl && savedScroll > 0) bodyEl.scrollTop = savedScroll;
 
                     if (savedCategory && savedLabel) {
                         var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
@@ -5989,7 +6016,11 @@ window.ASDiversity = (function () {
                 var savedInsightAsNum = insightActiveAsNum;
                 var savedInsightType = insightActiveType;
 
+                // Preserve scroll position across data refresh
+                var sumBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                var savedSumScroll = sumBodyEl ? sumBodyEl.scrollTop : 0;
                 openSummaryPanel();
+                if (sumBodyEl && savedSumScroll > 0) sumBodyEl.scrollTop = savedSumScroll;
 
                 // Restore insight state after panel rebuild
                 insightActiveAsNum = savedInsightAsNum;

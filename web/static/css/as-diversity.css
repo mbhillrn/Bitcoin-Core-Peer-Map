@@ -107,10 +107,12 @@ body.insight-rect-active .as-focused-close {
     pointer-events: auto;
     /* 3D depth effect */
     filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)) drop-shadow(0 1px 3px rgba(0,0,0,0.3));
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .as-donut {
     width: 260px;
     height: 260px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .as-donut-segment {
     cursor: pointer;
@@ -1352,18 +1354,19 @@ body.donut-focused .as-score-value.as-focused-provider {
     overflow-y: auto;
     text-align: left;
     padding: 2px 8px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--accent, #58a6ff) transparent;
+    scrollbar-width: auto;
+    scrollbar-color: var(--accent, #58a6ff) rgba(88, 166, 255, 0.08);
 }
 .as-donut-others-list::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
 }
 .as-donut-others-list::-webkit-scrollbar-thumb {
     background: var(--accent, #58a6ff);
-    border-radius: 2px;
+    border-radius: 3px;
 }
 .as-donut-others-list::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(88, 166, 255, 0.08);
+    border-radius: 3px;
 }
 body.donut-focused .as-donut-others-list.visible {
     display: block;
@@ -1395,6 +1398,35 @@ body.donut-focused .as-donut-others-list.visible {
 }
 .as-donut-others-back:hover {
     color: var(--accent, #58a6ff);
+}
+
+/* --- Others oval mode: donut stretches to horizontal oval --- */
+body.donut-focused .as-donut-wrap.others-oval {
+    width: 400px;
+}
+body.donut-focused .as-donut-wrap.others-oval .as-donut {
+    width: 400px;
+}
+/* Wider Others list with obvious scrollbar in oval mode */
+body.donut-focused .as-donut-wrap.others-oval .as-donut-others-list {
+    width: 230px;
+    max-height: 150px;
+}
+body.donut-focused .as-donut-wrap.others-oval .as-donut-others-list::-webkit-scrollbar {
+    width: 7px;
+}
+body.donut-focused .as-donut-wrap.others-oval .as-donut-others-list::-webkit-scrollbar-thumb {
+    background: var(--accent, #58a6ff);
+    border-radius: 4px;
+}
+body.donut-focused .as-donut-wrap.others-oval .as-donut-others-list::-webkit-scrollbar-track {
+    background: rgba(88, 166, 255, 0.08);
+    border-radius: 4px;
+}
+/* Items wider in oval mode */
+body.donut-focused .as-donut-wrap.others-oval .as-donut-others-item {
+    font-size: 11px;
+    padding: 4px 6px;
 }
 
 /* ==========================================================
