@@ -2986,6 +2986,7 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
+                        restoreDonutAfterPreview();
                         return;
                     }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
@@ -3097,6 +3098,7 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
+                        restoreDonutAfterPreview();
                         return;
                     }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
@@ -3181,6 +3183,7 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
+                        restoreDonutAfterPreview();
                         return;
                     }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
