@@ -52,7 +52,7 @@ window.ASDiversity = (function () {
     let legendFocusAs = null;      // AS number to exclusively show in legend during panel hover
     let donutFocused = false;      // True when in focused mode (donut at top-center)
     let focusedHoverAs = null;     // AS hovered in focused mode (for center text display)
-    let othersListOpen = false;    // True when Others scrollable list is showing in donut center
+    let othersListOpen = false;    // True when Others popup is showing next to the donut
 
     // Donut segment animation state
     let donutAnimState = 'idle';   // 'idle' | 'expanding' | 'expanded' | 'reverting'
@@ -1287,8 +1287,6 @@ window.ASDiversity = (function () {
         // If peer detail panel is active, don't touch center text — showPeerInDonutCenter manages it
         if (peerDetailActive) return;
 
-        // If Others scrollable list is open, don't touch center — showOthersListInDonut manages it
-        if (othersListOpen) return;
 
         // In focused mode with hover active, preserve the hover display during data updates
         if (donutFocused && focusedHoverAs && !selectedAs) {
@@ -1349,11 +1347,36 @@ window.ASDiversity = (function () {
         // If an AS is selected, show AS info instead of score
         if (selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            // Fallback for Others sub-providers not in donutSegments
+            if (!seg) {
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                    seg = {
+                        asNumber: grp.asNumber,
+                        asName: grp.asName,
+                        asShort: grp.asShort,
+                        peerCount: grp.peerCount,
+                        percentage: grp.percentage,
+                        color: othersSeg ? othersSeg.color : '#58a6ff',
+                        isOthers: false,
+                    };
+                }
+            }
             if (seg) {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
-                if (diversityEl) diversityEl.style.display = 'none';
+                // Show "← Others" back link for sub-providers inside the Others bucket
+                var isSubProv = isOthersSubProvider(selectedAs);
+                if (diversityEl) {
+                    if (isSubProv && donutFocused) {
+                        diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
+                        diversityEl.style.display = '';
+                    } else {
+                        diversityEl.style.display = 'none';
+                    }
+                }
                 if (headingEl) {
                     headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
                     headingEl.style.color = seg.color;
@@ -1370,6 +1393,7 @@ window.ASDiversity = (function () {
                 }
                 scoreLbl.textContent = seg.asNumber;
                 scoreLbl.classList.remove('as-summary-link');
+                attachOthersBackHandler();
                 return;
             }
         }
@@ -2032,6 +2056,10 @@ window.ASDiversity = (function () {
                 var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
                 if (grp) allPeers = grp.peers;
             }
+        } else if (selectedAs) {
+            // Fallback for Others sub-providers not in donutSegments
+            var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+            if (grp) allPeers = grp.peers;
         }
 
         var idSet = {};
@@ -2170,7 +2198,7 @@ window.ASDiversity = (function () {
                             animateDonutExpand(subFilterLabel);
                         } else if (selectedAs) {
                             renderCenter();
-                        } else if (!othersListOpen) {
+                        } else {
                             renderCenter();
                         }
                     }
@@ -2538,6 +2566,18 @@ window.ASDiversity = (function () {
         var html = '';
         html += '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
         html += '<div class="as-sub-tt-flag" style="font-weight:700; color:var(--text-primary)">' + catLabel + '</div>';
+        // For service flag categories, expand abbreviations to full descriptions
+        if (catLabel) {
+            var abbrs = catLabel.split(/\s+/);
+            for (var ai = 0; ai < abbrs.length; ai++) {
+                for (var fk in SERVICE_FLAGS) {
+                    if (SERVICE_FLAGS.hasOwnProperty(fk) && SERVICE_FLAGS[fk].abbr === abbrs[ai]) {
+                        html += '<div class="as-sub-tt-flag" style="font-size:10px; color:var(--text-secondary)">' + abbrs[ai] + ' = ' + SERVICE_FLAGS[fk].desc + '</div>';
+                        break;
+                    }
+                }
+            }
+        }
         html += '</div>';
 
         html += '<div class="as-sub-tt-scroll">';
@@ -4487,11 +4527,71 @@ window.ASDiversity = (function () {
     // FOCUSED MODE CENTER TEXT
     // ═══════════════════════════════════════════════════════════
 
+    /** Check if an AS number belongs to an Others sub-provider (not in top-8 donut segments) */
+    function isOthersSubProvider(asNum) {
+        if (!asNum) return false;
+        var inDonut = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        if (inDonut) return false;
+        // Check if it exists in asGroups (it's a real provider, just not top-8)
+        var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+        return !!grp;
+    }
+
+    /** Go back from an Others sub-provider to the Others segment with popup open */
+    function backToOthersList() {
+        var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+        if (!othersSeg) return;
+        // Clear sub-filters
+        subFilterPeerIds = null;
+        subFilterLabel = null;
+        subFilterCategory = null;
+        hideSubTooltip();
+        // Select the Others segment
+        selectedAs = 'Others';
+        openPanel('Others');
+        if (_filterPeerTable) _filterPeerTable(othersSeg.peerIds);
+        if (_dimMapPeers) _dimMapPeers(othersSeg.peerIds);
+        if (_drawLinesForAs) _drawLinesForAs('Others', othersSeg.peerIds, othersSeg.color);
+        animateDonutExpand('Others');
+        renderCenter();
+        renderLegend();
+        // Re-open the popup list
+        showOthersListInDonut();
+    }
+
+    /** Attach click handler to the "← Others" back link in donut center */
+    function attachOthersBackHandler() {
+        if (!donutCenter) return;
+        var backLink = donutCenter.querySelector('.as-others-back-link');
+        if (backLink) {
+            backLink.addEventListener('click', function (e) {
+                e.stopPropagation();
+                backToOthersList();
+            });
+        }
+    }
+
     /** Show provider name in donut center during focused mode hover.
      *  Handles multi-line display for long names with dashes. */
     function showFocusedCenterText(asNum) {
         if (!donutCenter) return;
         var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        // Fallback for Others sub-providers not in donutSegments
+        if (!seg) {
+            var grp = asGroups.find(function (g) { return g.asNumber === asNum; });
+            if (grp) {
+                var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                seg = {
+                    asNumber: grp.asNumber,
+                    asName: grp.asName,
+                    asShort: grp.asShort,
+                    peerCount: grp.peerCount,
+                    percentage: grp.percentage,
+                    color: othersSeg ? othersSeg.color : '#58a6ff',
+                    isOthers: false,
+                };
+            }
+        }
         if (!seg) return;
 
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
@@ -4500,7 +4600,16 @@ window.ASDiversity = (function () {
         var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
 
-        if (diversityEl) diversityEl.style.display = 'none';
+        // Show "← Others" back link for sub-providers inside the Others bucket
+        var isSubProv = isOthersSubProvider(asNum);
+        if (diversityEl) {
+            if (isSubProv) {
+                diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
+                diversityEl.style.display = '';
+            } else {
+                diversityEl.style.display = 'none';
+            }
+        }
 
         // Build display name — smart line-breaking for names with dashes
         var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
@@ -4525,56 +4634,45 @@ window.ASDiversity = (function () {
             scoreLbl.textContent = '';
             scoreLbl.classList.remove('as-summary-link');
         }
+        attachOthersBackHandler();
     }
 
-    /** Show scrollable Others list inside the donut center (focused mode only).
+    /** Show scrollable Others provider list as a floating popup to the right of the donut.
      *  Each item is hoverable (preview lines) and clickable (opens provider panel). */
     function showOthersListInDonut() {
-        if (!donutCenter) return;
         var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
         if (!othersSeg || !othersSeg._othersGroups) return;
 
         othersListOpen = true;
 
-        // Hide normal center elements
-        var diversityEl = donutCenter.querySelector('.as-score-diversity');
-        var headingEl = donutCenter.querySelector('.as-score-heading');
-        var scoreVal = donutCenter.querySelector('.as-score-value');
-        var qualityEl = donutCenter.querySelector('.as-score-quality');
-        var scoreLbl = donutCenter.querySelector('.as-score-label');
-        if (diversityEl) diversityEl.style.display = 'none';
-        if (headingEl) headingEl.style.display = 'none';
-        if (scoreVal) scoreVal.style.display = 'none';
-        if (qualityEl) qualityEl.style.display = 'none';
-        if (scoreLbl) scoreLbl.style.display = 'none';
-
-        // Remove any existing list
-        var existing = donutCenter.querySelector('.as-donut-others-list');
+        // Remove any existing popup
+        var existing = document.getElementById('as-others-popup');
         if (existing) existing.remove();
 
-        // Build scrollable list
+        // Build popup container
+        var popup = document.createElement('div');
+        popup.id = 'as-others-popup';
+        popup.className = 'as-others-popup';
+
+        // Header
+        var header = document.createElement('div');
+        header.className = 'as-others-popup-header';
+        header.textContent = 'Others (' + othersSeg._othersGroups.length + ' providers)';
+        popup.appendChild(header);
+
+        // Scrollable list
         var listDiv = document.createElement('div');
-        listDiv.className = 'as-donut-others-list visible';
+        listDiv.className = 'as-others-popup-list';
 
-        // Back arrow
-        var backEl = document.createElement('div');
-        backEl.className = 'as-donut-others-back';
-        backEl.textContent = '\u2190 Back';
-        backEl.addEventListener('click', function (e) {
-            e.stopPropagation();
-            closeOthersListInDonut();
-        });
-        listDiv.appendChild(backEl);
-
-        // Provider items
         var groups = othersSeg._othersGroups;
         for (var i = 0; i < groups.length; i++) {
             (function (g) {
                 var item = document.createElement('div');
-                item.className = 'as-donut-others-item';
+                item.className = 'as-others-popup-item';
                 var name = g.asShort || g.asName || g.asNumber;
-                if (name.length > 22) name = name.substring(0, 21) + '\u2026';
-                item.textContent = name + ' (' + g.peerCount + ')';
+                if (name.length > 24) name = name.substring(0, 23) + '\u2026';
+                item.innerHTML = '<span class="as-others-popup-name">' + name + '</span>' +
+                    '<span class="as-others-popup-count">' + g.peerCount + '</span>';
                 item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
 
                 // Hover: preview lines to this provider's peers
@@ -4605,30 +4703,21 @@ window.ASDiversity = (function () {
             })(groups[i]);
         }
 
-        donutCenter.appendChild(listDiv);
+        popup.appendChild(listDiv);
+
+        // Position next to the donut wrap
+        if (donutWrapEl) {
+            donutWrapEl.appendChild(popup);
+        } else {
+            document.body.appendChild(popup);
+        }
     }
 
-    /** Close the Others list in donut center and restore normal display */
+    /** Close the Others popup list */
     function closeOthersListInDonut() {
         othersListOpen = false;
-        if (!donutCenter) return;
-
-        var listEl = donutCenter.querySelector('.as-donut-others-list');
-        if (listEl) listEl.remove();
-
-        // Restore center element visibility
-        var diversityEl = donutCenter.querySelector('.as-score-diversity');
-        var headingEl = donutCenter.querySelector('.as-score-heading');
-        var scoreVal = donutCenter.querySelector('.as-score-value');
-        var qualityEl = donutCenter.querySelector('.as-score-quality');
-        var scoreLbl = donutCenter.querySelector('.as-score-label');
-        if (diversityEl) diversityEl.style.display = '';
-        if (headingEl) headingEl.style.display = '';
-        if (scoreVal) scoreVal.style.display = '';
-        if (qualityEl) qualityEl.style.display = '';
-        if (scoreLbl) scoreLbl.style.display = '';
-
-        renderCenter();
+        var popup = document.getElementById('as-others-popup');
+        if (popup) popup.remove();
     }
 
     /** Format a provider name to fit inside the donut center.
@@ -4882,6 +4971,7 @@ window.ASDiversity = (function () {
         subFilterPeerIds = null;
         subFilterLabel = null;
         subFilterCategory = null;
+        if (othersListOpen) closeOthersListInDonut();
         hideSubTooltip();
         hideInsightRect();
         closePanel();
@@ -5104,6 +5194,13 @@ window.ASDiversity = (function () {
             renderCenter();
         } else if (selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === selectedAs; });
+            if (!seg) {
+                var grp = asGroups.find(function (g) { return g.asNumber === selectedAs; });
+                if (grp) {
+                    var othersSeg = donutSegments.find(function (s) { return s.isOthers; });
+                    seg = { asNumber: selectedAs, peerIds: grp.peerIds, color: othersSeg ? othersSeg.color : '#58a6ff' };
+                }
+            }
             if (seg) {
                 if (_filterPeerTable) _filterPeerTable(seg.peerIds);
                 if (_dimMapPeers) _dimMapPeers(seg.peerIds);
@@ -5748,7 +5845,11 @@ window.ASDiversity = (function () {
                     }
                 } else {
                     // No sub-tooltip pinned — safe to rebuild panel
+                    // Preserve scroll position across data refresh
+                    var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                    var savedScroll = bodyEl ? bodyEl.scrollTop : 0;
                     openPanel(selectedAs);
+                    if (bodyEl && savedScroll > 0) bodyEl.scrollTop = savedScroll;
 
                     if (savedCategory && savedLabel) {
                         var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
@@ -5989,7 +6090,11 @@ window.ASDiversity = (function () {
                 var savedInsightAsNum = insightActiveAsNum;
                 var savedInsightType = insightActiveType;
 
+                // Preserve scroll position across data refresh
+                var sumBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+                var savedSumScroll = sumBodyEl ? sumBodyEl.scrollTop : 0;
                 openSummaryPanel();
+                if (sumBodyEl && savedSumScroll > 0) sumBodyEl.scrollTop = savedSumScroll;
 
                 // Restore insight state after panel rebuild
                 insightActiveAsNum = savedInsightAsNum;

@@ -149,6 +149,24 @@ body.insight-rect-active .as-focused-close {
     margin-bottom: 1px;
     line-height: 1.2;
 }
+/* "← Others" back link inside donut center for sub-providers */
+.as-others-back-link {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: none;
+    color: var(--accent, #58a6ff);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+    pointer-events: auto;
+}
+.as-others-back-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
 /* "SCORE:" heading above the number */
 .as-score-heading {
     font-family: var(--font-data);
@@ -1345,56 +1363,83 @@ body.donut-focused .as-score-value.as-focused-provider {
     word-break: break-word;
 }
 
-/* --- Others scrollable list inside donut center --- */
-.as-donut-others-list {
-    display: none;
-    max-height: 140px;
+/* --- Others popup: floating rectangle to the right of the donut --- */
+.as-others-popup {
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 10px);
+    transform: translateY(-50%);
+    width: 190px;
+    max-height: 240px;
+    background: rgba(13, 17, 23, 0.95);
+    border: 1px solid rgba(88, 166, 255, 0.18);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 1px rgba(88, 166, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    z-index: 90;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow: hidden;
+    animation: as-others-popup-in 0.2s ease-out;
+}
+@keyframes as-others-popup-in {
+    from { opacity: 0; transform: translateY(-50%) translateX(-8px); }
+    to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+.as-others-popup-header {
+    padding: 8px 10px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(230, 237, 243, 0.7);
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid rgba(88, 166, 255, 0.1);
+    flex-shrink: 0;
+}
+.as-others-popup-list {
     overflow-y: auto;
-    text-align: left;
-    padding: 2px 8px;
+    flex: 1;
+    padding: 4px 0;
     scrollbar-width: thin;
-    scrollbar-color: var(--accent, #58a6ff) transparent;
+    scrollbar-color: rgba(88, 166, 255, 0.4) rgba(88, 166, 255, 0.06);
 }
-.as-donut-others-list::-webkit-scrollbar {
-    width: 4px;
+.as-others-popup-list::-webkit-scrollbar {
+    width: 6px;
 }
-.as-donut-others-list::-webkit-scrollbar-thumb {
-    background: var(--accent, #58a6ff);
-    border-radius: 2px;
-}
-.as-donut-others-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-body.donut-focused .as-donut-others-list.visible {
-    display: block;
-}
-.as-donut-others-item {
-    font-family: var(--font-data);
-    font-size: 10px;
-    color: #58a6ff;
-    padding: 3px 4px;
-    cursor: pointer;
+.as-others-popup-list::-webkit-scrollbar-thumb {
+    background: rgba(88, 166, 255, 0.4);
     border-radius: 3px;
-    transition: background 0.15s ease;
-    white-space: nowrap;
+}
+.as-others-popup-list::-webkit-scrollbar-track {
+    background: rgba(88, 166, 255, 0.06);
+    border-radius: 3px;
+}
+.as-others-popup-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    font-size: 11px;
+    color: rgba(230, 237, 243, 0.85);
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+.as-others-popup-item:hover {
+    background: rgba(88, 166, 255, 0.12);
+    color: #e6edf3;
+}
+.as-others-popup-name {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
 }
-.as-donut-others-item:hover {
-    background: rgba(88, 166, 255, 0.15);
-    color: #79c0ff;
-}
-.as-donut-others-back {
-    font-family: var(--font-data);
+.as-others-popup-count {
+    flex-shrink: 0;
     font-size: 10px;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 2px 4px;
-    margin-bottom: 2px;
-    transition: color 0.15s ease;
-}
-.as-donut-others-back:hover {
-    color: var(--accent, #58a6ff);
+    color: rgba(88, 166, 255, 0.7);
+    font-weight: 600;
 }
 
 /* ==========================================================
