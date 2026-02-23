@@ -2831,11 +2831,15 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
                         clearSummarySubFilter();
+                        restoreDonutAfterPreview();
                         return;
                     }
 
                     // Apply sub-filter for all peers in this category
                     applySummarySubFilter(peerIds, catLabel);
+
+                    // Immediately update the donut to reflect the new category
+                    restoreDonutAfterPreview();
 
                     // Pin the sub-tooltip with provider list
                     var html = buildProviderListHtml(providers, catLabel);
