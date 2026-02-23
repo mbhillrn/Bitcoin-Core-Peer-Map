@@ -1788,6 +1788,7 @@ window.ASDiversity = (function () {
         }
 
         bodyEl.innerHTML = html;
+        bodyEl.scrollTop = 0;
 
         // Attach hover/click handlers to all interactive rows
         attachInteractiveRowHandlers(bodyEl, seg);
@@ -1966,6 +1967,7 @@ window.ASDiversity = (function () {
         }
 
         bodyEl.innerHTML = html;
+        bodyEl.scrollTop = 0;
 
         // Attach drill-down handlers for summary rows
         attachSummaryRowHandlers(bodyEl);
