@@ -5251,6 +5251,14 @@ window.ASDiversity = (function () {
             if (!summarySelected && !selectedAs) {
                 selectSummary();
             }
+            // Re-assert peer detail state after focused mode transition.
+            // selectSummary() → openSummaryPanel() → closePeerPopup() clears
+            // peerDetailActive/selectedPeerId/selectedPeerData during the cascade.
+            // Without this, the next update() cycle won't early-return and will
+            // re-render the donut/lines in summary-all mode, losing peer focus.
+            peerDetailActive = true;
+            selectedPeerId = peer.id;
+            selectedPeerData = peer;
         }
 
         // Draw a single line to this peer
