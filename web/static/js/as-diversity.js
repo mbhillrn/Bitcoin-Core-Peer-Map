@@ -1401,7 +1401,10 @@ window.ASDiversity = (function () {
         // Reset any selected-mode styling
         scoreVal.className = 'as-score-value';
         scoreVal.style.color = '';
-        if (diversityEl) diversityEl.style.display = '';
+        if (diversityEl) {
+            diversityEl.textContent = 'DIVERSITY';
+            diversityEl.style.display = '';
+        }
         if (headingEl) {
             headingEl.style.color = '';
         }
@@ -2831,11 +2834,15 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned && pinnedSubTooltipSrc === rowEl) {
                         hideSubTooltip();
                         clearSummarySubFilter();
+                        restoreDonutAfterPreview();
                         return;
                     }
 
                     // Apply sub-filter for all peers in this category
                     applySummarySubFilter(peerIds, catLabel);
+
+                    // Immediately update the donut to reflect the new category
+                    restoreDonutAfterPreview();
 
                     // Pin the sub-tooltip with provider list
                     var html = buildProviderListHtml(providers, catLabel);
@@ -2982,6 +2989,7 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
+                        restoreDonutAfterPreview();
                         return;
                     }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
@@ -3093,6 +3101,7 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
+                        restoreDonutAfterPreview();
                         return;
                     }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
@@ -3177,6 +3186,7 @@ window.ASDiversity = (function () {
                         if (_filterPeerTable) _filterPeerTable(null);
                         if (_dimMapPeers) _dimMapPeers(null);
                         if (summarySelected) activateHoverAll();
+                        restoreDonutAfterPreview();
                         return;
                     }
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
@@ -4224,6 +4234,9 @@ window.ASDiversity = (function () {
         // Close any open map peer tooltip when navigating back
         if (_hideMapTooltip) _hideMapTooltip();
 
+        // Close Others popup if open
+        if (othersListOpen) closeOthersListInDonut();
+
         // Always go back to diversity summary (clear all state)
         peerDetailActive = false;
         selectedAs = null;
@@ -4671,8 +4684,14 @@ window.ASDiversity = (function () {
                 item.className = 'as-others-popup-item';
                 var name = g.asShort || g.asName || g.asNumber;
                 if (name.length > 24) name = name.substring(0, 23) + '\u2026';
-                item.innerHTML = '<span class="as-others-popup-name">' + name + '</span>' +
-                    '<span class="as-others-popup-count">' + g.peerCount + '</span>';
+                var nameSpan = document.createElement('span');
+                nameSpan.className = 'as-others-popup-name';
+                nameSpan.textContent = name;
+                var countSpan = document.createElement('span');
+                countSpan.className = 'as-others-popup-count';
+                countSpan.textContent = g.peerCount;
+                item.appendChild(nameSpan);
+                item.appendChild(countSpan);
                 item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
 
                 // Hover: preview lines to this provider's peers
@@ -4680,23 +4699,36 @@ window.ASDiversity = (function () {
                     if (_drawLinesForAs) _drawLinesForAs(g.asNumber, g.peerIds, othersSeg.color);
                     if (_dimMapPeers) _dimMapPeers(g.peerIds);
                 });
+                item.dataset.as = g.asNumber;
                 item.addEventListener('mouseleave', function () {
-                    // Restore all-lines for Others
+                    // Restore lines for current selection
                     if (selectedAs === 'Others') {
                         if (_drawLinesForAs) _drawLinesForAs('Others', othersSeg.peerIds, othersSeg.color);
                         if (_dimMapPeers) _dimMapPeers(othersSeg.peerIds);
+                    } else if (selectedAs && isOthersSubProvider(selectedAs)) {
+                        // Restore selected sub-provider's lines
+                        var peerIds = getPeerIdsForAnyAs(selectedAs);
+                        var color = getColorForAsNum(selectedAs);
+                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, peerIds, color);
+                        if (_dimMapPeers) _dimMapPeers(peerIds);
                     } else {
                         activateHoverAll();
                         if (_dimMapPeers) _dimMapPeers(null);
                     }
                 });
 
-                // Click: navigate to this provider's panel
+                // Click: toggle or navigate to this provider's panel
                 item.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    closeOthersListInDonut();
-                    navigateToProvider(g.asNumber);
-                    animateDonutExpand(g.asNumber);
+                    if (selectedAs === g.asNumber) {
+                        // Toggle off — go back to Others list
+                        backToOthersList();
+                    } else {
+                        // Select this sub-provider (keep popup open)
+                        navigateToProvider(g.asNumber);
+                        animateDonutExpand(g.asNumber);
+                        updateOthersPopupHighlight();
+                    }
                 });
 
                 listDiv.appendChild(item);
@@ -4718,6 +4750,20 @@ window.ASDiversity = (function () {
         othersListOpen = false;
         var popup = document.getElementById('as-others-popup');
         if (popup) popup.remove();
+    }
+
+    /** Update the selected highlight on Others popup items */
+    function updateOthersPopupHighlight() {
+        var popup = document.getElementById('as-others-popup');
+        if (!popup) return;
+        var items = popup.querySelectorAll('.as-others-popup-item');
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].dataset.as === selectedAs) {
+                items[i].classList.add('as-others-popup-selected');
+            } else {
+                items[i].classList.remove('as-others-popup-selected');
+            }
+        }
     }
 
     /** Format a provider name to fit inside the donut center.

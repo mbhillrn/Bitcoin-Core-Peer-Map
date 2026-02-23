@@ -1428,6 +1428,12 @@ body.donut-focused .as-score-value.as-focused-provider {
     background: rgba(88, 166, 255, 0.12);
     color: #e6edf3;
 }
+.as-others-popup-item.as-others-popup-selected {
+    background: rgba(88, 166, 255, 0.18);
+    color: #e6edf3;
+    border-left: 2px solid #58a6ff;
+    padding-left: 8px;
+}
 .as-others-popup-name {
     flex: 1;
     overflow: hidden;
