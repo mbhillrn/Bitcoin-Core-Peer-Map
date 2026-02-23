@@ -1,12 +1,12 @@
-# MBCore Dashboard — Bitcoin Core Peer Visualizer, Network Analyzer, and Node Management GUI
+# MBCore Dashboard — Bitcoin Core Geolocated Peer Map, Visualizer, Network Analyzer, and Node Management GUI Tools
+
+### A real-time monitoring dashboard for your personal Bitcoin Core node. Geolocates connected peers on an interactive canvas world map, analyzes service provider diversity across your peer connections, and provides tools to manage peers directly, all from a browser graphical user interface.
 
 ### Real-Time Bitcoin Core Peer Map | ISP Diversity Analysis | Autonomous System Tracking | Geolocated Node Explorer | Interactive Network Dashboard | Peer Management Tools
 
-**Bitcoin Node Monitor | Bitcoin Core GUI | Bitcoin Peer Map | Bitcoin Network Visualizer | Bitcoin Node Dashboard | Bitcoin Core Peer Explorer | Bitcoin ISP Diversity | Bitcoin Autonomous System Analyzer | Bitcoin P2P Network Map | Bitcoin Core Connection Manager | Geolocated Bitcoin Peers | Bitcoin Node Geolocation | Bitcoin Peer Analytics | Bitcoin Network Health | Bitcoin Core RPC Dashboard | Bitcoin Node Tools | Bitcoin Peer Statistics | Bitcoin Core Monitoring | Bitcoin Network Explorer | Bitcoin Service Provider Analysis | Bitcoin Core Real-Time Map | Bitcoin Peer Tracker | Bitcoin Core Admin Panel | Bitcoin Core IPv4 IPv6 Tor I2P CJDNS**
-
 ---
 
-MBCore Dashboard is the most comprehensive real-time visualization and analysis tool available for your personal Bitcoin Core node's peer-to-peer network. It transforms your node's raw peer data into a fully interactive, geolocated world map where every single connected peer is plotted, searchable, filterable, and explorable — down to the individual connection level — across every dimension: location, service provider, software version, connection speed, data transfer, network protocol, hosting type, service flags, and more.
+MBCore Dashboard is a comprehensive real-time visualization and analysis tool available for your personal Bitcoin Core node's peer-to-peer network. It transforms your node's raw peer data into a fully interactive, geolocated world map where every single connected peer is plotted, searchable, filterable, and explorable — down to the individual connection level — across every dimension: location, service provider, software version, connection speed, data transfer, network protocol, hosting type, service flags, and more.
 
 Every peer. Every provider. Every metric. All searchable, all filterable, all drillable — from a high-level diversity overview all the way down to a single peer on the map.
 
@@ -660,6 +660,10 @@ MIT License. Free to use, modify, and distribute.
 If you're feeling generous:
 
 **Bitcoin:** `bc1qy63057zemrskq0n02avq9egce4cpuuenm5ztf5`
+
+---
+
+**Bitcoin Node Monitor | Bitcoin Core GUI | Bitcoin Peer Map | Bitcoin Network Visualizer | Bitcoin Node Dashboard | Bitcoin Core Peer Explorer | Bitcoin ISP Diversity | Bitcoin Autonomous System Analyzer | Bitcoin P2P Network Map | Bitcoin Core Connection Manager | Geolocated Bitcoin Peers | Bitcoin Node Geolocation | Bitcoin Peer Analytics | Bitcoin Network Health | Bitcoin Core RPC Dashboard | Bitcoin Node Tools | Bitcoin Peer Statistics | Bitcoin Core Monitoring | Bitcoin Network Explorer | Bitcoin Service Provider Analysis | Bitcoin Core Real-Time Map | Bitcoin Peer Tracker | Bitcoin Core Admin Panel | Bitcoin Core IPv4 IPv6 Tor I2P CJDNS**
 
 ---
 
