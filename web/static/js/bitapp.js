@@ -1451,6 +1451,13 @@
     let pnLegendEl = null;
     let pnStatsPanelEl = null;
     let pnStatsBodyEl = null;
+    let pnSearchEl = null;
+
+    // Private network filter state
+    let pnFilterNet = null;       // null = all, or 'onion'|'i2p'|'cjdns'
+    let pnFilterSoftware = null;  // null = all, or a subver string
+    let pnFilterService = null;   // null = all, or a services_abbrev string
+    let pnSearchQuery = '';       // search text
 
     function cachePnElements() {
         if (!pnContainerEl) {
@@ -1460,6 +1467,7 @@
             pnLegendEl = document.getElementById('pn-legend');
             pnStatsPanelEl = document.getElementById('pn-stats-panel');
             pnStatsBodyEl = document.getElementById('pn-stats-body');
+            pnSearchEl = document.getElementById('pn-search');
         }
     }
 
@@ -1487,8 +1495,15 @@
         highlightedPeerId = null;
         pinnedNode = null;
 
+        // Reset filters
+        pnFilterNet = null;
+        pnFilterSoftware = null;
+        pnFilterService = null;
+        pnSearchQuery = '';
+
         // Show private network UI
         cachePnElements();
+        if (pnSearchEl) pnSearchEl.value = '';
         if (pnContainerEl) {
             pnContainerEl.classList.remove('hidden');
             // Trigger opacity transition
@@ -1501,11 +1516,12 @@
         targetView.y = (antCenter.y - 0.5) * H;
         targetView.zoom = 2.5;
 
-        // Show stats panel
+        // Show stats panel + push content
         if (pnStatsPanelEl) {
             pnStatsPanelEl.classList.remove('hidden');
             requestAnimationFrame(() => pnStatsPanelEl.classList.add('visible'));
         }
+        document.body.classList.add('pn-panel-open');
 
         // Update all private network UI
         updatePrivateNetUI();
@@ -1522,10 +1538,16 @@
         privateNetMode = false;
         privateNetSelectedPeer = null;
         privateNetLinePeer = null;
+        pnFilterNet = null;
+        pnFilterSoftware = null;
+        pnFilterService = null;
+        pnSearchQuery = '';
         document.body.classList.remove('private-net-mode');
+        document.body.classList.remove('pn-panel-open');
 
         // Hide private network UI
         cachePnElements();
+        if (pnSearchEl) pnSearchEl.value = '';
         if (pnContainerEl) {
             pnContainerEl.classList.remove('visible', 'pn-focused');
             setTimeout(() => pnContainerEl.classList.add('hidden'), 500);
@@ -1592,24 +1614,31 @@
         }
         const total = privateNodes.length;
 
-        // Update center: show peer ID when focused, or total count otherwise
+        // Update center: show peer ID when focused, filtered network name, or total count
+        const pnCenterLabel = document.querySelector('.pn-center-label');
+        const pnCenterSub = document.querySelector('.pn-center-sub');
         if (pnCenterCount) {
             if (privateNetSelectedPeer) {
                 pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
                 pnCenterCount.style.fontSize = '22px';
+            } else if (pnFilterNet) {
+                const filteredCount = segments.find(s => s.net === pnFilterNet);
+                pnCenterCount.textContent = filteredCount ? filteredCount.count : 0;
+                pnCenterCount.style.fontSize = '';
             } else {
                 pnCenterCount.textContent = total;
                 pnCenterCount.style.fontSize = '';
             }
         }
-        // Update center label
-        const pnCenterLabel = document.querySelector('.pn-center-label');
-        const pnCenterSub = document.querySelector('.pn-center-sub');
         if (pnCenterLabel && pnCenterSub) {
             if (privateNetSelectedPeer) {
                 const netLbl = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
                 pnCenterLabel.textContent = netLbl[privateNetSelectedPeer.net] || 'PEER';
                 pnCenterSub.textContent = privateNetSelectedPeer.direction === 'IN' ? 'inbound' : 'outbound';
+            } else if (pnFilterNet) {
+                const netLbl = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+                pnCenterLabel.textContent = netLbl[pnFilterNet] || pnFilterNet.toUpperCase();
+                pnCenterSub.textContent = 'peers';
             } else {
                 pnCenterLabel.textContent = 'PRIVATE';
                 pnCenterSub.textContent = 'peers';
@@ -1659,13 +1688,13 @@
             svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="${strokeW}" stroke-dasharray="8 4"/>`;
         } else {
             // Draw colored segments using stroke-dasharray on the rounded rect
-            const selectedNet = privateNetSelectedPeer ? privateNetSelectedPeer.net : null;
+            const highlightNet = privateNetSelectedPeer ? privateNetSelectedPeer.net : pnFilterNet;
             let offset = 0;
             for (const seg of segments) {
                 const segLen = (seg.count / total) * perimeter;
-                // Highlight selected network's segment, dim others
-                const isSelected = selectedNet && seg.net === selectedNet;
-                const isDimmed = selectedNet && seg.net !== selectedNet;
+                // Highlight selected/filtered network's segment, dim others
+                const isSelected = highlightNet && seg.net === highlightNet;
+                const isDimmed = highlightNet && seg.net !== highlightNet;
                 const sw = isSelected ? strokeW + 6 : (isDimmed ? strokeW - 4 : strokeW);
                 const op = isSelected ? 1.0 : (isDimmed ? 0.3 : 0.85);
                 svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="${seg.color}" stroke-width="${sw}" stroke-dasharray="${segLen} ${perimeter - segLen}" stroke-dashoffset="${-offset}" opacity="${op}"/>`;
@@ -1675,11 +1704,16 @@
 
         pnRectSvg.innerHTML = svg;
 
-        // Update legend
+        // Update legend with active state for filtered network
         if (pnLegendEl) {
             let legendHtml = '';
+            const activeNet = pnFilterNet || (privateNetSelectedPeer ? privateNetSelectedPeer.net : null);
             for (const seg of segments) {
-                legendHtml += `<div class="pn-legend-item" data-net="${seg.net}">`;
+                const isActive = activeNet === seg.net;
+                const isDimmed = activeNet && activeNet !== seg.net;
+                const style = isDimmed ? 'opacity:0.4' : '';
+                const activeBg = isActive ? 'background:rgba(255,255,255,0.08)' : '';
+                legendHtml += `<div class="pn-legend-item" data-net="${seg.net}" style="${style};${activeBg}">`;
                 legendHtml += `<span class="pn-legend-dot" style="background:${seg.color}"></span>`;
                 legendHtml += `<span class="pn-legend-name">${seg.label}</span>`;
                 legendHtml += `<span class="pn-legend-count">${seg.count}</span>`;
@@ -1708,6 +1742,46 @@
         return v.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
     }
 
+    /** Get filtered private peers based on current filter state + search */
+    function getFilteredPrivatePeers() {
+        const ASD = window.ASDiversity;
+        const rawPeers = ASD ? ASD.getLastPeersRaw() : lastPeers;
+        let peers = rawPeers.filter(p => PRIVATE_NETS.has(p.network));
+
+        // Network filter
+        if (pnFilterNet) {
+            peers = peers.filter(p => p.network === pnFilterNet);
+        }
+        // Software filter
+        if (pnFilterSoftware) {
+            peers = peers.filter(p => (p.subver || 'Unknown') === pnFilterSoftware);
+        }
+        // Service filter
+        if (pnFilterService) {
+            peers = peers.filter(p => (p.services_abbrev || '\u2014') === pnFilterService);
+        }
+        // Search filter
+        if (pnSearchQuery) {
+            const q = pnSearchQuery.toLowerCase();
+            peers = peers.filter(p => {
+                const hay = [
+                    p.addr || '', p.subver || '', p.network || '',
+                    p.services_abbrev || '', p.connection_type || '',
+                    p.direction || '', String(p.id || ''),
+                ].join(' ').toLowerCase();
+                return hay.includes(q);
+            });
+        }
+        return peers;
+    }
+
+    /** Clear all private network filters */
+    function clearPnFilters() {
+        pnFilterNet = null;
+        pnFilterSoftware = null;
+        pnFilterService = null;
+    }
+
     /** Update the private network stats panel */
     function updatePnStatsPanel() {
         cachePnElements();
@@ -1715,14 +1789,21 @@
 
         const ASD = window.ASDiversity;
         const rawPeers = ASD ? ASD.getLastPeersRaw() : lastPeers;
-        const privatePeers = rawPeers.filter(p => PRIVATE_NETS.has(p.network));
+        const allPrivatePeers = rawPeers.filter(p => PRIVATE_NETS.has(p.network));
+        const filteredPeers = getFilteredPrivatePeers();
 
-        if (privatePeers.length === 0) {
+        if (allPrivatePeers.length === 0) {
             pnStatsBodyEl.innerHTML = '<div class="pn-stat-section"><div class="pn-stat-section-title">Overview</div><div class="pn-stat-row"><span class="pn-stat-label">No private network peers connected</span></div></div>';
             return;
         }
 
-        const counts = { onion: 0, i2p: 0, cjdns: 0 };
+        // Counts from ALL private peers (for network section)
+        const allCounts = { onion: 0, i2p: 0, cjdns: 0 };
+        for (const p of allPrivatePeers) {
+            if (allCounts.hasOwnProperty(p.network)) allCounts[p.network]++;
+        }
+
+        // Stats from filtered peers
         let inbound = 0, outbound = 0;
         let totalPing = 0, pingCount = 0;
         let totalBytesSent = 0, totalBytesRecv = 0;
@@ -1730,55 +1811,52 @@
         const softwareMap = {};
         const servicesMap = {};
 
-        for (const p of privatePeers) {
-            if (counts.hasOwnProperty(p.network)) counts[p.network]++;
+        for (const p of filteredPeers) {
             if (p.direction === 'IN') inbound++; else outbound++;
             if (p.ping_ms > 0) { totalPing += p.ping_ms; pingCount++; }
             totalBytesSent += (p.bytessent || 0);
             totalBytesRecv += (p.bytesrecv || 0);
             const sw = p.subver || 'Unknown';
             softwareMap[sw] = (softwareMap[sw] || 0) + 1;
-            const svc = p.services_abbrev || '—';
+            const svc = p.services_abbrev || '\u2014';
             servicesMap[svc] = (servicesMap[svc] || 0) + 1;
-        }
-
-        // Find "most stable" (longest conntime)
-        let mostStable = null;
-        let longestConn = 0;
-        for (const p of privatePeers) {
-            if (p.conntime > 0) {
-                const dur = nowSec - p.conntime;
-                if (dur > longestConn) { longestConn = dur; mostStable = p; }
-            }
-        }
-
-        // Find "fastest" (lowest ping)
-        let fastest = null;
-        let lowestPing = Infinity;
-        for (const p of privatePeers) {
-            if (p.ping_ms > 0 && p.ping_ms < lowestPing) {
-                lowestPing = p.ping_ms;
-                fastest = p;
-            }
-        }
-
-        // Find most bytes sent/recv
-        let topSender = null, topSent = 0;
-        let topReceiver = null, topRecv = 0;
-        for (const p of privatePeers) {
-            if ((p.bytessent || 0) > topSent) { topSent = p.bytessent; topSender = p; }
-            if ((p.bytesrecv || 0) > topRecv) { topRecv = p.bytesrecv; topReceiver = p; }
         }
 
         const avgPing = pingCount > 0 ? Math.round(totalPing / pingCount) : null;
         const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+        const netColorHex = {
+            onion: getComputedNetColor('--net-tor') || '#da3633',
+            i2p:   getComputedNetColor('--net-i2p') || '#d29922',
+            cjdns: getComputedNetColor('--net-cjdns') || '#bc8cff'
+        };
+
+        const hasFilter = pnFilterNet || pnFilterSoftware || pnFilterService || pnSearchQuery;
 
         let html = '';
 
-        // ── Overview ──
+        // ── Networks (clickable filter rows) ──
         html += '<div class="pn-stat-section">';
-        html += '<div class="pn-stat-section-title">Overview</div>';
-        html += pnStatRow('Total Peers', privatePeers.length);
+        html += '<div class="pn-stat-section-title">Networks</div>';
+        for (const net of ['onion', 'i2p', 'cjdns']) {
+            if (allCounts[net] > 0) {
+                const isActive = pnFilterNet === net;
+                const isDimmed = pnFilterNet && pnFilterNet !== net;
+                let cls = 'pn-net-filter-row';
+                if (isActive) cls += ' active';
+                if (isDimmed) cls += ' dimmed';
+                html += `<div class="${cls}" data-filter-net="${net}">`;
+                html += `<span class="pn-net-filter-dot" style="background:${netColorHex[net]}"></span>`;
+                html += `<span class="pn-net-filter-label">${netLabels[net]}</span>`;
+                html += `<span class="pn-net-filter-count">${allCounts[net]}</span>`;
+                html += '</div>';
+            }
+        }
+        html += '</div>';
+
+        // ── Overview (of filtered set) ──
+        html += '<div class="pn-stat-section">';
+        html += '<div class="pn-stat-section-title">Overview' + (hasFilter ? ' <span style="color:var(--text-muted);font-weight:400">(' + filteredPeers.length + ' shown)</span>' : '') + '</div>';
+        html += pnStatRow('Total Peers', filteredPeers.length);
         html += pnStatRow('Inbound', inbound);
         html += pnStatRow('Outbound', outbound);
         if (avgPing !== null) html += pnStatRow('Avg Ping', avgPing + 'ms');
@@ -1786,39 +1864,48 @@
         html += pnStatRow('Bytes Recv', fmtBytesShort(totalBytesRecv));
         html += '</div>';
 
-        // ── Networks ──
-        html += '<div class="pn-stat-section">';
-        html += '<div class="pn-stat-section-title">Networks</div>';
-        for (const net of ['onion', 'i2p', 'cjdns']) {
-            if (counts[net] > 0) {
-                html += pnStatRow(netLabels[net], counts[net] + ' peer' + (counts[net] !== 1 ? 's' : ''));
-            }
-        }
-        html += '</div>';
-
-        // ── Software ──
+        // ── Software (clickable) ──
         const swEntries = Object.entries(softwareMap).sort((a, b) => b[1] - a[1]);
         if (swEntries.length > 0) {
             html += '<div class="pn-stat-section">';
             html += '<div class="pn-stat-section-title">Software</div>';
             for (const [sw, cnt] of swEntries) {
-                html += pnStatRow(sw, cnt);
+                const isActive = pnFilterSoftware === sw;
+                const cls = 'pn-stat-row pn-clickable-row' + (isActive ? ' active' : '');
+                html += `<div class="${cls}" data-filter-sw="${pnEsc(sw)}"><span class="pn-stat-label">${pnEsc(sw)}</span><span class="pn-stat-value">${cnt}</span></div>`;
             }
             html += '</div>';
         }
 
-        // ── Services ──
+        // ── Services (clickable) ──
         const svcEntries = Object.entries(servicesMap).sort((a, b) => b[1] - a[1]);
         if (svcEntries.length > 0) {
             html += '<div class="pn-stat-section">';
             html += '<div class="pn-stat-section-title">Services</div>';
             for (const [svc, cnt] of svcEntries) {
-                html += pnStatRow(svc, cnt);
+                const isActive = pnFilterService === svc;
+                const cls = 'pn-stat-row pn-clickable-row' + (isActive ? ' active' : '');
+                html += `<div class="${cls}" data-filter-svc="${pnEsc(svc)}"><span class="pn-stat-label">${pnEsc(svc)}</span><span class="pn-stat-value">${cnt}</span></div>`;
             }
             html += '</div>';
         }
 
         // ── Highlights ──
+        // Find from filtered set
+        let mostStable = null, longestConn = 0;
+        let fastest = null, lowestPing = Infinity;
+        let topSender = null, topSent = 0;
+        let topReceiver = null, topRecv = 0;
+        for (const p of filteredPeers) {
+            if (p.conntime > 0) {
+                const dur = nowSec - p.conntime;
+                if (dur > longestConn) { longestConn = dur; mostStable = p; }
+            }
+            if (p.ping_ms > 0 && p.ping_ms < lowestPing) { lowestPing = p.ping_ms; fastest = p; }
+            if ((p.bytessent || 0) > topSent) { topSent = p.bytessent; topSender = p; }
+            if ((p.bytesrecv || 0) > topRecv) { topRecv = p.bytesrecv; topReceiver = p; }
+        }
+
         html += '<div class="pn-stat-section">';
         html += '<div class="pn-stat-section-title">Highlights</div>';
         if (mostStable) {
@@ -1835,15 +1922,97 @@
         }
         html += '</div>';
 
+        // ── Peer List ──
+        if (filteredPeers.length > 0) {
+            html += '<div class="pn-stat-section">';
+            html += '<div class="pn-stat-section-title">Peers (' + filteredPeers.length + ')</div>';
+            for (const p of filteredPeers) {
+                html += pnPeerListItem(p);
+            }
+            html += '</div>';
+        }
+
+        // ── Clear filter link ──
+        if (hasFilter) {
+            html += '<div style="text-align:center;padding:8px 0"><span class="pn-clickable-row" id="pn-clear-filters" style="display:inline-block;padding:4px 12px;font-size:10px;font-family:var(--font-data);color:var(--logo-primary);cursor:pointer;border:1px solid rgba(240,136,62,0.2);border-radius:4px">Clear all filters</span></div>';
+        }
+
         pnStatsBodyEl.innerHTML = html;
 
-        // Bind click handlers on peer cards
+        // ── Bind click handlers ──
+
+        // Network filter rows
+        pnStatsBodyEl.querySelectorAll('.pn-net-filter-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const net = row.dataset.filterNet;
+                pnFilterNet = (pnFilterNet === net) ? null : net;
+                pnFilterSoftware = null;
+                pnFilterService = null;
+                updatePrivateNetUI();
+            });
+        });
+
+        // Software filter rows
+        pnStatsBodyEl.querySelectorAll('[data-filter-sw]').forEach(row => {
+            row.addEventListener('click', () => {
+                const sw = row.dataset.filterSw;
+                pnFilterSoftware = (pnFilterSoftware === sw) ? null : sw;
+                updatePrivateNetUI();
+            });
+        });
+
+        // Service filter rows
+        pnStatsBodyEl.querySelectorAll('[data-filter-svc]').forEach(row => {
+            row.addEventListener('click', () => {
+                const svc = row.dataset.filterSvc;
+                pnFilterService = (pnFilterService === svc) ? null : svc;
+                updatePrivateNetUI();
+            });
+        });
+
+        // Peer cards
         pnStatsBodyEl.querySelectorAll('.pn-peer-card').forEach(card => {
             card.addEventListener('click', () => {
                 const pid = parseInt(card.dataset.peerId);
                 if (pid) selectPrivatePeer(pid);
             });
         });
+
+        // Clear filters link
+        const clearBtn = document.getElementById('pn-clear-filters');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                clearPnFilters();
+                pnSearchQuery = '';
+                if (pnSearchEl) pnSearchEl.value = '';
+                updatePrivateNetUI();
+            });
+        }
+    }
+
+    /** Build a compact peer list item for the stats panel */
+    function pnPeerListItem(peer) {
+        const netColors = { onion: 'var(--net-tor)', i2p: 'var(--net-i2p)', cjdns: 'var(--net-cjdns)' };
+        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+        const netKey = peer.network || 'onion';
+        const dotColor = netColors[netKey] || 'var(--accent)';
+        const netLabel = netLabels[netKey] || netKey.toUpperCase();
+        const dir = peer.direction === 'IN' ? 'In' : 'Out';
+
+        let addrShort = peer.addr || '\u2014';
+        if (addrShort.length > 28) addrShort = addrShort.substring(0, 24) + '...';
+
+        let html = `<div class="pn-peer-card" data-peer-id="${peer.id}">`;
+        html += `<div class="pn-peer-card-header">`;
+        html += `<span class="pn-peer-card-dot" style="background:${dotColor}"></span>`;
+        html += `<span class="pn-peer-card-id">#${peer.id}</span>`;
+        html += `<span style="font-size:9px;color:var(--text-muted)">${dir}</span>`;
+        html += `<span class="pn-peer-card-net" style="color:${dotColor};border-color:${dotColor}">${netLabel}</span>`;
+        html += `</div>`;
+        html += `<div class="pn-peer-card-meta">${pnEsc(addrShort)}</div>`;
+        if (peer.subver) html += `<div class="pn-peer-card-meta">${pnEsc(peer.subver)}</div>`;
+        html += `</div>`;
+        return html;
     }
 
     function pnStatRow(label, value) {
@@ -1881,11 +2050,12 @@
         return html;
     }
 
-    /** Update all private network UI (donut + stats) */
+    /** Update all private network UI (donut + stats + peer table) */
     function updatePrivateNetUI() {
         if (!privateNetMode) return;
         renderPnRectDonut();
         updatePnStatsPanel();
+        renderPeerTable();
     }
 
     /** Draw "PRIVATE NETWORKS" text tiled across Antarctica on the canvas */
@@ -3625,6 +3795,10 @@
         if (asFilterPeerIds && node.alive && !asFilterPeerIds.has(node.peerId)) {
             asDimFactor = 0.15;
         }
+        // [PRIVATE-NET] Dim peers not matching network filter
+        if (privateNetMode && pnFilterNet && node.alive && PRIVATE_NETS.has(node.net)) {
+            if (node.net !== pnFilterNet) asDimFactor = 0.15;
+        }
 
         const c = node.color;
         const ageMs = now - node.spawnTime;
@@ -4754,6 +4928,14 @@
             sorted = sorted.filter(p => mapFilterPeerIds.has(p.id));
         }
 
+        // [PRIVATE-NET] In private net mode, only show private peers (optionally filtered by network)
+        if (privateNetMode) {
+            sorted = sorted.filter(p => PRIVATE_NETS.has(p.network));
+            if (pnFilterNet) {
+                sorted = sorted.filter(p => p.network === pnFilterNet);
+            }
+        }
+
         handleCountEl.textContent = sorted.length;
 
         let html = '';
@@ -5772,16 +5954,18 @@
                 if (privateGroup.length > 0) {
                     selectPrivatePeer(privateGroup[0].peerId);
                 } else {
-                    // Clicked empty space in private mode — deselect peer
+                    // Clicked empty space in private mode — deselect peer but stay in mode
                     privateNetSelectedPeer = null;
                     privateNetLinePeer = null;
                     pinnedNode = null;
                     highlightedPeerId = null;
                     hideTooltip();
                     closePnBigPopup();
-                    // Un-focus rect donut (move back to top-right)
+                    // Un-focus rect donut (move back to top-right, offset from panel)
                     cachePnElements();
                     if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                    // Reset donut center display
+                    updatePrivateNetUI();
                 }
                 dragging = false;
                 return;
@@ -7302,6 +7486,30 @@
                 exitPrivateNetMode();
             }
         });
+
+        // [PRIVATE-NET] Search input in stats panel
+        const pnSearchInput = document.getElementById('pn-search');
+        if (pnSearchInput) {
+            pnSearchInput.addEventListener('input', () => {
+                pnSearchQuery = pnSearchInput.value.trim();
+                updatePnStatsPanel();
+            });
+        }
+
+        // [PRIVATE-NET] Legend clicks — filter by network from the donut legend
+        cachePnElements();
+        if (pnLegendEl) {
+            pnLegendEl.addEventListener('click', (e) => {
+                const item = e.target.closest('.pn-legend-item');
+                if (!item) return;
+                const net = item.dataset.net;
+                if (!net) return;
+                pnFilterNet = (pnFilterNet === net) ? null : net;
+                pnFilterSoftware = null;
+                pnFilterService = null;
+                updatePrivateNetUI();
+            });
+        }
 
     }
 
