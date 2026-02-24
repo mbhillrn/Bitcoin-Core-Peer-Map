@@ -125,31 +125,31 @@
     <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
 
-    <!-- [PRIVATE-NET] Rectangular donut for private networks — hidden by default -->
+    <!-- [PRIVATE-NET] Circular donut for private networks — hidden by default -->
     <div id="pn-container" class="pn-container hidden">
         <div class="pn-title">Private Networks</div>
-        <div class="pn-rect-wrap" id="pn-rect-wrap">
-            <svg id="pn-rect-donut" class="pn-rect-donut" viewBox="0 0 300 180"></svg>
-            <div id="pn-rect-center" class="pn-rect-center">
-                <div class="pn-center-label">PRIVATE</div>
+        <div class="pn-donut-wrap" id="pn-donut-wrap">
+            <svg id="pn-donut-svg" class="pn-donut-svg" viewBox="0 0 260 260"></svg>
+            <div id="pn-donut-center" class="pn-donut-center">
+                <div class="pn-center-label" id="pn-center-label">PRIVATE</div>
                 <div class="pn-center-count" id="pn-center-count">0</div>
-                <div class="pn-center-sub">peers</div>
+                <div class="pn-center-sub" id="pn-center-sub">peers</div>
             </div>
             <button class="pn-exit-btn" id="pn-exit-btn" title="Return to public network view">&times;</button>
         </div>
         <div id="pn-legend" class="pn-legend"></div>
     </div>
 
-    <!-- [PRIVATE-NET] Stats panel for private networks — slides in from right -->
-    <div id="pn-stats-panel" class="pn-stats-panel hidden">
-        <div class="pn-stats-header">
-            <span class="pn-stats-title">Private Networks</span>
-            <button class="pn-stats-close" id="pn-stats-close" title="Exit private network view">&times;</button>
+    <!-- [PRIVATE-NET] Detail panel — slides in from right, like AS detail panel -->
+    <div id="pn-detail-panel" class="pn-detail-panel hidden">
+        <div class="pn-detail-header" id="pn-detail-header">
+            <div class="pn-detail-header-info">
+                <div class="pn-detail-net-name" id="pn-detail-net-name"></div>
+                <div class="pn-detail-meta" id="pn-detail-meta"></div>
+            </div>
+            <button class="pn-detail-close" id="pn-detail-close" title="Close">&times;</button>
         </div>
-        <div class="pn-search-wrap">
-            <input type="text" id="pn-search" class="pn-search-input" placeholder="Filter peers..." autocomplete="off" spellcheck="false">
-        </div>
-        <div class="pn-stats-body" id="pn-stats-body"></div>
+        <div class="pn-detail-body" id="pn-detail-body"></div>
     </div>
 
     <!-- Antarctica modal (shown on every page load) -->

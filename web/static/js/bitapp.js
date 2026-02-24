@@ -1442,39 +1442,59 @@
 
     // ═══════════════════════════════════════════════════════════
     // PRIVATE NETWORK MODE — Full Antarctica view for Tor/I2P/CJDNS
+    // Circular donut + detail panel with cascading sub-tooltips
+    // (mirrors the AS Diversity panel pattern)
     // ═══════════════════════════════════════════════════════════
 
-    // DOM refs for private network UI (cached after first use)
-    let pnContainerEl = null;
-    let pnRectSvg = null;
-    let pnCenterCount = null;
-    let pnLegendEl = null;
-    let pnStatsPanelEl = null;
-    let pnStatsBodyEl = null;
-    let pnSearchEl = null;
+    // Donut configuration
+    const PN_DONUT_SIZE = 260;
+    const PN_DONUT_RADIUS = 116;
+    const PN_DONUT_WIDTH = 28;
+    const PN_DONUT_WIDTH_SELECTED = 40;
+    const PN_DONUT_WIDTH_DIMMED = 14;
+    const PN_INNER_RADIUS = PN_DONUT_RADIUS - PN_DONUT_WIDTH;
 
-    // Private network filter state
-    let pnFilterNet = null;       // null = all, or 'onion'|'i2p'|'cjdns'
-    let pnFilterSoftware = null;  // null = all, or a subver string
-    let pnFilterService = null;   // null = all, or a services_abbrev string
-    let pnSearchQuery = '';       // search text
+    // DOM refs (cached after first use)
+    let pnContainerEl = null;
+    let pnDonutSvg = null;
+    let pnCenterCount = null;
+    let pnCenterLabel = null;
+    let pnCenterSub = null;
+    let pnLegendEl = null;
+    let pnDetailPanelEl = null;
+    let pnDetailBodyEl = null;
+    let pnDetailNetNameEl = null;
+    let pnDetailMetaEl = null;
+
+    // Donut state
+    let pnSegments = [];           // Array of { net, count, color, label }
+    let pnSelectedNet = null;      // Currently selected donut segment (null = overview/all)
+    let pnDonutFocused = false;    // Donut in focused mode (moved to top-center)
+
+    // Sub-tooltip state
+    let pnSubTooltipPinned = false;
+    let pnPinnedSubSrc = null;
+    let pnPinnedSubHtml = '';
+    let pnSubSubTooltipPinned = false;
 
     function cachePnElements() {
         if (!pnContainerEl) {
             pnContainerEl = document.getElementById('pn-container');
-            pnRectSvg = document.getElementById('pn-rect-donut');
+            pnDonutSvg = document.getElementById('pn-donut-svg');
             pnCenterCount = document.getElementById('pn-center-count');
+            pnCenterLabel = document.getElementById('pn-center-label');
+            pnCenterSub = document.getElementById('pn-center-sub');
             pnLegendEl = document.getElementById('pn-legend');
-            pnStatsPanelEl = document.getElementById('pn-stats-panel');
-            pnStatsBodyEl = document.getElementById('pn-stats-body');
-            pnSearchEl = document.getElementById('pn-search');
+            pnDetailPanelEl = document.getElementById('pn-detail-panel');
+            pnDetailBodyEl = document.getElementById('pn-detail-body');
+            pnDetailNetNameEl = document.getElementById('pn-detail-net-name');
+            pnDetailMetaEl = document.getElementById('pn-detail-meta');
         }
     }
 
-    /** Enter private network mode: zoom to Antarctica, show rect donut + stats */
+    /** Enter private network mode: zoom to Antarctica, show circular donut */
     function enterPrivateNetMode(selectedPeerId) {
         if (privateNetMode) {
-            // Already in mode — if a peer was passed, select it
             if (selectedPeerId) selectPrivatePeer(selectedPeerId);
             return;
         }
@@ -1489,41 +1509,30 @@
                 window.ASDiversity.exitFocusedMode();
             }
         }
-        // Clear map state
         hideTooltip();
         clearMapDotFilter();
         highlightedPeerId = null;
         pinnedNode = null;
 
-        // Reset filters
-        pnFilterNet = null;
-        pnFilterSoftware = null;
-        pnFilterService = null;
-        pnSearchQuery = '';
+        // Reset state
+        pnSelectedNet = null;
+        pnDonutFocused = false;
+        hidePnSubTooltip();
 
-        // Show private network UI
+        // Show donut container
         cachePnElements();
-        if (pnSearchEl) pnSearchEl.value = '';
         if (pnContainerEl) {
-            pnContainerEl.classList.remove('hidden');
-            // Trigger opacity transition
+            pnContainerEl.classList.remove('hidden', 'pn-focused');
             requestAnimationFrame(() => pnContainerEl.classList.add('visible'));
         }
 
-        // Zoom to Antarctica center (~-75 lat, 40 lon) at moderate zoom
+        // Zoom to Antarctica
         const antCenter = project(40, -72);
         targetView.x = (antCenter.x - 0.5) * W;
         targetView.y = (antCenter.y - 0.5) * H;
         targetView.zoom = 2.5;
 
-        // Show stats panel + push content
-        if (pnStatsPanelEl) {
-            pnStatsPanelEl.classList.remove('hidden');
-            requestAnimationFrame(() => pnStatsPanelEl.classList.add('visible'));
-        }
-        document.body.classList.add('pn-panel-open');
-
-        // Update all private network UI
+        // Render donut (no panel open yet — user clicks a segment to open it)
         updatePrivateNetUI();
 
         // Select the triggering peer if provided
@@ -1538,23 +1547,22 @@
         privateNetMode = false;
         privateNetSelectedPeer = null;
         privateNetLinePeer = null;
-        pnFilterNet = null;
-        pnFilterSoftware = null;
-        pnFilterService = null;
-        pnSearchQuery = '';
-        document.body.classList.remove('private-net-mode');
-        document.body.classList.remove('pn-panel-open');
+        pnSelectedNet = null;
+        pnDonutFocused = false;
+        document.body.classList.remove('private-net-mode', 'pn-panel-open');
+
+        // Hide sub-tooltips
+        hidePnSubTooltip();
 
         // Hide private network UI
         cachePnElements();
-        if (pnSearchEl) pnSearchEl.value = '';
         if (pnContainerEl) {
             pnContainerEl.classList.remove('visible', 'pn-focused');
             setTimeout(() => pnContainerEl.classList.add('hidden'), 500);
         }
-        if (pnStatsPanelEl) {
-            pnStatsPanelEl.classList.remove('visible');
-            setTimeout(() => pnStatsPanelEl.classList.add('hidden'), 350);
+        if (pnDetailPanelEl) {
+            pnDetailPanelEl.classList.remove('visible');
+            setTimeout(() => pnDetailPanelEl.classList.add('hidden'), 350);
         }
 
         // Clear state
@@ -1586,26 +1594,63 @@
         targetView.y = (p.y - 0.5) * H;
         targetView.zoom = 4;
 
-        // Hide the small map tooltip — big popup handles details
         hideTooltip();
+        hidePnSubTooltip();
 
-        // Move rect donut to top-center (focused state)
+        // Move donut to top-center (focused state)
         cachePnElements();
+        pnDonutFocused = true;
         if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
 
         // Show the full detail popup after zoom settles
-        setTimeout(() => {
-            showPnBigPopup(node);
-        }, 350);
+        setTimeout(() => showPnBigPopup(node), 350);
 
-        // Update the stats panel to highlight this peer
         updatePrivateNetUI();
     }
 
-    /** Render the rectangular donut SVG for private networks */
-    function renderPnRectDonut() {
+    // ── SVG Arc Path (same approach as AS diversity donut) ──
+
+    function pnDescribeArc(cx, cy, outerR, innerR, startAngle, endAngle) {
+        const sweep = endAngle - startAngle;
+        const actualEnd = sweep >= 2 * Math.PI ? startAngle + 2 * Math.PI - 0.001 : endAngle;
+        const largeArc = sweep > Math.PI ? 1 : 0;
+        const ox1 = cx + outerR * Math.cos(startAngle);
+        const oy1 = cy + outerR * Math.sin(startAngle);
+        const ox2 = cx + outerR * Math.cos(actualEnd);
+        const oy2 = cy + outerR * Math.sin(actualEnd);
+        const ix1 = cx + innerR * Math.cos(actualEnd);
+        const iy1 = cy + innerR * Math.sin(actualEnd);
+        const ix2 = cx + innerR * Math.cos(startAngle);
+        const iy2 = cy + innerR * Math.sin(startAngle);
+        return [
+            'M ' + ox1 + ' ' + oy1,
+            'A ' + outerR + ' ' + outerR + ' 0 ' + largeArc + ' 1 ' + ox2 + ' ' + oy2,
+            'L ' + ix1 + ' ' + iy1,
+            'A ' + innerR + ' ' + innerR + ' 0 ' + largeArc + ' 0 ' + ix2 + ' ' + iy2,
+            'Z',
+        ].join(' ');
+    }
+
+    // ── Network metadata ──
+
+    const PN_NET_COLORS_HEX = { onion: '#da3633', i2p: '#d29922', cjdns: '#bc8cff' };
+    const PN_NET_LABELS = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+
+    function getPnNetColor(net) {
+        const varMap = { onion: '--net-tor', i2p: '--net-i2p', cjdns: '--net-cjdns' };
+        const v = varMap[net];
+        if (v) {
+            const c = getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+            if (c) return c;
+        }
+        return PN_NET_COLORS_HEX[net] || '#f0883e';
+    }
+
+    // ── Circular Donut Renderer ──
+
+    function renderPnDonut() {
         cachePnElements();
-        if (!pnRectSvg) return;
+        if (!pnDonutSvg) return;
 
         const privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
         const counts = { onion: 0, i2p: 0, cjdns: 0 };
@@ -1614,412 +1659,564 @@
         }
         const total = privateNodes.length;
 
-        // Update center: show peer ID when focused, filtered network name, or total count
-        const pnCenterLabel = document.querySelector('.pn-center-label');
-        const pnCenterSub = document.querySelector('.pn-center-sub');
-        if (pnCenterCount) {
-            if (privateNetSelectedPeer) {
-                pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
-                pnCenterCount.style.fontSize = '22px';
-            } else if (pnFilterNet) {
-                const filteredCount = segments.find(s => s.net === pnFilterNet);
-                pnCenterCount.textContent = filteredCount ? filteredCount.count : 0;
-                pnCenterCount.style.fontSize = '';
-            } else {
-                pnCenterCount.textContent = total;
-                pnCenterCount.style.fontSize = '';
+        // Build segments
+        pnSegments = [];
+        for (const net of ['onion', 'i2p', 'cjdns']) {
+            if (counts[net] > 0) {
+                pnSegments.push({ net, count: counts[net], color: getPnNetColor(net), label: PN_NET_LABELS[net] });
             }
         }
-        if (pnCenterLabel && pnCenterSub) {
+
+        // Update center text
+        if (pnCenterLabel && pnCenterCount && pnCenterSub) {
             if (privateNetSelectedPeer) {
-                const netLbl = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
-                pnCenterLabel.textContent = netLbl[privateNetSelectedPeer.net] || 'PEER';
+                pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
+                pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
+                pnCenterCount.style.fontSize = '22px';
                 pnCenterSub.textContent = privateNetSelectedPeer.direction === 'IN' ? 'inbound' : 'outbound';
-            } else if (pnFilterNet) {
-                const netLbl = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
-                pnCenterLabel.textContent = netLbl[pnFilterNet] || pnFilterNet.toUpperCase();
+            } else if (pnSelectedNet) {
+                const seg = pnSegments.find(s => s.net === pnSelectedNet);
+                pnCenterLabel.textContent = PN_NET_LABELS[pnSelectedNet] || pnSelectedNet.toUpperCase();
+                pnCenterCount.textContent = seg ? seg.count : 0;
+                pnCenterCount.style.fontSize = '';
                 pnCenterSub.textContent = 'peers';
             } else {
                 pnCenterLabel.textContent = 'PRIVATE';
+                pnCenterCount.textContent = total;
+                pnCenterCount.style.fontSize = '';
                 pnCenterSub.textContent = 'peers';
             }
         }
 
-        // Build segments with colors
-        const segments = [];
-        const netColors = {
-            onion: 'var(--net-tor, #da3633)',
-            i2p:   'var(--net-i2p, #d29922)',
-            cjdns: 'var(--net-cjdns, #bc8cff)'
-        };
-        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
-        const netColorHex = {
-            onion: getComputedNetColor('--net-tor') || '#da3633',
-            i2p:   getComputedNetColor('--net-i2p') || '#d29922',
-            cjdns: getComputedNetColor('--net-cjdns') || '#bc8cff'
-        };
+        // Render SVG
+        const cx = PN_DONUT_SIZE / 2;
+        const cy = PN_DONUT_SIZE / 2;
+        const gap = 0.03;
+        let html = '';
 
-        for (const net of ['onion', 'i2p', 'cjdns']) {
-            if (counts[net] > 0) {
-                segments.push({ net, count: counts[net], color: netColorHex[net], label: netLabels[net] });
-            }
-        }
+        // Defs for 3D effects
+        html += '<defs>';
+        html += '<filter id="pn-donut-shadow" x="-20%" y="-20%" width="140%" height="140%">';
+        html += '<feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.55"/>';
+        html += '</filter>';
+        html += '<linearGradient id="pn-donut-highlight" x1="0" y1="0" x2="0" y2="1">';
+        html += '<stop offset="0%" stop-color="rgba(255,255,255,0.12)"/>';
+        html += '<stop offset="50%" stop-color="rgba(255,255,255,0)"/>';
+        html += '<stop offset="100%" stop-color="rgba(0,0,0,0.10)"/>';
+        html += '</linearGradient>';
+        html += '</defs>';
 
-        // SVG rounded rectangle path
-        const w = 300, h = 180, rx = 20, ry = 20;
-        const strokeW = 18;
-        const innerW = w - strokeW, innerH = h - strokeW;
-        const cx = w / 2, cy = h / 2;
+        // Background track ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (PN_DONUT_RADIUS - PN_DONUT_WIDTH / 2) + '" fill="none" stroke="rgba(240,136,62,0.04)" stroke-width="' + PN_DONUT_WIDTH + '" />';
+        // Outer decorative ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (PN_DONUT_RADIUS + 3) + '" fill="none" stroke="rgba(240,136,62,0.08)" stroke-width="1" />';
+        // Inner decorative ring
+        html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (PN_INNER_RADIUS - 3) + '" fill="none" stroke="rgba(240,136,62,0.06)" stroke-width="0.5" />';
 
-        // Total perimeter of the rounded rectangle
-        const straightH = innerH - 2 * ry;
-        const straightW = innerW - 2 * rx;
-        const cornerArc = (Math.PI / 2) * ((rx + ry) / 2);
-        const perimeter = 2 * straightW + 2 * straightH + 4 * cornerArc;
-
-        // Build SVG content
-        let svg = '';
-
-        // Background rect ring
-        svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="${strokeW}"/>`;
-
-        if (total === 0 || segments.length === 0) {
+        if (pnSegments.length === 0) {
             // Empty state
-            svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="${strokeW}" stroke-dasharray="8 4"/>`;
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (PN_DONUT_RADIUS - PN_DONUT_WIDTH / 2) + '" fill="none" stroke="#2d333b" stroke-width="' + PN_DONUT_WIDTH + '" opacity="0.5" />';
+        } else if (pnSegments.length === 1) {
+            const seg = pnSegments[0];
+            const w = (pnSelectedNet === seg.net) ? PN_DONUT_WIDTH_SELECTED : PN_DONUT_WIDTH;
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (PN_DONUT_RADIUS - PN_DONUT_WIDTH / 2) + '" fill="none" stroke="' + seg.color + '" stroke-width="' + w + '" class="pn-donut-segment" data-net="' + seg.net + '" filter="url(#pn-donut-shadow)" style="cursor:pointer" />';
         } else {
-            // Draw colored segments using stroke-dasharray on the rounded rect
-            const highlightNet = privateNetSelectedPeer ? privateNetSelectedPeer.net : pnFilterNet;
-            let offset = 0;
-            for (const seg of segments) {
-                const segLen = (seg.count / total) * perimeter;
-                // Highlight selected/filtered network's segment, dim others
-                const isSelected = highlightNet && seg.net === highlightNet;
-                const isDimmed = highlightNet && seg.net !== highlightNet;
-                const sw = isSelected ? strokeW + 6 : (isDimmed ? strokeW - 4 : strokeW);
-                const op = isSelected ? 1.0 : (isDimmed ? 0.3 : 0.85);
-                svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="${seg.color}" stroke-width="${sw}" stroke-dasharray="${segLen} ${perimeter - segLen}" stroke-dashoffset="${-offset}" opacity="${op}"/>`;
-                offset += segLen;
+            const totalGap = gap * pnSegments.length;
+            const available = 2 * Math.PI - totalGap;
+            let angle = -Math.PI / 2;
+            const highlightNet = pnSelectedNet || (privateNetSelectedPeer ? privateNetSelectedPeer.net : null);
+
+            html += '<g filter="url(#pn-donut-shadow)">';
+            for (const seg of pnSegments) {
+                const sweep = (seg.count / total) * available;
+                if (sweep <= 0) continue;
+
+                const startA = angle + gap / 2;
+                const endA = angle + sweep + gap / 2;
+
+                const isSelected = highlightNet === seg.net;
+                const isDimmed = highlightNet && highlightNet !== seg.net;
+                const segW = isSelected ? PN_DONUT_WIDTH_SELECTED : (isDimmed ? PN_DONUT_WIDTH_DIMMED : PN_DONUT_WIDTH);
+                const segOuter = PN_DONUT_RADIUS - (PN_DONUT_WIDTH - segW) / 2;
+                const segInner = segOuter - segW;
+                const d = pnDescribeArc(cx, cy, segOuter, segInner, startA, endA);
+
+                let cls = 'pn-donut-segment';
+                if (isSelected) cls += ' selected';
+                if (isDimmed) cls += ' dimmed';
+
+                html += '<path d="' + d + '" fill="' + seg.color + '" class="' + cls + '" data-net="' + seg.net + '" style="cursor:pointer" />';
+                angle += sweep + gap;
             }
+            html += '</g>';
+
+            // 3D highlight overlay
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (PN_DONUT_RADIUS - PN_DONUT_WIDTH / 2) + '" fill="none" stroke="url(#pn-donut-highlight)" stroke-width="' + PN_DONUT_WIDTH + '" pointer-events="none" />';
         }
 
-        pnRectSvg.innerHTML = svg;
+        pnDonutSvg.innerHTML = html;
 
-        // Update legend with active state for filtered network
-        if (pnLegendEl) {
-            let legendHtml = '';
-            const activeNet = pnFilterNet || (privateNetSelectedPeer ? privateNetSelectedPeer.net : null);
-            for (const seg of segments) {
-                const isActive = activeNet === seg.net;
-                const isDimmed = activeNet && activeNet !== seg.net;
-                const style = isDimmed ? 'opacity:0.4' : '';
-                const activeBg = isActive ? 'background:rgba(255,255,255,0.08)' : '';
-                legendHtml += `<div class="pn-legend-item" data-net="${seg.net}" style="${style};${activeBg}">`;
-                legendHtml += `<span class="pn-legend-dot" style="background:${seg.color}"></span>`;
-                legendHtml += `<span class="pn-legend-name">${seg.label}</span>`;
-                legendHtml += `<span class="pn-legend-count">${seg.count}</span>`;
-                legendHtml += `</div>`;
-            }
-            if (segments.length === 0) {
-                legendHtml = '<div class="pn-legend-item"><span class="pn-legend-name" style="color:var(--text-muted)">No private peers connected</span></div>';
-            }
-            pnLegendEl.innerHTML = legendHtml;
-        }
+        // Attach segment click handlers
+        pnDonutSvg.querySelectorAll('.pn-donut-segment').forEach(el => {
+            el.addEventListener('click', onPnSegmentClick);
+        });
+
+        // Update legend
+        renderPnLegend();
     }
 
-    /** Get computed CSS color variable */
-    function getComputedNetColor(varName) {
-        const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-        return raw || null;
+    /** Handle click on a donut segment */
+    function onPnSegmentClick(e) {
+        e.stopPropagation();
+        const net = e.currentTarget.dataset.net;
+        if (!net) return;
+
+        // Toggle: click same segment deselects
+        if (pnSelectedNet === net) {
+            pnSelectedNet = null;
+            pnDonutFocused = false;
+            closePnDetailPanel();
+            cachePnElements();
+            if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+            document.body.classList.remove('pn-panel-open');
+        } else {
+            pnSelectedNet = net;
+            pnDonutFocused = true;
+            cachePnElements();
+            if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+            openPnDetailPanel(net);
+        }
+        updatePrivateNetUI();
     }
 
-    /** Utility: format bytes for display */
-    function fmtBytesShort(bytes) {
-        if (!bytes || bytes <= 0) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        let i = 0;
-        let v = bytes;
-        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-        return v.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    /** Render legend below the donut */
+    function renderPnLegend() {
+        if (!pnLegendEl) return;
+        const activeNet = pnSelectedNet || (privateNetSelectedPeer ? privateNetSelectedPeer.net : null);
+        let legendHtml = '';
+        for (const seg of pnSegments) {
+            const isActive = activeNet === seg.net;
+            const isDimmed = activeNet && activeNet !== seg.net;
+            const style = isDimmed ? 'opacity:0.4' : '';
+            const activeBg = isActive ? 'background:rgba(255,255,255,0.08)' : '';
+            legendHtml += '<div class="pn-legend-item" data-net="' + seg.net + '" style="' + style + ';' + activeBg + '">';
+            legendHtml += '<span class="pn-legend-dot" style="background:' + seg.color + '"></span>';
+            legendHtml += '<span class="pn-legend-name">' + seg.label + '</span>';
+            legendHtml += '<span class="pn-legend-count">' + seg.count + '</span>';
+            legendHtml += '</div>';
+        }
+        if (pnSegments.length === 0) {
+            legendHtml = '<div class="pn-legend-item"><span class="pn-legend-name" style="color:var(--text-muted)">No private peers connected</span></div>';
+        }
+        pnLegendEl.innerHTML = legendHtml;
     }
 
-    /** Get filtered private peers based on current filter state + search */
-    function getFilteredPrivatePeers() {
-        const ASD = window.ASDiversity;
-        const rawPeers = ASD ? ASD.getLastPeersRaw() : lastPeers;
-        let peers = rawPeers.filter(p => PRIVATE_NETS.has(p.network));
+    // ── Detail Panel (slides in from right, like AS detail panel) ──
 
-        // Network filter
-        if (pnFilterNet) {
-            peers = peers.filter(p => p.network === pnFilterNet);
-        }
-        // Software filter
-        if (pnFilterSoftware) {
-            peers = peers.filter(p => (p.subver || 'Unknown') === pnFilterSoftware);
-        }
-        // Service filter
-        if (pnFilterService) {
-            peers = peers.filter(p => (p.services_abbrev || '\u2014') === pnFilterService);
-        }
-        // Search filter
-        if (pnSearchQuery) {
-            const q = pnSearchQuery.toLowerCase();
-            peers = peers.filter(p => {
-                const hay = [
-                    p.addr || '', p.subver || '', p.network || '',
-                    p.services_abbrev || '', p.connection_type || '',
-                    p.direction || '', String(p.id || ''),
-                ].join(' ').toLowerCase();
-                return hay.includes(q);
-            });
-        }
-        return peers;
-    }
-
-    /** Clear all private network filters */
-    function clearPnFilters() {
-        pnFilterNet = null;
-        pnFilterSoftware = null;
-        pnFilterService = null;
-    }
-
-    /** Update the private network stats panel */
-    function updatePnStatsPanel() {
+    function openPnDetailPanel(net) {
         cachePnElements();
-        if (!pnStatsBodyEl) return;
+        if (!pnDetailPanelEl || !pnDetailBodyEl) return;
+
+        document.body.classList.add('pn-panel-open');
+        pnDetailPanelEl.classList.remove('hidden');
+        requestAnimationFrame(() => pnDetailPanelEl.classList.add('visible'));
+
+        updatePnDetailPanel(net);
+    }
+
+    function closePnDetailPanel() {
+        hidePnSubTooltip();
+        cachePnElements();
+        if (pnDetailPanelEl) {
+            pnDetailPanelEl.classList.remove('visible');
+            setTimeout(() => {
+                pnDetailPanelEl.classList.add('hidden');
+                document.body.classList.remove('pn-panel-open');
+            }, 350);
+        }
+    }
+
+    /** Build and populate the detail panel for a specific network */
+    function updatePnDetailPanel(net) {
+        cachePnElements();
+        if (!pnDetailBodyEl) return;
 
         const ASD = window.ASDiversity;
         const rawPeers = ASD ? ASD.getLastPeersRaw() : lastPeers;
-        const allPrivatePeers = rawPeers.filter(p => PRIVATE_NETS.has(p.network));
-        const filteredPeers = getFilteredPrivatePeers();
+        const netPeers = rawPeers.filter(p => p.network === net);
+        const netLabel = PN_NET_LABELS[net] || net.toUpperCase();
+        const netColor = getPnNetColor(net);
 
-        if (allPrivatePeers.length === 0) {
-            pnStatsBodyEl.innerHTML = '<div class="pn-stat-section"><div class="pn-stat-section-title">Overview</div><div class="pn-stat-row"><span class="pn-stat-label">No private network peers connected</span></div></div>';
+        // Update header
+        if (pnDetailNetNameEl) {
+            pnDetailNetNameEl.innerHTML = '<span style="color:' + netColor + '">' + netLabel + '</span> Network';
+        }
+        if (pnDetailMetaEl) {
+            pnDetailMetaEl.textContent = netPeers.length + ' peer' + (netPeers.length !== 1 ? 's' : '') + ' connected';
+        }
+
+        if (netPeers.length === 0) {
+            pnDetailBodyEl.innerHTML = '<div class="pn-panel-empty">No ' + netLabel + ' peers connected</div>';
             return;
         }
 
-        // Counts from ALL private peers (for network section)
-        const allCounts = { onion: 0, i2p: 0, cjdns: 0 };
-        for (const p of allPrivatePeers) {
-            if (allCounts.hasOwnProperty(p.network)) allCounts[p.network]++;
-        }
-
-        // Stats from filtered peers
-        let inbound = 0, outbound = 0;
-        let totalPing = 0, pingCount = 0;
+        // Calculate stats
+        let inbound = 0, outbound = 0, totalPing = 0, pingCount = 0;
         let totalBytesSent = 0, totalBytesRecv = 0;
-        const nowSec = Math.floor(Date.now() / 1000);
         const softwareMap = {};
         const servicesMap = {};
+        const connTypeMap = {};
 
-        for (const p of filteredPeers) {
+        for (const p of netPeers) {
             if (p.direction === 'IN') inbound++; else outbound++;
             if (p.ping_ms > 0) { totalPing += p.ping_ms; pingCount++; }
             totalBytesSent += (p.bytessent || 0);
             totalBytesRecv += (p.bytesrecv || 0);
             const sw = p.subver || 'Unknown';
-            softwareMap[sw] = (softwareMap[sw] || 0) + 1;
+            softwareMap[sw] = softwareMap[sw] || [];
+            softwareMap[sw].push(p);
             const svc = p.services_abbrev || '\u2014';
-            servicesMap[svc] = (servicesMap[svc] || 0) + 1;
+            servicesMap[svc] = servicesMap[svc] || [];
+            servicesMap[svc].push(p);
+            const ct = p.connection_type || 'unknown';
+            connTypeMap[ct] = connTypeMap[ct] || [];
+            connTypeMap[ct].push(p);
         }
 
         const avgPing = pingCount > 0 ? Math.round(totalPing / pingCount) : null;
-        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
-        const netColorHex = {
-            onion: getComputedNetColor('--net-tor') || '#da3633',
-            i2p:   getComputedNetColor('--net-i2p') || '#d29922',
-            cjdns: getComputedNetColor('--net-cjdns') || '#bc8cff'
-        };
-
-        const hasFilter = pnFilterNet || pnFilterSoftware || pnFilterService || pnSearchQuery;
 
         let html = '';
 
-        // ── Networks (clickable filter rows) ──
-        html += '<div class="pn-stat-section">';
-        html += '<div class="pn-stat-section-title">Networks</div>';
-        for (const net of ['onion', 'i2p', 'cjdns']) {
-            if (allCounts[net] > 0) {
-                const isActive = pnFilterNet === net;
-                const isDimmed = pnFilterNet && pnFilterNet !== net;
-                let cls = 'pn-net-filter-row';
-                if (isActive) cls += ' active';
-                if (isDimmed) cls += ' dimmed';
-                html += `<div class="${cls}" data-filter-net="${net}">`;
-                html += `<span class="pn-net-filter-dot" style="background:${netColorHex[net]}"></span>`;
-                html += `<span class="pn-net-filter-label">${netLabels[net]}</span>`;
-                html += `<span class="pn-net-filter-count">${allCounts[net]}</span>`;
-                html += '</div>';
+        // ── Peers section (Overview) ──
+        html += '<div class="modal-section-title">Peers</div>';
+        html += pnStaticRow('Total', netPeers.length);
+        html += pnStaticRow('Inbound', inbound);
+        html += pnStaticRow('Outbound', outbound);
+
+        // ── Performance ──
+        html += '<div class="modal-section-title">Performance</div>';
+        if (avgPing !== null) html += pnStaticRow('Avg Ping', avgPing + ' ms');
+        html += pnStaticRow('Bytes Sent', fmtBytesShort(totalBytesSent));
+        html += pnStaticRow('Bytes Recv', fmtBytesShort(totalBytesRecv));
+
+        // ── Connection Types (interactive) ──
+        const ctEntries = Object.entries(connTypeMap).sort((a, b) => b[1].length - a[1].length);
+        if (ctEntries.length > 0) {
+            html += '<div class="modal-section-title">Connection Types</div>';
+            for (const [ct, peers] of ctEntries) {
+                const PN_CT_LABELS = {
+                    'outbound-full-relay': 'Full Relay',
+                    'block-relay-only': 'Block Relay',
+                    'manual': 'Manual',
+                    'addr-fetch': 'Addr Fetch',
+                    'feeler': 'Feeler',
+                    'inbound': 'Inbound',
+                };
+                const ctLabel = PN_CT_LABELS[ct] || ct;
+                const peerIds = JSON.stringify(peers.map(p => p.id));
+                html += pnInteractiveRow(ctLabel, peers.length, peerIds, 'conntype');
             }
         }
-        html += '</div>';
 
-        // ── Overview (of filtered set) ──
-        html += '<div class="pn-stat-section">';
-        html += '<div class="pn-stat-section-title">Overview' + (hasFilter ? ' <span style="color:var(--text-muted);font-weight:400">(' + filteredPeers.length + ' shown)</span>' : '') + '</div>';
-        html += pnStatRow('Total Peers', filteredPeers.length);
-        html += pnStatRow('Inbound', inbound);
-        html += pnStatRow('Outbound', outbound);
-        if (avgPing !== null) html += pnStatRow('Avg Ping', avgPing + 'ms');
-        html += pnStatRow('Bytes Sent', fmtBytesShort(totalBytesSent));
-        html += pnStatRow('Bytes Recv', fmtBytesShort(totalBytesRecv));
-        html += '</div>';
-
-        // ── Software (clickable) ──
-        const swEntries = Object.entries(softwareMap).sort((a, b) => b[1] - a[1]);
+        // ── Software (interactive) ──
+        const swEntries = Object.entries(softwareMap).sort((a, b) => b[1].length - a[1].length);
         if (swEntries.length > 0) {
-            html += '<div class="pn-stat-section">';
-            html += '<div class="pn-stat-section-title">Software</div>';
-            for (const [sw, cnt] of swEntries) {
-                const isActive = pnFilterSoftware === sw;
-                const cls = 'pn-stat-row pn-clickable-row' + (isActive ? ' active' : '');
-                html += `<div class="${cls}" data-filter-sw="${pnEsc(sw)}"><span class="pn-stat-label">${pnEsc(sw)}</span><span class="pn-stat-value">${cnt}</span></div>`;
+            html += '<div class="modal-section-title">Software</div>';
+            for (const [sw, peers] of swEntries) {
+                const peerIds = JSON.stringify(peers.map(p => p.id));
+                html += pnInteractiveRow(pnEsc(sw), peers.length, peerIds, 'software');
             }
-            html += '</div>';
         }
 
-        // ── Services (clickable) ──
-        const svcEntries = Object.entries(servicesMap).sort((a, b) => b[1] - a[1]);
+        // ── Services (interactive) ──
+        const svcEntries = Object.entries(servicesMap).sort((a, b) => b[1].length - a[1].length);
         if (svcEntries.length > 0) {
-            html += '<div class="pn-stat-section">';
-            html += '<div class="pn-stat-section-title">Services</div>';
-            for (const [svc, cnt] of svcEntries) {
-                const isActive = pnFilterService === svc;
-                const cls = 'pn-stat-row pn-clickable-row' + (isActive ? ' active' : '');
-                html += `<div class="${cls}" data-filter-svc="${pnEsc(svc)}"><span class="pn-stat-label">${pnEsc(svc)}</span><span class="pn-stat-value">${cnt}</span></div>`;
+            html += '<div class="modal-section-title">Services</div>';
+            for (const [svc, peers] of svcEntries) {
+                const peerIds = JSON.stringify(peers.map(p => p.id));
+                html += pnInteractiveRow(pnEsc(svc), peers.length, peerIds, 'services');
             }
-            html += '</div>';
         }
 
-        // ── Highlights ──
-        // Find from filtered set
-        let mostStable = null, longestConn = 0;
-        let fastest = null, lowestPing = Infinity;
-        let topSender = null, topSent = 0;
-        let topReceiver = null, topRecv = 0;
-        for (const p of filteredPeers) {
-            if (p.conntime > 0) {
-                const dur = nowSec - p.conntime;
-                if (dur > longestConn) { longestConn = dur; mostStable = p; }
+        pnDetailBodyEl.innerHTML = html;
+
+        // Attach interactive row handlers
+        attachPnInteractiveRowHandlers(pnDetailBodyEl, netPeers);
+
+        // Clicking blank space in panel closes sub-tooltips
+        pnDetailBodyEl.addEventListener('click', (e) => {
+            if (e.target === pnDetailBodyEl || e.target.classList.contains('modal-section-title') ||
+                e.target.classList.contains('modal-row') || e.target.classList.contains('modal-label') ||
+                e.target.classList.contains('modal-val')) {
+                if (pnSubTooltipPinned) {
+                    hidePnSubTooltip();
+                    // Restore: remove active class from rows
+                    pnDetailBodyEl.querySelectorAll('.pn-sub-filter-active').forEach(r => r.classList.remove('pn-sub-filter-active'));
+                }
             }
-            if (p.ping_ms > 0 && p.ping_ms < lowestPing) { lowestPing = p.ping_ms; fastest = p; }
-            if ((p.bytessent || 0) > topSent) { topSent = p.bytessent; topSender = p; }
-            if ((p.bytesrecv || 0) > topRecv) { topRecv = p.bytesrecv; topReceiver = p; }
-        }
-
-        html += '<div class="pn-stat-section">';
-        html += '<div class="pn-stat-section-title">Highlights</div>';
-        if (mostStable) {
-            html += pnPeerHighlight('Most Stable', mostStable, fmtDurationShort(longestConn));
-        }
-        if (fastest) {
-            html += pnPeerHighlight('Fastest Ping', fastest, lowestPing + 'ms');
-        }
-        if (topSender && topSent > 0) {
-            html += pnPeerHighlight('Most Bytes Sent', topSender, fmtBytesShort(topSent));
-        }
-        if (topReceiver && topRecv > 0) {
-            html += pnPeerHighlight('Most Bytes Recv', topReceiver, fmtBytesShort(topRecv));
-        }
-        html += '</div>';
-
-        // ── Peer List ──
-        if (filteredPeers.length > 0) {
-            html += '<div class="pn-stat-section">';
-            html += '<div class="pn-stat-section-title">Peers (' + filteredPeers.length + ')</div>';
-            for (const p of filteredPeers) {
-                html += pnPeerListItem(p);
-            }
-            html += '</div>';
-        }
-
-        // ── Clear filter link ──
-        if (hasFilter) {
-            html += '<div style="text-align:center;padding:8px 0"><span class="pn-clickable-row" id="pn-clear-filters" style="display:inline-block;padding:4px 12px;font-size:10px;font-family:var(--font-data);color:var(--logo-primary);cursor:pointer;border:1px solid rgba(240,136,62,0.2);border-radius:4px">Clear all filters</span></div>';
-        }
-
-        pnStatsBodyEl.innerHTML = html;
-
-        // ── Bind click handlers ──
-
-        // Network filter rows
-        pnStatsBodyEl.querySelectorAll('.pn-net-filter-row').forEach(row => {
-            row.addEventListener('click', () => {
-                const net = row.dataset.filterNet;
-                pnFilterNet = (pnFilterNet === net) ? null : net;
-                pnFilterSoftware = null;
-                pnFilterService = null;
-                updatePrivateNetUI();
-            });
         });
-
-        // Software filter rows
-        pnStatsBodyEl.querySelectorAll('[data-filter-sw]').forEach(row => {
-            row.addEventListener('click', () => {
-                const sw = row.dataset.filterSw;
-                pnFilterSoftware = (pnFilterSoftware === sw) ? null : sw;
-                updatePrivateNetUI();
-            });
-        });
-
-        // Service filter rows
-        pnStatsBodyEl.querySelectorAll('[data-filter-svc]').forEach(row => {
-            row.addEventListener('click', () => {
-                const svc = row.dataset.filterSvc;
-                pnFilterService = (pnFilterService === svc) ? null : svc;
-                updatePrivateNetUI();
-            });
-        });
-
-        // Peer cards
-        pnStatsBodyEl.querySelectorAll('.pn-peer-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const pid = parseInt(card.dataset.peerId);
-                if (pid) selectPrivatePeer(pid);
-            });
-        });
-
-        // Clear filters link
-        const clearBtn = document.getElementById('pn-clear-filters');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                clearPnFilters();
-                pnSearchQuery = '';
-                if (pnSearchEl) pnSearchEl.value = '';
-                updatePrivateNetUI();
-            });
-        }
     }
 
-    /** Build a compact peer list item for the stats panel */
-    function pnPeerListItem(peer) {
-        const netColors = { onion: 'var(--net-tor)', i2p: 'var(--net-i2p)', cjdns: 'var(--net-cjdns)' };
-        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
-        const netKey = peer.network || 'onion';
-        const dotColor = netColors[netKey] || 'var(--accent)';
-        const netLabel = netLabels[netKey] || netKey.toUpperCase();
-        const dir = peer.direction === 'IN' ? 'In' : 'Out';
+    /** Build a static (non-interactive) row */
+    function pnStaticRow(label, value) {
+        return '<div class="modal-row"><span class="modal-label">' + label + '</span><span class="modal-val">' + value + '</span></div>';
+    }
 
-        let addrShort = peer.addr || '\u2014';
-        if (addrShort.length > 28) addrShort = addrShort.substring(0, 24) + '...';
+    /** Build an interactive row (hover + click for sub-tooltip) */
+    function pnInteractiveRow(label, count, peerIdsJson, category) {
+        return '<div class="as-detail-sub-row pn-interactive-row" data-peer-ids=\'' + peerIdsJson + '\' data-category="' + category + '">'
+             + '<span class="as-detail-sub-label">' + label + '</span>'
+             + '<span class="as-detail-sub-val">' + count + '</span>'
+             + '</div>';
+    }
 
-        let html = `<div class="pn-peer-card" data-peer-id="${peer.id}">`;
-        html += `<div class="pn-peer-card-header">`;
-        html += `<span class="pn-peer-card-dot" style="background:${dotColor}"></span>`;
-        html += `<span class="pn-peer-card-id">#${peer.id}</span>`;
-        html += `<span style="font-size:9px;color:var(--text-muted)">${dir}</span>`;
-        html += `<span class="pn-peer-card-net" style="color:${dotColor};border-color:${dotColor}">${netLabel}</span>`;
-        html += `</div>`;
-        html += `<div class="pn-peer-card-meta">${pnEsc(addrShort)}</div>`;
-        if (peer.subver) html += `<div class="pn-peer-card-meta">${pnEsc(peer.subver)}</div>`;
-        html += `</div>`;
+    // ── Sub-Tooltip System (cascading from the panel, like AS diversity) ──
+
+    /** Attach hover/click to interactive rows in the detail panel */
+    function attachPnInteractiveRowHandlers(bodyEl, allNetPeers) {
+        bodyEl.querySelectorAll('.pn-interactive-row').forEach(rowEl => {
+            rowEl.addEventListener('mouseenter', (e) => {
+                if (pnSubTooltipPinned) return;
+                const peerIds = JSON.parse(rowEl.dataset.peerIds);
+                const category = rowEl.dataset.category;
+                const label = rowEl.querySelector('.as-detail-sub-label').textContent;
+                const html = buildPnPeerListHtml(peerIds, allNetPeers, category, label);
+                showPnSubTooltip(html, e);
+            });
+            rowEl.addEventListener('mousemove', (e) => {
+                if (!pnSubTooltipPinned) positionPnSubTooltip(e);
+            });
+            rowEl.addEventListener('mouseleave', () => {
+                if (pnSubTooltipPinned) return;
+                hidePnSubTooltip();
+            });
+            rowEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const peerIds = JSON.parse(rowEl.dataset.peerIds);
+                const category = rowEl.dataset.category;
+                const label = rowEl.querySelector('.as-detail-sub-label').textContent;
+
+                // Toggle: clicking same row unpins
+                if (pnSubTooltipPinned && pnPinnedSubSrc === rowEl) {
+                    hidePnSubTooltip();
+                    rowEl.classList.remove('pn-sub-filter-active');
+                    return;
+                }
+
+                // Remove active from previous
+                bodyEl.querySelectorAll('.pn-sub-filter-active').forEach(r => r.classList.remove('pn-sub-filter-active'));
+                rowEl.classList.add('pn-sub-filter-active');
+
+                const html = buildPnPeerListHtml(peerIds, allNetPeers, category, label);
+                showPnSubTooltip(html, e);
+                pinPnSubTooltip(html, rowEl);
+            });
+        });
+    }
+
+    /** Build peer list HTML for the sub-tooltip */
+    function buildPnPeerListHtml(peerIds, allNetPeers, category, label) {
+        const idSet = new Set(peerIds);
+        const matched = allNetPeers.filter(p => idSet.has(p.id));
+
+        let html = '';
+        // Title
+        html += '<div class="pn-sub-tt-title">' + pnEsc(label) + '</div>';
+
+        // Service flag expansion for services category
+        if (category === 'services' && label && label !== '\u2014') {
+            html += '<div class="as-sub-tt-section">';
+            const SERVICE_FLAGS = { 'N': 'NETWORK', 'BF': 'BLOOM', 'W': 'WITNESS', 'CF': 'COMPACT_FILTERS', 'NL': 'NETWORK_LIMITED', 'P': 'P2P_V2' };
+            const parts = label.split(/[\s\/]+/);
+            for (const p of parts) {
+                const full = SERVICE_FLAGS[p.trim()];
+                if (full) html += '<div class="as-sub-tt-flag">' + p.trim() + ' = ' + full + '</div>';
+            }
+            html += '</div>';
+        }
+
+        const initialShow = 6;
+        html += '<div class="as-sub-tt-scroll">';
+        for (let i = 0; i < matched.length; i++) {
+            const p = matched[i];
+            const dir = p.direction === 'IN' ? 'Inbound' : 'Outbound';
+            let addr = p.addr || '';
+            if (addr.length > 20) addr = addr.substring(0, 17) + '\u2026';
+            const extraCls = i >= initialShow ? ' as-sub-tt-peer-extra' : '';
+            const extraStyle = i >= initialShow ? ' style="display:none"' : '';
+            html += '<div class="as-sub-tt-peer' + extraCls + '" data-peer-id="' + p.id + '"' + extraStyle + '>';
+            html += '<span class="as-sub-tt-id pn-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
+            html += '<span class="as-sub-tt-type">' + dir + '</span>';
+            if (addr) html += '<span class="as-sub-tt-loc">' + pnEsc(addr) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        if (matched.length > initialShow) {
+            const remaining = matched.length - initialShow;
+            html += '<div class="as-sub-tt-more pn-sub-tt-show-more">+' + remaining + ' more <span class="as-sub-tt-toggle">(show)</span></div>';
+            html += '<div class="as-sub-tt-more pn-sub-tt-show-less" style="display:none"><span class="as-sub-tt-toggle">(less)</span></div>';
+        }
         return html;
     }
 
-    function pnStatRow(label, value) {
-        return `<div class="pn-stat-row"><span class="pn-stat-label">${label}</span><span class="pn-stat-value">${value}</span></div>`;
+    /** Show the sub-tooltip (positioned to the left of the detail panel) */
+    function showPnSubTooltip(html, event) {
+        hidePnSubSubTooltip();
+        let tip = document.getElementById('pn-sub-tooltip');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = 'pn-sub-tooltip';
+            tip.className = 'as-sub-tooltip pn-sub-tooltip';
+            document.body.appendChild(tip);
+        }
+        tip.innerHTML = html;
+        tip.classList.remove('hidden');
+        tip.style.display = '';
+        positionPnSubTooltip(event);
+        attachPnSubTooltipHandlers(tip);
     }
 
-    /** Format a duration in seconds to short human-readable */
+    function positionPnSubTooltip(event) {
+        const tip = document.getElementById('pn-sub-tooltip');
+        if (!tip) return;
+        const rect = tip.getBoundingClientRect();
+        const pad = 12;
+        const panelRect = pnDetailPanelEl ? pnDetailPanelEl.getBoundingClientRect() : { left: window.innerWidth };
+        let x = panelRect.left - rect.width - pad;
+        if (x < pad) x = pad;
+        let y = event.clientY - rect.height / 2;
+        if (y < pad) y = pad;
+        if (y + rect.height > window.innerHeight - pad) y = window.innerHeight - rect.height - pad;
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+    }
+
+    function hidePnSubTooltip() {
+        const tip = document.getElementById('pn-sub-tooltip');
+        if (tip) {
+            tip.classList.add('hidden');
+            tip.style.display = 'none';
+            tip.style.pointerEvents = 'none';
+        }
+        pnSubTooltipPinned = false;
+        pnPinnedSubSrc = null;
+        pnPinnedSubHtml = '';
+        hidePnSubSubTooltip();
+    }
+
+    function pinPnSubTooltip(html, srcEl) {
+        pnSubTooltipPinned = true;
+        pnPinnedSubSrc = srcEl || null;
+        pnPinnedSubHtml = html;
+        const tip = document.getElementById('pn-sub-tooltip');
+        if (tip) tip.style.pointerEvents = 'auto';
+    }
+
+    /** Attach handlers to peer rows inside the sub-tooltip */
+    function attachPnSubTooltipHandlers(tip) {
+        // Peer ID click → select that peer on the map
+        tip.querySelectorAll('.pn-sub-tt-id-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const peerId = parseInt(link.dataset.peerId);
+                if (isNaN(peerId)) return;
+                selectPrivatePeer(peerId);
+            });
+        });
+
+        // Peer row hover → preview
+        tip.querySelectorAll('.as-sub-tt-peer[data-peer-id]').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                const peerId = parseInt(row.dataset.peerId);
+                if (!isNaN(peerId)) highlightedPeerId = peerId;
+            });
+            row.addEventListener('mouseleave', () => {
+                highlightedPeerId = pnSelectedNet ? null : (privateNetSelectedPeer ? privateNetSelectedPeer.peerId : null);
+            });
+        });
+
+        // Expand/collapse
+        const showMore = tip.querySelector('.pn-sub-tt-show-more');
+        const showLess = tip.querySelector('.pn-sub-tt-show-less');
+        if (showMore && showLess) {
+            showMore.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tip.querySelectorAll('.as-sub-tt-peer-extra').forEach(el => el.style.display = '');
+                showMore.style.display = 'none';
+                showLess.style.display = '';
+                const scroll = tip.querySelector('.as-sub-tt-scroll');
+                if (scroll) scroll.classList.add('as-sub-tt-expanded');
+            });
+            showLess.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tip.querySelectorAll('.as-sub-tt-peer-extra').forEach(el => el.style.display = 'none');
+                showLess.style.display = 'none';
+                showMore.style.display = '';
+                const scroll = tip.querySelector('.as-sub-tt-scroll');
+                if (scroll) scroll.classList.remove('as-sub-tt-expanded');
+            });
+        }
+    }
+
+    // ── Sub-Sub-Tooltip (third level, for network-then-peers cascade) ──
+
+    function showPnSubSubTooltip(html, event) {
+        let tip = document.getElementById('pn-sub-sub-tooltip');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = 'pn-sub-sub-tooltip';
+            tip.className = 'as-sub-tooltip pn-sub-tooltip pn-sub-sub-tooltip';
+            document.body.appendChild(tip);
+        }
+        tip.innerHTML = html;
+        tip.classList.remove('hidden');
+        tip.style.display = '';
+        tip.style.pointerEvents = 'auto';
+        positionPnSubSubTooltip(event);
+        attachPnSubTooltipHandlers(tip);
+    }
+
+    function positionPnSubSubTooltip(event) {
+        const tip = document.getElementById('pn-sub-sub-tooltip');
+        if (!tip) return;
+        const subTip = document.getElementById('pn-sub-tooltip');
+        const rect = tip.getBoundingClientRect();
+        const pad = 12;
+        const anchor = subTip ? subTip.getBoundingClientRect() : (pnDetailPanelEl ? pnDetailPanelEl.getBoundingClientRect() : { left: window.innerWidth });
+        let x = anchor.left - rect.width - pad;
+        if (x < pad) x = pad;
+        let y = event ? event.clientY - rect.height / 2 : anchor.top;
+        if (y < pad) y = pad;
+        if (y + rect.height > window.innerHeight - pad) y = window.innerHeight - rect.height - pad;
+        tip.style.left = x + 'px';
+        tip.style.top = y + 'px';
+    }
+
+    function hidePnSubSubTooltip() {
+        const tip = document.getElementById('pn-sub-sub-tooltip');
+        if (tip) {
+            tip.classList.add('hidden');
+            tip.style.display = 'none';
+            tip.style.pointerEvents = 'none';
+        }
+        pnSubSubTooltipPinned = false;
+    }
+
+    // ── Utility helpers ──
+
+    function getComputedNetColor(varName) {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        return raw || null;
+    }
+
+    function fmtBytesShort(bytes) {
+        if (!bytes || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0, v = bytes;
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+        return v.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    }
+
     function fmtDurationShort(sec) {
         if (sec < 60) return sec + 's';
         if (sec < 3600) return Math.floor(sec / 60) + 'm';
@@ -2027,34 +2224,13 @@
         return Math.floor(sec / 86400) + 'd ' + Math.floor((sec % 86400) / 3600) + 'h';
     }
 
-    /** Build a clickable peer highlight card for stats panel */
-    function pnPeerHighlight(title, peer, valueStr) {
-        const netColors = { onion: 'var(--net-tor)', i2p: 'var(--net-i2p)', cjdns: 'var(--net-cjdns)' };
-        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
-        const netKey = peer.network || 'onion';
-        const dotColor = netColors[netKey] || 'var(--accent)';
-        const netLabel = netLabels[netKey] || netKey.toUpperCase();
-
-        let addrShort = peer.addr || '—';
-        if (addrShort.length > 22) addrShort = addrShort.substring(0, 18) + '...';
-
-        let html = `<div class="pn-peer-card" data-peer-id="${peer.id}">`;
-        html += `<div class="pn-stat-row" style="margin-bottom:2px"><span class="pn-stat-label">${title}</span><span class="pn-stat-highlight">${valueStr}</span></div>`;
-        html += `<div class="pn-peer-card-header">`;
-        html += `<span class="pn-peer-card-dot" style="background:${dotColor}"></span>`;
-        html += `<span class="pn-peer-card-id">#${peer.id}</span>`;
-        html += `<span class="pn-peer-card-net" style="color:${dotColor};border-color:${dotColor}">${netLabel}</span>`;
-        html += `</div>`;
-        html += `<div class="pn-peer-card-meta">${addrShort}</div>`;
-        html += `</div>`;
-        return html;
-    }
-
-    /** Update all private network UI (donut + stats + peer table) */
+    /** Update all private network UI (donut + panel if open) */
     function updatePrivateNetUI() {
         if (!privateNetMode) return;
-        renderPnRectDonut();
-        updatePnStatsPanel();
+        renderPnDonut();
+        if (pnSelectedNet && pnDetailPanelEl && pnDetailPanelEl.classList.contains('visible')) {
+            updatePnDetailPanel(pnSelectedNet);
+        }
         renderPeerTable();
     }
 
@@ -2129,9 +2305,9 @@
         const node = nodes.find(n => n.peerId === privateNetLinePeer && n.alive);
         if (!node) return;
 
-        // Origin: center of the pn-rect-wrap element
+        // Origin: center of the pn-donut-wrap element
         cachePnElements();
-        const rectWrap = document.getElementById('pn-rect-wrap');
+        const rectWrap = document.getElementById('pn-donut-wrap');
         if (!rectWrap) return;
         const rect = rectWrap.getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
@@ -2432,9 +2608,12 @@
                 privateNetLinePeer = null;
                 highlightedPeerId = null;
                 pinnedNode = null;
-                // Un-focus rect donut
-                cachePnElements();
-                if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                // Return donut to default position (unless panel is open)
+                if (!pnSelectedNet) {
+                    pnDonutFocused = false;
+                    cachePnElements();
+                    if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                }
                 updatePrivateNetUI();
             });
         }
@@ -3795,9 +3974,9 @@
         if (asFilterPeerIds && node.alive && !asFilterPeerIds.has(node.peerId)) {
             asDimFactor = 0.15;
         }
-        // [PRIVATE-NET] Dim peers not matching network filter
-        if (privateNetMode && pnFilterNet && node.alive && PRIVATE_NETS.has(node.net)) {
-            if (node.net !== pnFilterNet) asDimFactor = 0.15;
+        // [PRIVATE-NET] Dim peers not matching selected network segment
+        if (privateNetMode && pnSelectedNet && node.alive && PRIVATE_NETS.has(node.net)) {
+            if (node.net !== pnSelectedNet) asDimFactor = 0.15;
         }
 
         const c = node.color;
@@ -4928,11 +5107,11 @@
             sorted = sorted.filter(p => mapFilterPeerIds.has(p.id));
         }
 
-        // [PRIVATE-NET] In private net mode, only show private peers (optionally filtered by network)
+        // [PRIVATE-NET] In private net mode, only show private peers (optionally filtered by selected segment)
         if (privateNetMode) {
             sorted = sorted.filter(p => PRIVATE_NETS.has(p.network));
-            if (pnFilterNet) {
-                sorted = sorted.filter(p => p.network === pnFilterNet);
+            if (pnSelectedNet) {
+                sorted = sorted.filter(p => p.network === pnSelectedNet);
             }
         }
 
@@ -5954,17 +6133,20 @@
                 if (privateGroup.length > 0) {
                     selectPrivatePeer(privateGroup[0].peerId);
                 } else {
-                    // Clicked empty space in private mode — deselect peer but stay in mode
+                    // Clicked empty space in private mode — deselect peer
                     privateNetSelectedPeer = null;
                     privateNetLinePeer = null;
                     pinnedNode = null;
                     highlightedPeerId = null;
                     hideTooltip();
                     closePnBigPopup();
-                    // Un-focus rect donut (move back to top-right, offset from panel)
-                    cachePnElements();
-                    if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
-                    // Reset donut center display
+                    hidePnSubTooltip();
+                    // If no panel is open, un-focus donut
+                    if (!pnSelectedNet) {
+                        pnDonutFocused = false;
+                        cachePnElements();
+                        if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                    }
                     updatePrivateNetUI();
                 }
                 dragging = false;
@@ -7460,7 +7642,7 @@
             });
         }
 
-        // [PRIVATE-NET] Exit button on rectangular donut
+        // [PRIVATE-NET] Exit button on donut
         const pnExitBtn = document.getElementById('pn-exit-btn');
         if (pnExitBtn) {
             pnExitBtn.addEventListener('click', (e) => {
@@ -7469,12 +7651,18 @@
             });
         }
 
-        // [PRIVATE-NET] Stats panel close button
-        const pnStatsClose = document.getElementById('pn-stats-close');
-        if (pnStatsClose) {
-            pnStatsClose.addEventListener('click', (e) => {
+        // [PRIVATE-NET] Detail panel close button
+        const pnDetailClose = document.getElementById('pn-detail-close');
+        if (pnDetailClose) {
+            pnDetailClose.addEventListener('click', (e) => {
                 e.stopPropagation();
-                exitPrivateNetMode();
+                // Close panel, deselect segment, return donut to default position
+                pnSelectedNet = null;
+                pnDonutFocused = false;
+                closePnDetailPanel();
+                cachePnElements();
+                if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                updatePrivateNetUI();
             });
         }
 
@@ -7487,16 +7675,7 @@
             }
         });
 
-        // [PRIVATE-NET] Search input in stats panel
-        const pnSearchInput = document.getElementById('pn-search');
-        if (pnSearchInput) {
-            pnSearchInput.addEventListener('input', () => {
-                pnSearchQuery = pnSearchInput.value.trim();
-                updatePnStatsPanel();
-            });
-        }
-
-        // [PRIVATE-NET] Legend clicks — filter by network from the donut legend
+        // [PRIVATE-NET] Legend clicks — click a network label to select that segment
         cachePnElements();
         if (pnLegendEl) {
             pnLegendEl.addEventListener('click', (e) => {
@@ -7504,9 +7683,20 @@
                 if (!item) return;
                 const net = item.dataset.net;
                 if (!net) return;
-                pnFilterNet = (pnFilterNet === net) ? null : net;
-                pnFilterSoftware = null;
-                pnFilterService = null;
+                // Simulate segment click
+                if (pnSelectedNet === net) {
+                    pnSelectedNet = null;
+                    pnDonutFocused = false;
+                    closePnDetailPanel();
+                    cachePnElements();
+                    if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                } else {
+                    pnSelectedNet = net;
+                    pnDonutFocused = true;
+                    cachePnElements();
+                    if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+                    openPnDetailPanel(net);
+                }
                 updatePrivateNetUI();
             });
         }

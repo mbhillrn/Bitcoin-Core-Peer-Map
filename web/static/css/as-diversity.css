@@ -1734,6 +1734,7 @@ body.as-panel-open .peer-detail-popup {
     opacity: 0;
     transition: opacity 0.5s ease, top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .pn-container.visible {
@@ -1742,24 +1743,24 @@ body.as-panel-open .peer-detail-popup {
 .pn-container.hidden {
     display: none;
 }
-/* Focused state: peer selected → move rect donut to top-center, shrink */
+/* Focused state: segment selected or peer selected → move donut to top-center */
 .pn-container.pn-focused {
     top: 10px;
     right: auto;
     left: 50%;
     transform: translateX(-50%) scale(0.72);
 }
-/* When stats panel is open, push pn-container away from the right edge */
+/* When detail panel is open, push donut away from right edge */
 body.pn-panel-open .pn-container:not(.pn-focused) {
-    right: 354px;
+    right: 334px;
 }
-/* In focused mode with panel open, center between left edge and panel */
+/* Focused mode with panel open: center between left edge and panel */
 body.pn-panel-open .pn-container.pn-focused {
-    left: calc((100vw - 340px) / 2);
+    left: calc((100vw - 320px) / 2);
 }
 
 /* ==========================================================
-   PN2. Title — "Private Networks" above the rect donut
+   PN2. Title — "Private Networks" above the circular donut
    ========================================================== */
 .pn-title {
     font-family: var(--font-display, 'Cinzel', serif);
@@ -1775,23 +1776,32 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 
 /* ==========================================================
-   PN3. Rectangular Donut — rounded-rect SVG ring
+   PN3. Circular Donut — SVG arc segments (like AS diversity)
    ========================================================== */
-.pn-rect-wrap {
+.pn-donut-wrap {
     position: relative;
-    width: 300px;
-    height: 180px;
+    width: 260px;
+    height: 260px;
     flex-shrink: 0;
     pointer-events: auto;
-    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)) drop-shadow(0 1px 3px rgba(0,0,0,0.3));
 }
-.pn-rect-donut {
-    width: 300px;
-    height: 180px;
+.pn-donut-svg {
+    width: 260px;
+    height: 260px;
+}
+.pn-donut-segment {
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+}
+.pn-donut-segment:hover {
+    filter: brightness(1.2);
+}
+.pn-donut-segment.dimmed {
+    opacity: 0.3;
 }
 
-/* Center label inside the rect donut */
-.pn-rect-center {
+/* Center label inside the circular donut */
+.pn-donut-center {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -1824,7 +1834,7 @@ body.pn-panel-open .pn-container.pn-focused {
     color: var(--text-muted, #8b949e);
 }
 
-/* Exit button inside rect donut */
+/* Exit button on donut */
 .pn-exit-btn {
     position: absolute;
     top: 6px;
@@ -1851,7 +1861,7 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 
 /* ==========================================================
-   PN4. Legend beneath rect donut
+   PN4. Legend beneath donut
    ========================================================== */
 .pn-legend {
     display: flex;
@@ -1859,7 +1869,7 @@ body.pn-panel-open .pn-container.pn-focused {
     gap: 3px;
     margin-top: 4px;
     pointer-events: auto;
-    max-width: 300px;
+    max-width: 260px;
 }
 .pn-legend-item {
     display: flex;
@@ -1871,7 +1881,7 @@ body.pn-panel-open .pn-container.pn-focused {
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 3px;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, opacity 0.15s ease;
 }
 .pn-legend-item:hover {
     background: rgba(255, 255, 255, 0.05);
@@ -1894,50 +1904,61 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 
 /* ==========================================================
-   PN5. Stats Panel — slides in from right
+   PN5. Detail Panel — slides in from right (like AS detail panel)
    ========================================================== */
-.pn-stats-panel {
+.pn-detail-panel {
     position: fixed;
-    top: 40px;
+    top: 46px;
     right: 0;
     bottom: 0;
-    width: 340px;
+    width: 320px;
     z-index: 260;
     background: var(--bg-surface, rgba(22, 27, 34, 0.97));
     border-left: 1px solid rgba(240, 136, 62, 0.2);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     transform: translateX(100%);
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow-y: auto;
-    overflow-x: hidden;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
-.pn-stats-panel.visible {
+.pn-detail-panel.visible {
     transform: translateX(0);
 }
-.pn-stats-panel.hidden {
+.pn-detail-panel.hidden {
     pointer-events: none;
 }
-.pn-stats-header {
+
+/* Detail panel header */
+.pn-detail-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 14px 16px;
     border-bottom: 1px solid rgba(240, 136, 62, 0.15);
-    position: sticky;
-    top: 0;
-    background: var(--bg-surface, rgba(22, 27, 34, 0.97));
-    z-index: 5;
+    flex-shrink: 0;
 }
-.pn-stats-title {
+.pn-detail-header-info {
+    flex: 1;
+    min-width: 0;
+}
+.pn-detail-net-name {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: var(--logo-primary, #f0883e);
+    color: var(--text-primary, #c9d1d9);
 }
-.pn-stats-close {
+.pn-detail-meta {
+    font-size: 11px;
+    color: var(--text-muted, #8b949e);
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    margin-top: 2px;
+}
+.pn-detail-close {
     background: none;
     border: 1px solid rgba(240, 136, 62, 0.3);
     color: var(--text-muted, #8b949e);
@@ -1950,112 +1971,66 @@ body.pn-panel-open .pn-container.pn-focused {
     line-height: 26px;
     text-align: center;
     padding: 0;
+    flex-shrink: 0;
 }
-.pn-stats-close:hover {
+.pn-detail-close:hover {
     background: rgba(240, 136, 62, 0.15);
     color: var(--text-primary, #c9d1d9);
 }
-.pn-stats-body {
+
+/* Detail panel body — scrollable */
+.pn-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 12px 16px;
 }
 
-/* Stats sections */
-.pn-stat-section {
-    margin-bottom: 16px;
-}
-.pn-stat-section-title {
-    font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+/* Section titles inside detail panel — reuse modal-section-title
+   but override color to match orange theme */
+.pn-detail-body .modal-section-title {
     color: var(--logo-primary, #f0883e);
-    margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid rgba(240, 136, 62, 0.12);
-}
-.pn-stat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 0;
-    font-size: 11px;
-    font-family: var(--font-data, 'JetBrains Mono', monospace);
-}
-.pn-stat-label {
-    color: var(--text-muted, #8b949e);
-}
-.pn-stat-value {
-    color: var(--text-primary, #c9d1d9);
-    font-weight: 600;
-}
-.pn-stat-highlight {
-    color: var(--accent, #58a6ff);
-    font-weight: 700;
+    text-decoration-color: rgba(240, 136, 62, 0.3);
 }
 
-/* Peer card in stats */
-.pn-peer-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(240, 136, 62, 0.1);
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-bottom: 8px;
+/* Interactive rows in the detail panel */
+.pn-interactive-row {
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-}
-.pn-peer-card:hover {
-    background: rgba(240, 136, 62, 0.06);
-    border-color: rgba(240, 136, 62, 0.3);
-}
-.pn-peer-card-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-}
-.pn-peer-card-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-.pn-peer-card-id {
-    font-family: var(--font-data, 'JetBrains Mono', monospace);
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-primary, #c9d1d9);
-}
-.pn-peer-card-net {
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 1px 5px;
     border-radius: 3px;
-    border: 1px solid;
-    margin-left: auto;
+    transition: background 0.15s ease, border-left 0.15s ease;
+    border-left: 2px solid transparent;
 }
-.pn-peer-card-meta {
-    font-size: 10px;
+.pn-interactive-row:hover {
+    background: rgba(240, 136, 62, 0.1);
+    border-left-color: var(--logo-primary, #f0883e);
+}
+.pn-interactive-row.pn-sub-filter-active {
+    background: rgba(240, 136, 62, 0.16);
+    border-left-color: var(--logo-primary, #f0883e);
+}
+
+/* Empty state inside panel */
+.pn-panel-empty {
+    text-align: center;
+    padding: 32px 16px;
     color: var(--text-muted, #8b949e);
+    font-size: 12px;
     font-family: var(--font-data, 'JetBrains Mono', monospace);
 }
 
 /* ==========================================================
-   PN5b. Push effect — when PN stats panel is open, shift content
+   PN5b. Push effect — when PN detail panel is open, shift content
    ========================================================== */
 body.pn-panel-open .peer-panel {
-    right: 340px;
+    right: 320px;
 }
 body.pn-panel-open .footer {
-    right: 340px;
+    right: 320px;
 }
 body.pn-panel-open #worldmap {
-    right: 340px;
+    right: 320px;
 }
-/* Z-index: PN panel on top when in private net mode */
-body.private-net-mode .pn-stats-panel {
+body.private-net-mode .pn-detail-panel {
     z-index: 260;
 }
 body.private-net-mode .peer-panel {
@@ -2063,100 +2038,35 @@ body.private-net-mode .peer-panel {
 }
 
 /* ==========================================================
-   PN5c. Search input in stats panel
+   PN5c. Sub-tooltip — private net variant (orange accent)
    ========================================================== */
-.pn-search-wrap {
-    padding: 8px 16px;
-    border-bottom: 1px solid rgba(240, 136, 62, 0.12);
-    position: sticky;
-    top: 44px;
-    z-index: 4;
-    background: var(--bg-surface, rgba(22, 27, 34, 0.97));
+.pn-sub-tooltip {
+    border-color: rgba(240, 136, 62, 0.25) !important;
 }
-.pn-search-input {
-    width: 100%;
-    box-sizing: border-box;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(240, 136, 62, 0.2);
-    border-radius: 5px;
-    padding: 6px 10px 6px 30px;
+.pn-sub-tooltip .pn-sub-tt-title {
     font-family: var(--font-data, 'JetBrains Mono', monospace);
     font-size: 11px;
-    color: var(--text-primary, #c9d1d9);
-    outline: none;
-    transition: border-color 0.2s ease, background 0.2s ease;
-}
-.pn-search-input::placeholder {
-    color: var(--text-muted, #484f58);
-}
-.pn-search-input:focus {
-    border-color: rgba(240, 136, 62, 0.5);
-    background: rgba(255, 255, 255, 0.06);
-}
-.pn-search-wrap::before {
-    content: '\1F50D';
-    position: absolute;
-    left: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 12px;
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-/* ==========================================================
-   PN5d. Clickable network filter rows in stats panel
-   ========================================================== */
-.pn-net-filter-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-    font-size: 11px;
-    font-family: var(--font-data, 'JetBrains Mono', monospace);
-}
-.pn-net-filter-row:hover {
-    background: rgba(255, 255, 255, 0.06);
-}
-.pn-net-filter-row.active {
-    background: rgba(240, 136, 62, 0.1);
-    border: 1px solid rgba(240, 136, 62, 0.25);
-}
-.pn-net-filter-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-.pn-net-filter-label {
-    flex: 1;
-    color: var(--text-secondary, #8b949e);
-}
-.pn-net-filter-row.active .pn-net-filter-label {
-    color: var(--text-primary, #c9d1d9);
-}
-.pn-net-filter-count {
     font-weight: 700;
-    color: var(--text-primary, #c9d1d9);
+    color: var(--logo-primary, #f0883e);
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(240, 136, 62, 0.15);
 }
-.pn-net-filter-row.dimmed {
-    opacity: 0.4;
-}
-
-/* Clickable software / service rows */
-.pn-clickable-row {
+.pn-sub-tooltip .as-sub-tt-peer {
     cursor: pointer;
-    border-radius: 3px;
-    transition: background 0.15s ease;
 }
-.pn-clickable-row:hover {
-    background: rgba(255, 255, 255, 0.04);
+.pn-sub-tooltip .as-sub-tt-peer:hover {
+    background: rgba(240, 136, 62, 0.1);
 }
-.pn-clickable-row.active {
-    background: rgba(240, 136, 62, 0.08);
+.pn-sub-tooltip .pn-sub-tt-id-link {
+    color: var(--logo-primary, #f0883e);
+    cursor: pointer;
+}
+.pn-sub-tooltip .pn-sub-tt-id-link:hover {
+    text-decoration: underline;
+}
+.pn-sub-sub-tooltip {
+    z-index: 330 !important;
 }
 
 /* ==========================================================
@@ -2194,12 +2104,12 @@ body.private-net-mode .pn-big-popup.visible {
    PN7. Light theme overrides
    ========================================================== */
 body.theme-light .pn-container { }
-body.theme-light .pn-stats-panel {
+body.theme-light .pn-detail-panel {
     border-left-color: rgba(240, 136, 62, 0.25);
 }
 body.theme-light .pn-exit-btn {
     background: rgba(255, 255, 255, 0.9);
 }
-body.theme-light .pn-stats-close {
+body.theme-light .pn-detail-close {
     background: rgba(255, 255, 255, 0.5);
 }
