@@ -671,6 +671,7 @@
     let privateNetMode = false;          // true when viewing private networks in Antarctica
     let privateNetSelectedPeer = null;   // node object of selected private peer (or null)
     let privateNetLinePeer = null;       // peer ID to draw line to in private mode
+    let pnBigPopupEl = null;             // DOM element for the private peer big detail popup
     const PRIVATE_NETS = new Set(['onion', 'i2p', 'cjdns']);
 
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
@@ -1526,7 +1527,7 @@
         // Hide private network UI
         cachePnElements();
         if (pnContainerEl) {
-            pnContainerEl.classList.remove('visible');
+            pnContainerEl.classList.remove('visible', 'pn-focused');
             setTimeout(() => pnContainerEl.classList.add('hidden'), 500);
         }
         if (pnStatsPanelEl) {
@@ -1536,6 +1537,7 @@
 
         // Clear state
         hideTooltip();
+        closePnBigPopup();
         clearMapDotFilter();
         highlightedPeerId = null;
         pinnedNode = null;
@@ -1562,18 +1564,17 @@
         targetView.y = (p.y - 0.5) * H;
         targetView.zoom = 4;
 
-        // Show pinned tooltip near the peer after zoom settles
+        // Hide the small map tooltip — big popup handles details
+        hideTooltip();
+
+        // Move rect donut to top-center (focused state)
+        cachePnElements();
+        if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+
+        // Show the full detail popup after zoom settles
         setTimeout(() => {
-            const offsets = getWrapOffsets();
-            for (const off of offsets) {
-                const s = worldToScreen(node.lon + off, node.lat);
-                if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
-                    showPinnedPeerDetail(node, s.x, s.y, false);
-                    hoveredNode = node;
-                    break;
-                }
-            }
-        }, 500);
+            showPnBigPopup(node);
+        }, 350);
 
         // Update the stats panel to highlight this peer
         updatePrivateNetUI();
@@ -1591,8 +1592,29 @@
         }
         const total = privateNodes.length;
 
-        // Update center count
-        if (pnCenterCount) pnCenterCount.textContent = total;
+        // Update center: show peer ID when focused, or total count otherwise
+        if (pnCenterCount) {
+            if (privateNetSelectedPeer) {
+                pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
+                pnCenterCount.style.fontSize = '22px';
+            } else {
+                pnCenterCount.textContent = total;
+                pnCenterCount.style.fontSize = '';
+            }
+        }
+        // Update center label
+        const pnCenterLabel = document.querySelector('.pn-center-label');
+        const pnCenterSub = document.querySelector('.pn-center-sub');
+        if (pnCenterLabel && pnCenterSub) {
+            if (privateNetSelectedPeer) {
+                const netLbl = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+                pnCenterLabel.textContent = netLbl[privateNetSelectedPeer.net] || 'PEER';
+                pnCenterSub.textContent = privateNetSelectedPeer.direction === 'IN' ? 'inbound' : 'outbound';
+            } else {
+                pnCenterLabel.textContent = 'PRIVATE';
+                pnCenterSub.textContent = 'peers';
+            }
+        }
 
         // Build segments with colors
         const segments = [];
@@ -1637,10 +1659,16 @@
             svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="${strokeW}" stroke-dasharray="8 4"/>`;
         } else {
             // Draw colored segments using stroke-dasharray on the rounded rect
+            const selectedNet = privateNetSelectedPeer ? privateNetSelectedPeer.net : null;
             let offset = 0;
             for (const seg of segments) {
                 const segLen = (seg.count / total) * perimeter;
-                svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="${seg.color}" stroke-width="${strokeW}" stroke-dasharray="${segLen} ${perimeter - segLen}" stroke-dashoffset="${-offset}" opacity="0.85"/>`;
+                // Highlight selected network's segment, dim others
+                const isSelected = selectedNet && seg.net === selectedNet;
+                const isDimmed = selectedNet && seg.net !== selectedNet;
+                const sw = isSelected ? strokeW + 6 : (isDimmed ? strokeW - 4 : strokeW);
+                const op = isSelected ? 1.0 : (isDimmed ? 0.3 : 0.85);
+                svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="${seg.color}" stroke-width="${sw}" stroke-dasharray="${segLen} ${perimeter - segLen}" stroke-dashoffset="${-offset}" opacity="${op}"/>`;
                 offset += segLen;
             }
         }
@@ -1860,48 +1888,67 @@
         updatePnStatsPanel();
     }
 
-    /** Draw "PRIVATE NETWORKS" text across Antarctica on the canvas */
+    /** Draw "PRIVATE NETWORKS" text tiled across Antarctica on the canvas */
     function drawPrivateNetworksText() {
         if (!privateNetMode) return;
 
-        // Position the text across Antarctica
-        const textLat = -78;
-        const positions = [
-            { lon: -30, text: 'P R I V A T E' },
-            { lon: -30, text2: 'N E T W O R K S' }
-        ];
-
-        // Main title
-        const s1 = worldToScreen(-10, -75);
-        const s2 = worldToScreen(-10, -81);
-
         const fontSize1 = Math.max(12, Math.min(48, 18 * view.zoom));
         const fontSize2 = Math.max(10, Math.min(40, 15 * view.zoom));
+        const fontSize3 = Math.max(6, Math.min(14, 5 * view.zoom));
 
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Big "PRIVATE" text
-        ctx.font = `900 ${fontSize1}px 'Cinzel', serif`;
-        ctx.fillStyle = 'rgba(240, 136, 62, 0.35)';
-        ctx.shadowColor = 'rgba(240, 136, 62, 0.2)';
-        ctx.shadowBlur = 20;
-        ctx.fillText('P R I V A T E', s1.x, s1.y);
+        // Tile "PRIVATE NETWORKS" at repeating positions across Antarctica
+        const tileLons = [-160, -100, -40, 30, 90, 150];
+        const tileRows = [
+            { lat1: -72, lat2: -77, sub: -80 },
+            { lat1: -78, lat2: -83, sub: -86 },
+        ];
 
-        // "NETWORKS" below
-        ctx.font = `700 ${fontSize2}px 'Cinzel', serif`;
-        ctx.fillStyle = 'rgba(240, 136, 62, 0.25)';
-        ctx.shadowBlur = 15;
-        ctx.fillText('N E T W O R K S', s2.x, s2.y);
+        for (let ri = 0; ri < tileRows.length; ri++) {
+            const row = tileRows[ri];
+            for (let ci = 0; ci < tileLons.length; ci++) {
+                const lon = tileLons[ci];
+                // Stagger odd rows
+                const lonOff = (ri % 2 === 1) ? 30 : 0;
+                const sLon = lon + lonOff;
 
-        // Subtitle
-        const s3 = worldToScreen(-10, -84);
-        const fontSize3 = Math.max(6, Math.min(14, 5 * view.zoom));
-        ctx.font = `600 ${fontSize3}px 'JetBrains Mono', monospace`;
-        ctx.fillStyle = 'rgba(240, 136, 62, 0.15)';
-        ctx.shadowBlur = 8;
-        ctx.fillText('NOT REAL LOCATIONS', s3.x, s3.y);
+                // Fade outer tiles for softer edges
+                const distFromCenter = Math.abs(sLon) / 180;
+                const alphaFade = 1 - distFromCenter * 0.5;
+
+                const s1 = worldToScreen(sLon, row.lat1);
+                const s2 = worldToScreen(sLon, row.lat2);
+
+                // Skip if off screen
+                if (s1.x < -200 || s1.x > W + 200) continue;
+                if (s1.y < -200 || s1.y > H + 200) continue;
+
+                // Big "PRIVATE" text
+                ctx.font = `900 ${fontSize1}px 'Cinzel', serif`;
+                ctx.fillStyle = `rgba(240, 136, 62, ${(0.22 * alphaFade).toFixed(3)})`;
+                ctx.shadowColor = `rgba(240, 136, 62, ${(0.12 * alphaFade).toFixed(3)})`;
+                ctx.shadowBlur = 20;
+                ctx.fillText('P R I V A T E', s1.x, s1.y);
+
+                // "NETWORKS" below
+                ctx.font = `700 ${fontSize2}px 'Cinzel', serif`;
+                ctx.fillStyle = `rgba(240, 136, 62, ${(0.16 * alphaFade).toFixed(3)})`;
+                ctx.shadowBlur = 15;
+                ctx.fillText('N E T W O R K S', s2.x, s2.y);
+
+                // Subtitle on first row only
+                if (ri === 0 && (ci === 2 || ci === 3)) {
+                    const s3 = worldToScreen(sLon, row.sub);
+                    ctx.font = `600 ${fontSize3}px 'JetBrains Mono', monospace`;
+                    ctx.fillStyle = `rgba(240, 136, 62, ${(0.10 * alphaFade).toFixed(3)})`;
+                    ctx.shadowBlur = 8;
+                    ctx.fillText('NOT REAL LOCATIONS', s3.x, s3.y);
+                }
+            }
+        }
 
         ctx.restore();
     }
@@ -1963,6 +2010,275 @@
         ctx.fill();
 
         ctx.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PRIVATE-NET BIG POPUP — full peer detail for private peers
+    // ═══════════════════════════════════════════════════════════
+
+    const PN_CONN_TYPE_FULL = {
+        'outbound-full-relay': 'Outbound Full Relay',
+        'block-relay-only': 'Block Relay Only',
+        'manual': 'Manual',
+        'addr-fetch': 'Address Fetch',
+        'feeler': 'Feeler',
+        'inbound': 'Inbound',
+    };
+
+    function pnEsc(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function pnFmtBytes(b) {
+        if (b == null || isNaN(b)) return '\u2014';
+        if (b < 1024) return b + ' B';
+        if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+        if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+        return (b / 1073741824).toFixed(2) + ' GB';
+    }
+
+    function pnFmtDuration(secs) {
+        if (!secs || secs <= 0) return '\u2014';
+        const d = Math.floor(secs / 86400);
+        const h = Math.floor((secs % 86400) / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
+    }
+
+    function pnDetailRow(label, value) {
+        return '<div class="as-detail-sub-row"><span class="as-detail-sub-label">' + pnEsc(label) + '</span><span class="as-detail-sub-val">' + value + '</span></div>';
+    }
+
+    /** Close any existing private peer big popup */
+    function closePnBigPopup() {
+        if (pnBigPopupEl && pnBigPopupEl.parentNode) {
+            pnBigPopupEl.classList.remove('visible');
+            setTimeout(() => {
+                if (pnBigPopupEl && pnBigPopupEl.parentNode) {
+                    pnBigPopupEl.parentNode.removeChild(pnBigPopupEl);
+                }
+                pnBigPopupEl = null;
+            }, 250);
+        } else {
+            pnBigPopupEl = null;
+        }
+    }
+
+    /** Show full peer detail popup for a private network peer */
+    function showPnBigPopup(node) {
+        // Close any existing popup
+        closePnBigPopup();
+
+        // Find raw peer data for full details
+        const peer = lastPeers.find(p => p.id === node.peerId);
+        if (!peer) return;
+
+        // Network display
+        const netColorMap = {
+            onion: 'var(--net-tor, #da3633)',
+            i2p:   'var(--net-i2p, #d29922)',
+            cjdns: 'var(--net-cjdns, #bc8cff)',
+        };
+        const netLabelMap = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+        const netKey = (peer.network || 'onion').toLowerCase();
+        const netColor = netColorMap[netKey] || 'var(--accent, #58a6ff)';
+        const netLabel = netLabelMap[netKey] || netKey.toUpperCase();
+
+        const nowSec = Math.floor(Date.now() / 1000);
+
+        // Expand service flags
+        function expandSvc(abbrev) {
+            if (!abbrev || abbrev === '\u2014') return '\u2014';
+            const SERVICE_MAP = {
+                'N': 'NETWORK', 'BF': 'BLOOM', 'W': 'WITNESS', 'CF': 'COMPACT_FILTERS',
+                'NL': 'NETWORK_LIMITED', 'P': 'P2P_V2',
+            };
+            return abbrev.split('/').map(f => {
+                const t = f.trim();
+                return SERVICE_MAP[t] || t;
+            }).join('<br>');
+        }
+
+        // Build popup HTML — same structure as AS diversity peer-detail-popup
+        let html = '';
+        html += `<div class="peer-popup-badge" style="border-color:${netColor};color:${netColor}">${netLabel}</div>`;
+        html += '<div class="peer-popup-header">';
+        html += `<div class="peer-popup-circle" style="background:${netColor}"></div>`;
+        html += '<div class="peer-popup-title">';
+        html += `<div class="peer-popup-name" style="color:${netColor}">Peer #${peer.id}</div>`;
+        html += `<div class="peer-popup-addr">${pnEsc(peer.addr || '')}</div>`;
+        html += `<div class="peer-popup-meta">${netLabel} \u00b7 ${peer.direction === 'IN' ? 'Inbound' : 'Outbound'}</div>`;
+        html += '</div>';
+        html += '</div>';
+
+        html += '<div class="peer-popup-scroll">';
+
+        // Identity
+        html += '<div class="peer-popup-section">';
+        html += '<div class="peer-popup-section-title">Identity</div>';
+        html += pnDetailRow('Peer ID', '#' + peer.id);
+        html += pnDetailRow('Address', pnEsc(peer.addr || '\u2014'));
+        html += pnDetailRow('Network', netLabel);
+        html += pnDetailRow('Direction', peer.direction === 'IN' ? 'Inbound' : 'Outbound');
+        html += pnDetailRow('Conn Type', PN_CONN_TYPE_FULL[peer.connection_type] || peer.connection_type || '\u2014');
+        if (peer.addrlocal) html += pnDetailRow('Your Addr', pnEsc(peer.addrlocal));
+        html += '</div>';
+
+        // Performance
+        html += '<div class="peer-popup-section">';
+        html += '<div class="peer-popup-section-title">Performance</div>';
+        html += pnDetailRow('Ping', peer.ping_ms ? peer.ping_ms + ' ms' : '\u2014');
+        html += pnDetailRow('Min Ping', peer.minping ? (peer.minping * 1000).toFixed(1) + ' ms' : '\u2014');
+        html += pnDetailRow('Connected', peer.conntime_fmt || pnFmtDuration(peer.conntime ? (nowSec - peer.conntime) : 0));
+        html += pnDetailRow('Last Send', peer.lastsend ? pnFmtDuration(nowSec - peer.lastsend) + ' ago' : '\u2014');
+        html += pnDetailRow('Last Recv', peer.lastrecv ? pnFmtDuration(nowSec - peer.lastrecv) + ' ago' : '\u2014');
+        html += pnDetailRow('Last Block', peer.last_block ? pnFmtDuration(nowSec - peer.last_block) + ' ago' : '\u2014');
+        html += pnDetailRow('Last Tx', peer.last_transaction ? pnFmtDuration(nowSec - peer.last_transaction) + ' ago' : '\u2014');
+        html += pnDetailRow('Bytes Sent', peer.bytessent_fmt || pnFmtBytes(peer.bytessent));
+        html += pnDetailRow('Bytes Recv', peer.bytesrecv_fmt || pnFmtBytes(peer.bytesrecv));
+        html += pnDetailRow('Time Offset', peer.timeoffset != null ? (peer.timeoffset === 0 ? '0s (synced)' : peer.timeoffset + 's') : '\u2014');
+        html += '</div>';
+
+        // Software
+        html += '<div class="peer-popup-section">';
+        html += '<div class="peer-popup-section-title">Software</div>';
+        html += pnDetailRow('Version', pnEsc(peer.subver || '\u2014'));
+        html += pnDetailRow('Protocol', peer.version || '\u2014');
+        html += pnDetailRow('Services', expandSvc(peer.services_abbrev || ''));
+        html += pnDetailRow('Start Height', peer.startingheight || '\u2014');
+        html += pnDetailRow('Synced Hdrs', peer.synced_headers || '\u2014');
+        html += pnDetailRow('Synced Blks', peer.synced_blocks || '\u2014');
+        if (peer.transport_protocol_type) html += pnDetailRow('Transport', peer.transport_protocol_type === 'v2' ? 'v2 (BIP324 encrypted)' : peer.transport_protocol_type);
+        if (peer.session_id) html += pnDetailRow('Session ID', '<span style="font-size:9px;word-break:break-all">' + pnEsc(peer.session_id) + '</span>');
+        if (peer.minfeefilter != null) html += pnDetailRow('Min Fee Filter', peer.minfeefilter > 0 ? (peer.minfeefilter * 100000000).toFixed(0) + ' sat/kvB' : 'None');
+        html += '</div>';
+
+        // Privacy / Status
+        html += '<div class="peer-popup-section">';
+        html += '<div class="peer-popup-section-title">Privacy & Status</div>';
+        html += pnDetailRow('Location', '<span style="color:var(--text-muted)">Private Network</span>');
+        html += pnDetailRow('Relay Txs', peer.relaytxes != null ? (peer.relaytxes ? 'Yes' : 'No') : '\u2014');
+        html += pnDetailRow('Addrman', peer.in_addrman ? 'Yes' : 'No');
+        html += pnDetailRow('Addr Relay', peer.addr_relay_enabled != null ? (peer.addr_relay_enabled ? 'Yes' : 'No') : '\u2014');
+        if (peer.addr_processed || peer.addr_rate_limited) html += pnDetailRow('Addr Stats', (peer.addr_processed || 0) + ' processed, ' + (peer.addr_rate_limited || 0) + ' limited');
+        const hbParts = [];
+        if (peer.bip152_hb_from) hbParts.push('From: Yes');
+        if (peer.bip152_hb_to) hbParts.push('To: Yes');
+        html += pnDetailRow('BIP152 HB', hbParts.length > 0 ? hbParts.join(', ') : 'No');
+        if (peer.permissions && peer.permissions.length > 0) html += pnDetailRow('Permissions', peer.permissions.join(', '));
+        html += '</div>';
+
+        html += '</div>'; // end peer-popup-scroll
+
+        // Footer buttons
+        html += '<div class="peer-popup-footer">';
+        html += `<button class="peer-popup-disconnect" data-peer-id="${peer.id}">\u2716 Disconnect</button>`;
+        html += '<button class="peer-popup-close">Close</button>';
+        html += '</div>';
+        html += '<div class="peer-popup-resize-handle"></div>';
+
+        // Create DOM element
+        const popup = document.createElement('div');
+        popup.className = 'peer-detail-popup pn-big-popup';
+        popup.style.borderColor = netColor;
+        popup.innerHTML = html;
+        document.body.appendChild(popup);
+        pnBigPopupEl = popup;
+
+        // Animate in
+        requestAnimationFrame(() => popup.classList.add('visible'));
+
+        // Prevent map clicks
+        popup.addEventListener('click', e => e.stopPropagation());
+
+        // Draggable header
+        const header = popup.querySelector('.peer-popup-header');
+        if (header) {
+            header.style.cursor = 'grab';
+            let isDragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+            header.addEventListener('mousedown', e => {
+                if (e.target.closest('button, a')) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = popup.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+                popup.classList.add('dragging');
+                header.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', e => {
+                if (!isDragging) return;
+                popup.style.left = (startLeft + e.clientX - startX) + 'px';
+                popup.style.top = (startTop + e.clientY - startY) + 'px';
+                popup.style.transform = 'none';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                popup.classList.remove('dragging');
+                header.style.cursor = 'grab';
+            });
+        }
+
+        // Resizable
+        const handle = popup.querySelector('.peer-popup-resize-handle');
+        if (handle) {
+            let isResizing = false, rStartX, rStartY, rStartW, rStartH;
+            handle.addEventListener('mousedown', e => {
+                isResizing = true;
+                rStartX = e.clientX;
+                rStartY = e.clientY;
+                const r = popup.getBoundingClientRect();
+                rStartW = r.width;
+                rStartH = r.height;
+                popup.classList.add('resizing');
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            document.addEventListener('mousemove', e => {
+                if (!isResizing) return;
+                popup.style.width = Math.max(260, rStartW + (e.clientX - rStartX)) + 'px';
+                popup.style.maxHeight = 'none';
+                popup.style.height = Math.max(200, rStartH + (e.clientY - rStartY)) + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!isResizing) return;
+                isResizing = false;
+                popup.classList.remove('resizing');
+            });
+        }
+
+        // Close button
+        const closeBtn = popup.querySelector('.peer-popup-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                closePnBigPopup();
+                privateNetSelectedPeer = null;
+                privateNetLinePeer = null;
+                highlightedPeerId = null;
+                pinnedNode = null;
+                // Un-focus rect donut
+                cachePnElements();
+                if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                updatePrivateNetUI();
+            });
+        }
+
+        // Disconnect button
+        const disconnBtn = popup.querySelector('.peer-popup-disconnect');
+        if (disconnBtn) {
+            disconnBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                const peerId = parseInt(disconnBtn.dataset.peerId);
+                if (isNaN(peerId)) return;
+                showDisconnectDialog(peerId, netKey);
+            });
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -5462,6 +5778,10 @@
                     pinnedNode = null;
                     highlightedPeerId = null;
                     hideTooltip();
+                    closePnBigPopup();
+                    // Un-focus rect donut (move back to top-right)
+                    cachePnElements();
+                    if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
                 }
                 dragging = false;
                 return;

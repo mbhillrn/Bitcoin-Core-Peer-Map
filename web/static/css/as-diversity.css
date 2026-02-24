@@ -1731,13 +1731,23 @@ body.as-panel-open .peer-detail-popup {
     pointer-events: none;
     user-select: none;
     opacity: 0;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.5s ease, top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .pn-container.visible {
     opacity: 1;
 }
 .pn-container.hidden {
     display: none;
+}
+/* Focused state: peer selected → move rect donut to top-center */
+.pn-container.pn-focused {
+    top: 10px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
 }
 
 /* ==========================================================
@@ -2040,6 +2050,19 @@ body.private-net-mode .as-tooltip {
 }
 body.private-net-mode .peer-popup {
     display: none !important;
+}
+
+/* ==========================================================
+   PN6b. Private peer big popup — full detail in private net mode
+   ========================================================== */
+body.private-net-mode .pn-big-popup {
+    display: flex !important;
+    opacity: 0;
+    left: 14px;
+    top: 100px;
+}
+body.private-net-mode .pn-big-popup.visible {
+    opacity: 1;
 }
 
 /* ==========================================================
