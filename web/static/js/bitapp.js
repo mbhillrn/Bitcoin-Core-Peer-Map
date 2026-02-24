@@ -1470,6 +1470,7 @@
     let pnSegments = [];           // Array of { net, count, color, label }
     let pnSelectedNet = null;      // Currently selected donut segment (null = overview/all)
     let pnDonutFocused = false;    // Donut in focused mode (moved to top-center)
+    let pnPopupTimer = null;       // Timer ID for pending popup show (prevents race conditions)
 
     // Sub-tooltip state
     let pnSubTooltipPinned = false;
@@ -1602,8 +1603,14 @@
         pnDonutFocused = true;
         if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
 
-        // Show the full detail popup after zoom settles
-        setTimeout(() => showPnBigPopup(node), 350);
+        // Cancel any pending popup timer, close existing popup immediately (sync),
+        // then schedule the new one
+        if (pnPopupTimer) clearTimeout(pnPopupTimer);
+        closePnBigPopupSync();
+        pnPopupTimer = setTimeout(() => {
+            pnPopupTimer = null;
+            showPnBigPopup(node);
+        }, 350);
 
         updatePrivateNetUI();
     }
@@ -1756,13 +1763,38 @@
 
         pnDonutSvg.innerHTML = html;
 
-        // Attach segment click handlers
+        // Attach segment event handlers (hover preview + click)
         pnDonutSvg.querySelectorAll('.pn-donut-segment').forEach(el => {
             el.addEventListener('click', onPnSegmentClick);
+            el.addEventListener('mouseenter', onPnSegmentHover);
+            el.addEventListener('mouseleave', onPnSegmentLeave);
         });
+    }
 
-        // Update legend
-        renderPnLegend();
+    /** Hover over a donut segment → preview network name/count in center */
+    function onPnSegmentHover(e) {
+        if (pnSelectedNet || privateNetSelectedPeer) return; // Don't override active selection
+        const net = e.currentTarget.dataset.net;
+        const seg = pnSegments.find(s => s.net === net);
+        if (!seg) return;
+        if (pnCenterLabel) pnCenterLabel.textContent = seg.label.toUpperCase();
+        if (pnCenterCount) {
+            pnCenterCount.textContent = seg.count;
+            pnCenterCount.style.color = seg.color;
+        }
+        if (pnCenterSub) pnCenterSub.textContent = 'peers';
+    }
+
+    /** Leave a donut segment → restore center to default */
+    function onPnSegmentLeave() {
+        if (pnSelectedNet || privateNetSelectedPeer) return;
+        const total = pnSegments.reduce((s, seg) => s + seg.count, 0);
+        if (pnCenterLabel) pnCenterLabel.textContent = 'PRIVATE';
+        if (pnCenterCount) {
+            pnCenterCount.textContent = total;
+            pnCenterCount.style.color = '';
+        }
+        if (pnCenterSub) pnCenterSub.textContent = 'peers';
     }
 
     /** Handle click on a donut segment */
@@ -2334,20 +2366,19 @@
         };
         const c = netColorMap[node.net] || { r: 240, g: 136, b: 62 };
 
-        ctx.save();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},0.5)`;
-        ctx.setLineDash([6, 4]);
+        // Solid line (matches the public AS diversity line style)
+        const dist = Math.sqrt((originX - bestS.x) ** 2 + (originY - bestS.y) ** 2);
+        const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
 
-        // Curved line
-        const midX = (originX + bestS.x) / 2;
-        const midY = Math.min(originY, bestS.y) - 30;
+        ctx.save();
+        ctx.lineWidth = Math.max(1.2, 1.5 * Math.min(view.zoom / 1.5, 3));
+        ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha.toFixed(3)})`;
+        ctx.globalAlpha = 1;
 
         ctx.beginPath();
         ctx.moveTo(originX, originY);
-        ctx.quadraticCurveTo(midX, midY, bestS.x, bestS.y);
+        ctx.lineTo(bestS.x, bestS.y);
         ctx.stroke();
-        ctx.setLineDash([]);
 
         // Small dot at the end
         ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.7)`;
@@ -2398,25 +2429,33 @@
         return '<div class="as-detail-sub-row"><span class="as-detail-sub-label">' + pnEsc(label) + '</span><span class="as-detail-sub-val">' + value + '</span></div>';
     }
 
-    /** Close any existing private peer big popup */
+    /** Close any existing private peer big popup (with fade-out animation) */
     function closePnBigPopup() {
+        if (pnPopupTimer) { clearTimeout(pnPopupTimer); pnPopupTimer = null; }
         if (pnBigPopupEl && pnBigPopupEl.parentNode) {
             pnBigPopupEl.classList.remove('visible');
+            const el = pnBigPopupEl;
+            pnBigPopupEl = null;
             setTimeout(() => {
-                if (pnBigPopupEl && pnBigPopupEl.parentNode) {
-                    pnBigPopupEl.parentNode.removeChild(pnBigPopupEl);
-                }
-                pnBigPopupEl = null;
+                if (el && el.parentNode) el.parentNode.removeChild(el);
             }, 250);
         } else {
             pnBigPopupEl = null;
         }
     }
 
+    /** Close popup immediately (no animation) — used before opening a new one */
+    function closePnBigPopupSync() {
+        if (pnBigPopupEl && pnBigPopupEl.parentNode) {
+            pnBigPopupEl.parentNode.removeChild(pnBigPopupEl);
+        }
+        pnBigPopupEl = null;
+    }
+
     /** Show full peer detail popup for a private network peer */
     function showPnBigPopup(node) {
-        // Close any existing popup
-        closePnBigPopup();
+        // Remove any existing popup immediately (no animation delay)
+        closePnBigPopupSync();
 
         // Find raw peer data for full details
         const peer = lastPeers.find(p => p.id === node.peerId);
@@ -2990,6 +3029,15 @@
 
             // [PRIVATE-NET] Update private network UI if in that mode
             updatePrivateNetUI();
+
+            // [PRIVATE-NET] Auto-enter private mode if user only has private peers
+            if (!privateNetMode && lastPeers.length > 0) {
+                const publicPeers = lastPeers.filter(p => !PRIVATE_NETS.has(p.network));
+                const privatePeers = lastPeers.filter(p => PRIVATE_NETS.has(p.network));
+                if (publicPeers.length === 0 && privatePeers.length > 0) {
+                    enterPrivateNetMode();
+                }
+            }
 
             // Reset countdown timer
             lastPeerFetchTime = Date.now();

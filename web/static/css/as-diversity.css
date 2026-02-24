@@ -1784,6 +1784,8 @@ body.pn-panel-open .pn-container.pn-focused {
     height: 260px;
     flex-shrink: 0;
     pointer-events: auto;
+    background: radial-gradient(circle at center, rgba(13, 17, 23, 0.95) 35%, rgba(13, 17, 23, 0.7) 60%, transparent 75%);
+    border-radius: 50%;
 }
 .pn-donut-svg {
     width: 260px;
@@ -1812,26 +1814,29 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-center-label {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 2px;
+    letter-spacing: 2.5px;
     text-transform: uppercase;
-    color: var(--text-muted, #8b949e);
+    color: var(--logo-primary, #f0883e);
+    transition: color 0.2s ease;
 }
 .pn-center-count {
     font-family: var(--font-data, 'JetBrains Mono', monospace);
-    font-size: 32px;
+    font-size: 38px;
     font-weight: 800;
     color: var(--text-primary, #c9d1d9);
     line-height: 1;
-    margin: 2px 0;
+    margin: 4px 0;
+    transition: color 0.2s ease, font-size 0.2s ease;
 }
 .pn-center-sub {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: 1px;
+    letter-spacing: 1.2px;
     text-transform: uppercase;
     color: var(--text-muted, #8b949e);
+    transition: color 0.2s ease;
 }
 
 /* Exit button on donut */
@@ -1864,12 +1869,7 @@ body.pn-panel-open .pn-container.pn-focused {
    PN4. Legend beneath donut
    ========================================================== */
 .pn-legend {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-top: 4px;
-    pointer-events: auto;
-    max-width: 260px;
+    display: none; /* Network selection happens via donut segments, not a separate legend */
 }
 .pn-legend-item {
     display: flex;
@@ -2093,8 +2093,8 @@ body.private-net-mode .peer-popup {
 body.private-net-mode .pn-big-popup {
     display: flex !important;
     opacity: 0;
-    left: 14px;
-    top: 100px;
+    left: 180px;
+    top: 160px;
 }
 body.private-net-mode .pn-big-popup.visible {
     opacity: 1;
