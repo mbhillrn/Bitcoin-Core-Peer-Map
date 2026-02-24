@@ -1479,6 +1479,7 @@
     let pnLegendEl = null;
     let pnDetailPanelEl = null;
     let pnDetailBodyEl = null;
+    let pnDetailBodyHandlerAttached = false;  // guard against re-registering click handler
     let pnDetailNetNameEl = null;
     let pnDetailMetaEl = null;
 
@@ -1507,6 +1508,20 @@
             pnDetailBodyEl = document.getElementById('pn-detail-body');
             pnDetailNetNameEl = document.getElementById('pn-detail-net-name');
             pnDetailMetaEl = document.getElementById('pn-detail-meta');
+        }
+        // Attach blank-space click handler once on pnDetailBodyEl (dismiss sub-tooltips)
+        if (pnDetailBodyEl && !pnDetailBodyHandlerAttached) {
+            pnDetailBodyHandlerAttached = true;
+            pnDetailBodyEl.addEventListener('click', (e) => {
+                if (e.target === pnDetailBodyEl || e.target.classList.contains('modal-section-title') ||
+                    e.target.classList.contains('modal-row') || e.target.classList.contains('modal-label') ||
+                    e.target.classList.contains('modal-val')) {
+                    if (pnSubTooltipPinned) {
+                        hidePnSubTooltip();
+                        pnDetailBodyEl.querySelectorAll('.pn-sub-filter-active').forEach(r => r.classList.remove('pn-sub-filter-active'));
+                    }
+                }
+            });
         }
     }
 
@@ -1786,6 +1801,7 @@
         pnDonutSvg.innerHTML = html;
 
         // Attach segment event handlers (hover preview + click)
+        // Safe: innerHTML above replaced all children, so old listeners are GC'd with old elements
         pnDonutSvg.querySelectorAll('.pn-donut-segment').forEach(el => {
             el.addEventListener('click', onPnSegmentClick);
             el.addEventListener('mouseenter', onPnSegmentHover);
@@ -2013,19 +2029,6 @@
 
         // Attach interactive row handlers
         attachPnInteractiveRowHandlers(pnDetailBodyEl, netPeers);
-
-        // Clicking blank space in panel closes sub-tooltips
-        pnDetailBodyEl.addEventListener('click', (e) => {
-            if (e.target === pnDetailBodyEl || e.target.classList.contains('modal-section-title') ||
-                e.target.classList.contains('modal-row') || e.target.classList.contains('modal-label') ||
-                e.target.classList.contains('modal-val')) {
-                if (pnSubTooltipPinned) {
-                    hidePnSubTooltip();
-                    // Restore: remove active class from rows
-                    pnDetailBodyEl.querySelectorAll('.pn-sub-filter-active').forEach(r => r.classList.remove('pn-sub-filter-active'));
-                }
-            }
-        });
     }
 
     /** Build a static (non-interactive) row */
@@ -2237,25 +2240,22 @@
             });
         }
 
-        // Click blank space to dismiss sub-tooltips
-        pnDetailBodyEl.addEventListener('click', (e) => {
-            if (e.target === pnDetailBodyEl || e.target.classList.contains('modal-section-title')) {
-                if (pnSubTooltipPinned) {
-                    hidePnSubTooltip();
-                    pnDetailBodyEl.querySelectorAll('.pn-sub-filter-active').forEach(r => r.classList.remove('pn-sub-filter-active'));
-                }
-            }
-        });
     }
 
     // ── Sub-Tooltip System (cascading from the panel, like AS diversity) ──
+
+    /** Safely parse peer IDs from a row's data attribute */
+    function parsePnPeerIds(rowEl) {
+        try { return JSON.parse(rowEl.dataset.peerIds); }
+        catch (_) { return []; }
+    }
 
     /** Attach hover/click to interactive rows in the detail panel */
     function attachPnInteractiveRowHandlers(bodyEl, allNetPeers) {
         bodyEl.querySelectorAll('.pn-interactive-row').forEach(rowEl => {
             rowEl.addEventListener('mouseenter', (e) => {
                 if (pnSubTooltipPinned) return;
-                const peerIds = JSON.parse(rowEl.dataset.peerIds);
+                const peerIds = parsePnPeerIds(rowEl);
                 const category = rowEl.dataset.category;
                 const label = rowEl.querySelector('.as-detail-sub-label').textContent;
                 const html = buildPnPeerListHtml(peerIds, allNetPeers, category, label);
@@ -2270,7 +2270,7 @@
             });
             rowEl.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const peerIds = JSON.parse(rowEl.dataset.peerIds);
+                const peerIds = parsePnPeerIds(rowEl);
                 const category = rowEl.dataset.category;
                 const label = rowEl.querySelector('.as-detail-sub-label').textContent;
 
@@ -5515,26 +5515,26 @@
         if (!tbodyEl) return;
         let sorted = getSortedPeers();
 
-        // Apply network filter to table as well
-        if (!isAllNetsEnabled()) {
-            sorted = sorted.filter(p => passesNetFilter(p.network || 'ipv4'));
-        }
-
-        // [AS-DIVERSITY] Apply AS filter when an AS is selected
-        if (asFilterPeerIds) {
-            sorted = sorted.filter(p => asFilterPeerIds.has(p.id));
-        }
-
-        // [MAP DOT FILTER] Apply map dot filter when a dot is clicked
-        if (mapFilterPeerIds) {
-            sorted = sorted.filter(p => mapFilterPeerIds.has(p.id));
-        }
-
-        // [PRIVATE-NET] In private net mode, only show private peers (optionally filtered by selected segment)
+        // [PRIVATE-NET] In private net mode, bypass badge/AS/map filters and only show private peers
         if (privateNetMode) {
             sorted = sorted.filter(p => PRIVATE_NETS.has(p.network));
             if (pnSelectedNet) {
                 sorted = sorted.filter(p => p.network === pnSelectedNet);
+            }
+        } else {
+            // Apply network filter to table as well
+            if (!isAllNetsEnabled()) {
+                sorted = sorted.filter(p => passesNetFilter(p.network || 'ipv4'));
+            }
+
+            // [AS-DIVERSITY] Apply AS filter when an AS is selected
+            if (asFilterPeerIds) {
+                sorted = sorted.filter(p => asFilterPeerIds.has(p.id));
+            }
+
+            // [MAP DOT FILTER] Apply map dot filter when a dot is clicked
+            if (mapFilterPeerIds) {
+                sorted = sorted.filter(p => mapFilterPeerIds.has(p.id));
             }
         }
 
