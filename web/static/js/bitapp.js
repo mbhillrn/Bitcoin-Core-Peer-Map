@@ -904,7 +904,7 @@
         return html;
     }
 
-    // Attach hover listeners to all flight deck chips
+    // Attach hover + click listeners to all flight deck chips
     document.querySelectorAll('.fd-net-chip').forEach(chip => {
         chip.addEventListener('mouseenter', () => {
             const netKey = chip.dataset.net;
@@ -920,6 +920,22 @@
         });
         chip.addEventListener('mouseleave', () => {
             if (fdTooltipEl) fdTooltipEl.classList.add('hidden');
+        });
+        // Click: IPv4/IPv6 → open AS diversity focused mode, Tor/I2P/CJDNS → enter private mode
+        chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (fdTooltipEl) fdTooltipEl.classList.add('hidden');
+            const netKey = chip.dataset.net;
+            if (PRIVATE_NETS.has(netKey)) {
+                // Private network chip → enter private mode
+                if (!privateNetMode) enterPrivateNetMode();
+            } else {
+                // Public network chip (ipv4/ipv6) → exit private mode if active, enter AS focused mode
+                if (privateNetMode) exitPrivateNetMode();
+                if (window.ASDiversity && !window.ASDiversity.isFocusedMode()) {
+                    window.ASDiversity.enterFocusedMode();
+                }
+            }
         });
     });
 
@@ -2528,7 +2544,7 @@
             if (counts[net] > 0) segs.push({ net, count: counts[net], color: getPnNetColor(net) });
         }
 
-        const cx = 40, cy = 40, outerR = 36, innerR = 26;
+        const cx = 80, cy = 80, outerR = 72, innerR = 54;
         let html = '';
         if (segs.length === 1) {
             html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="' + segs[0].color + '" stroke-width="' + (outerR - innerR) + '" />';
@@ -2546,6 +2562,22 @@
             }
         }
         miniSvg.innerHTML = html;
+
+        // Build mini legend (network breakdown list, sorted by count descending)
+        const miniLegendEl = document.getElementById('pn-mini-legend');
+        if (miniLegendEl) {
+            const sorted = segs.slice().sort((a, b) => b.count - a.count);
+            let legendHtml = '';
+            for (const seg of sorted) {
+                const label = PN_NET_LABELS[seg.net] || seg.net.toUpperCase();
+                legendHtml += '<div class="pn-mini-legend-item" data-net="' + seg.net + '">';
+                legendHtml += '<span class="pn-mini-legend-dot" style="background:' + seg.color + '"></span>';
+                legendHtml += '<span class="pn-mini-legend-name">' + label + '</span>';
+                legendHtml += '<span class="pn-mini-legend-count">' + seg.count + '</span>';
+                legendHtml += '</div>';
+            }
+            miniLegendEl.innerHTML = legendHtml;
+        }
     }
 
     /** Draw "PRIVATE NETWORKS" text tiled across Antarctica on the canvas */
@@ -2648,12 +2680,8 @@
         };
         const c = netColorMap[node.net] || { r: 240, g: 136, b: 62 };
 
-        // Offset origin slightly to the right so line isn't straight vertical
-        const rightOffset = W * 0.06;
-        const oX = originX + rightOffset;
-
-        // Solid line with slight curve (matches the public AS diversity line style)
-        const dist = Math.sqrt((oX - bestS.x) ** 2 + (originY - bestS.y) ** 2);
+        // Straight line from donut center to peer position
+        const dist = Math.sqrt((originX - bestS.x) ** 2 + (originY - bestS.y) ** 2);
         const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
 
         ctx.save();
@@ -2661,15 +2689,12 @@
         ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha.toFixed(3)})`;
         ctx.globalAlpha = 1;
 
-        // Draw curved line from offset origin to peer
-        const midX = (oX + bestS.x) / 2 + rightOffset * 0.5;
-        const midY = (originY + bestS.y) / 2;
         ctx.beginPath();
-        ctx.moveTo(oX, originY);
-        ctx.quadraticCurveTo(midX, midY, bestS.x, bestS.y);
+        ctx.moveTo(originX, originY);
+        ctx.lineTo(bestS.x, bestS.y);
         ctx.stroke();
 
-        // Small dot at the end
+        // Small dot at the peer position
         ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.7)`;
         ctx.beginPath();
         ctx.arc(bestS.x, bestS.y, 4, 0, Math.PI * 2);
@@ -6805,17 +6830,6 @@
             }
             updateBadgeStates();
             renderPeerTable();
-
-            // [PRIVATE-NET] Mode switching: private net badges → enter private mode
-            // Public net badges → exit private mode if active
-            const isPrivateNet = PRIVATE_NETS.has(net);
-            if (isPrivateNet && !privateNetMode) {
-                enterPrivateNetMode();
-            } else if (!isPrivateNet && net !== 'all' && privateNetMode) {
-                exitPrivateNetMode();
-            } else if (net === 'all' && privateNetMode) {
-                exitPrivateNetMode();
-            }
         });
 
         // Hover to show network stats popover (positioned above the badge)

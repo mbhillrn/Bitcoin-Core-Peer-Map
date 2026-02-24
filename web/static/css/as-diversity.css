@@ -63,7 +63,7 @@
     display: block;
     font-size: 9px;
     letter-spacing: 2px;
-    color: var(--text-muted, #8b949e);
+    color: var(--logo-accent, #7ec8e3);
     font-weight: 600;
     margin-top: 1px;
 }
@@ -491,8 +491,8 @@ body.insight-rect-active .as-focused-close {
     transition: opacity 0.25s ease, transform 0.25s ease;
     pointer-events: none;
 }
-/* Show legend when hovering the donut area */
-.as-diversity-container:hover .as-legend,
+/* Show legend when hovering the donut area (but NOT when only hovering the mini private donut) */
+.as-diversity-container:hover:not(:has(.pn-mini-donut:hover)) .as-legend,
 .as-diversity-container.as-legend-visible .as-legend {
     opacity: 1;
     transform: translateY(0);
@@ -1732,8 +1732,8 @@ body.as-panel-open .peer-detail-popup {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    margin-top: 4px;
+    gap: 0;
+    margin-top: 8px;
     cursor: pointer;
     pointer-events: auto;
     opacity: 0;
@@ -1741,7 +1741,7 @@ body.as-panel-open .peer-detail-popup {
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 .pn-mini-donut.visible {
-    opacity: 0.85;
+    opacity: 0.88;
     transform: scale(1);
 }
 .pn-mini-donut.hidden {
@@ -1749,31 +1749,95 @@ body.as-panel-open .peer-detail-popup {
 }
 .pn-mini-donut:hover {
     opacity: 1;
-    transform: scale(1.05);
 }
 .pn-mini-label {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 8px;
+    font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     color: var(--logo-primary, #f0883e);
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: -4px;
+}
+.pn-mini-subtitle {
+    display: block;
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    color: var(--logo-accent, #7ec8e3);
+    font-weight: 600;
+    margin-top: 1px;
+}
+.pn-mini-donut-ring {
+    position: relative;
+    width: 160px;
+    height: 160px;
 }
 .pn-mini-svg {
-    width: 64px;
-    height: 64px;
+    width: 160px;
+    height: 160px;
 }
 .pn-mini-count {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -30%);
+    transform: translate(-50%, -50%);
     font-family: var(--font-data, 'JetBrains Mono', monospace);
-    font-size: 14px;
+    font-size: 22px;
     font-weight: 800;
     color: var(--text-primary, #c9d1d9);
     pointer-events: none;
+}
+/* Mini legend — network breakdown list shown on hover */
+.pn-mini-legend {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 160px;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+.pn-mini-donut:hover .pn-mini-legend {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.pn-mini-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.pn-mini-legend-item:hover {
+    background: rgba(240, 136, 62, 0.1);
+}
+.pn-mini-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.pn-mini-legend-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary, #8b949e);
+    flex: 1;
+}
+.pn-mini-legend-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary, #c9d1d9);
 }
 /* Hide mini donut when in focused mode or private mode */
 body.donut-focused .pn-mini-donut,
@@ -1833,16 +1897,24 @@ body.pn-panel-open .pn-container.pn-focused {
    ========================================================== */
 .pn-title {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 24px;
+    font-size: 16px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 3px;
+    letter-spacing: 1.5px;
     text-align: center;
     color: var(--logo-primary, #f0883e);
-    text-shadow: 0 2px 12px rgba(240, 136, 62, 0.5), 0 4px 16px rgba(0, 0, 0, 0.8);
-    margin-bottom: 6px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    margin-bottom: -6px;
     pointer-events: auto;
     line-height: 1.1;
+}
+.pn-title-subtitle {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--logo-accent, #7ec8e3);
+    font-weight: 600;
+    margin-top: 1px;
 }
 
 /* ==========================================================
