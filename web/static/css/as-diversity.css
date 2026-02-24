@@ -51,13 +51,21 @@
     line-height: 1.1;
     transition: opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease;
     overflow: hidden;
-    max-height: 40px;
+    max-height: 52px;
 }
 .as-title-peer {
     color: var(--logo-primary);
 }
 .as-title-provider {
     color: var(--logo-primary);
+}
+.as-title-subtitle {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-muted, #8b949e);
+    font-weight: 600;
+    margin-top: 1px;
 }
 
 /* ==========================================================
@@ -1717,6 +1725,67 @@ body.as-panel-open .peer-detail-popup {
    ============================================================ */
 
 /* ==========================================================
+   PN-MINI. Mini private donut beneath the public AS donut
+   ========================================================== */
+.pn-mini-donut {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-top: 4px;
+    cursor: pointer;
+    pointer-events: auto;
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.pn-mini-donut.visible {
+    opacity: 0.85;
+    transform: scale(1);
+}
+.pn-mini-donut.hidden {
+    display: none;
+}
+.pn-mini-donut:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+.pn-mini-label {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--logo-primary, #f0883e);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.pn-mini-svg {
+    width: 64px;
+    height: 64px;
+}
+.pn-mini-count {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -30%);
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-primary, #c9d1d9);
+    pointer-events: none;
+}
+/* Hide mini donut when in focused mode or private mode */
+body.donut-focused .pn-mini-donut,
+body.private-net-mode .pn-mini-donut {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    max-height: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* ==========================================================
    PN1. Container — positioned like the AS diversity container
    ========================================================== */
 .pn-container {
@@ -1764,15 +1833,16 @@ body.pn-panel-open .pn-container.pn-focused {
    ========================================================== */
 .pn-title {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 15px;
+    font-size: 24px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 3px;
     text-align: center;
     color: var(--logo-primary, #f0883e);
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    margin-bottom: 4px;
+    text-shadow: 0 2px 12px rgba(240, 136, 62, 0.5), 0 4px 16px rgba(0, 0, 0, 0.8);
+    margin-bottom: 6px;
     pointer-events: auto;
+    line-height: 1.1;
 }
 
 /* ==========================================================
@@ -2018,6 +2088,66 @@ body.pn-panel-open .pn-container.pn-focused {
     font-family: var(--font-data, 'JetBrains Mono', monospace);
 }
 
+/* Insight rows — clickable stat highlights */
+.pn-insight-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 11px;
+}
+.pn-insight-row:hover {
+    background: rgba(240, 136, 62, 0.12);
+}
+.pn-insight-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+}
+.pn-insight-label {
+    color: var(--logo-primary, #f0883e);
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 90px;
+}
+.pn-insight-val {
+    color: var(--text-secondary, #8b949e);
+    flex: 1;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Search bar inside detail panel */
+.pn-search-wrap {
+    margin-bottom: 10px;
+}
+.pn-search-input {
+    width: 100%;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(240, 136, 62, 0.25);
+    border-radius: 6px;
+    color: var(--text-primary, #c9d1d9);
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+.pn-search-input:focus {
+    border-color: var(--logo-primary, #f0883e);
+}
+.pn-search-input::placeholder {
+    color: var(--text-muted, #8b949e);
+}
+
 /* ==========================================================
    PN5b. Push effect — when PN detail panel is open, shift content
    ========================================================== */
@@ -2093,7 +2223,7 @@ body.private-net-mode .peer-popup {
 body.private-net-mode .pn-big-popup {
     display: flex !important;
     opacity: 0;
-    left: 180px;
+    left: 260px;
     top: 160px;
 }
 body.private-net-mode .pn-big-popup.visible {
