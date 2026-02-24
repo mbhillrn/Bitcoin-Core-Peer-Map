@@ -1537,11 +1537,13 @@
         pnDonutFocused = false;
         hidePnSubTooltip();
 
-        // Show donut container
+        // Show donut container — centered at top with panel open
         cachePnElements();
         if (pnContainerEl) {
-            pnContainerEl.classList.remove('hidden', 'pn-focused');
-            requestAnimationFrame(() => pnContainerEl.classList.add('visible'));
+            pnContainerEl.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                pnContainerEl.classList.add('visible', 'pn-focused');
+            });
         }
 
         // Zoom to Antarctica
@@ -1550,8 +1552,10 @@
         targetView.y = (antCenter.y - 0.5) * H;
         targetView.zoom = 2.5;
 
-        // Render donut (no panel open yet — user clicks a segment to open it)
+        // Focus the donut and open overview panel
+        pnDonutFocused = true;
         updatePrivateNetUI();
+        setTimeout(() => openPnOverviewPanel(), 200);
 
         // Select the triggering peer if provided
         if (selectedPeerId) {

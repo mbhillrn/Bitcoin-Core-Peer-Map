@@ -481,14 +481,14 @@ body.insight-rect-active .as-focused-close {
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-    pointer-events: auto;
     width: 260px;
-    max-height: 260px;
-    overflow-y: auto;
-    /* Hidden by default, revealed on hover or selection */
+    /* Collapsed by default — no vertical space taken */
+    max-height: 0;
+    overflow: hidden;
     opacity: 0;
     transform: translateY(-4px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease,
+                max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: none;
 }
 /* Show legend when hovering the donut area (but NOT when only hovering the mini private donut) */
@@ -497,6 +497,8 @@ body.insight-rect-active .as-focused-close {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
+    max-height: 260px;
+    overflow-y: auto;
 }
 /* "TOP 8" header above the legend list */
 .as-legend-header {
