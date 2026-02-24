@@ -667,6 +667,12 @@
     let asLineAsNum = null;        // AS number for legend dot lookup
     let asLineGroups = null;       // Array of {asNum, peerIds, color} for hover-all mode
 
+    // [PRIVATE-NET] State for private network view mode
+    let privateNetMode = false;          // true when viewing private networks in Antarctica
+    let privateNetSelectedPeer = null;   // node object of selected private peer (or null)
+    let privateNetLinePeer = null;       // peer ID to draw line to in private mode
+    const PRIVATE_NETS = new Set(['onion', 'i2p', 'cjdns']);
+
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
     const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
     let enabledNets = new Set(ALL_NETS);  // start with all enabled
@@ -1434,23 +1440,529 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // PRIVATE NETWORK POPUP (for peer list clicks)
+    // PRIVATE NETWORK MODE — Full Antarctica view for Tor/I2P/CJDNS
     // ═══════════════════════════════════════════════════════════
 
-    function showPrivateNetPopup(msg) {
-        // Remove existing
-        const existing = document.getElementById('private-net-popup');
-        if (existing) existing.remove();
-        const popup = document.createElement('div');
-        popup.className = 'private-net-popup';
-        popup.id = 'private-net-popup';
-        popup.innerHTML = `<div>${msg}</div><button class="close-popup">OK</button>`;
-        popup.style.left = '50%';
-        popup.style.top = '40%';
-        popup.style.transform = 'translate(-50%, -50%)';
-        document.body.appendChild(popup);
-        popup.querySelector('.close-popup').addEventListener('click', () => popup.remove());
-        setTimeout(() => popup.remove(), 8000);
+    // DOM refs for private network UI (cached after first use)
+    let pnContainerEl = null;
+    let pnRectSvg = null;
+    let pnCenterCount = null;
+    let pnLegendEl = null;
+    let pnStatsPanelEl = null;
+    let pnStatsBodyEl = null;
+
+    function cachePnElements() {
+        if (!pnContainerEl) {
+            pnContainerEl = document.getElementById('pn-container');
+            pnRectSvg = document.getElementById('pn-rect-donut');
+            pnCenterCount = document.getElementById('pn-center-count');
+            pnLegendEl = document.getElementById('pn-legend');
+            pnStatsPanelEl = document.getElementById('pn-stats-panel');
+            pnStatsBodyEl = document.getElementById('pn-stats-body');
+        }
+    }
+
+    /** Enter private network mode: zoom to Antarctica, show rect donut + stats */
+    function enterPrivateNetMode(selectedPeerId) {
+        if (privateNetMode) {
+            // Already in mode — if a peer was passed, select it
+            if (selectedPeerId) selectPrivatePeer(selectedPeerId);
+            return;
+        }
+        privateNetMode = true;
+        document.body.classList.add('private-net-mode');
+
+        // Close any existing AS diversity panels/tooltips
+        if (window.ASDiversity) {
+            window.ASDiversity.closePeerPopup();
+            window.ASDiversity.deselect();
+            if (window.ASDiversity.isFocusedMode()) {
+                window.ASDiversity.exitFocusedMode();
+            }
+        }
+        // Clear map state
+        hideTooltip();
+        clearMapDotFilter();
+        highlightedPeerId = null;
+        pinnedNode = null;
+
+        // Show private network UI
+        cachePnElements();
+        if (pnContainerEl) {
+            pnContainerEl.classList.remove('hidden');
+            // Trigger opacity transition
+            requestAnimationFrame(() => pnContainerEl.classList.add('visible'));
+        }
+
+        // Zoom to Antarctica center (~-75 lat, 40 lon) at moderate zoom
+        const antCenter = project(40, -72);
+        targetView.x = (antCenter.x - 0.5) * W;
+        targetView.y = (antCenter.y - 0.5) * H;
+        targetView.zoom = 2.5;
+
+        // Show stats panel
+        if (pnStatsPanelEl) {
+            pnStatsPanelEl.classList.remove('hidden');
+            requestAnimationFrame(() => pnStatsPanelEl.classList.add('visible'));
+        }
+
+        // Update all private network UI
+        updatePrivateNetUI();
+
+        // Select the triggering peer if provided
+        if (selectedPeerId) {
+            setTimeout(() => selectPrivatePeer(selectedPeerId), 300);
+        }
+    }
+
+    /** Exit private network mode: return to normal public view */
+    function exitPrivateNetMode() {
+        if (!privateNetMode) return;
+        privateNetMode = false;
+        privateNetSelectedPeer = null;
+        privateNetLinePeer = null;
+        document.body.classList.remove('private-net-mode');
+
+        // Hide private network UI
+        cachePnElements();
+        if (pnContainerEl) {
+            pnContainerEl.classList.remove('visible');
+            setTimeout(() => pnContainerEl.classList.add('hidden'), 500);
+        }
+        if (pnStatsPanelEl) {
+            pnStatsPanelEl.classList.remove('visible');
+            setTimeout(() => pnStatsPanelEl.classList.add('hidden'), 350);
+        }
+
+        // Clear state
+        hideTooltip();
+        clearMapDotFilter();
+        highlightedPeerId = null;
+        pinnedNode = null;
+
+        // Zoom back to world view
+        targetView.x = 0;
+        targetView.y = 0;
+        targetView.zoom = 1;
+    }
+
+    /** Select a specific private peer in Antarctica view */
+    function selectPrivatePeer(peerId) {
+        const node = nodes.find(n => n.peerId === peerId && n.alive);
+        if (!node) return;
+
+        privateNetSelectedPeer = node;
+        privateNetLinePeer = peerId;
+        highlightedPeerId = peerId;
+        pinnedNode = node;
+
+        // Zoom to the peer in Antarctica
+        const p = project(node.lon, node.lat);
+        targetView.x = (p.x - 0.5) * W;
+        targetView.y = (p.y - 0.5) * H;
+        targetView.zoom = 4;
+
+        // Show pinned tooltip near the peer after zoom settles
+        setTimeout(() => {
+            const offsets = getWrapOffsets();
+            for (const off of offsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+                if (s.x > -50 && s.x < W + 50 && s.y > -50 && s.y < H + 50) {
+                    showPinnedPeerDetail(node, s.x, s.y, false);
+                    hoveredNode = node;
+                    break;
+                }
+            }
+        }, 500);
+
+        // Update the stats panel to highlight this peer
+        updatePrivateNetUI();
+    }
+
+    /** Render the rectangular donut SVG for private networks */
+    function renderPnRectDonut() {
+        cachePnElements();
+        if (!pnRectSvg) return;
+
+        const privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+        const counts = { onion: 0, i2p: 0, cjdns: 0 };
+        for (const n of privateNodes) {
+            if (counts.hasOwnProperty(n.net)) counts[n.net]++;
+        }
+        const total = privateNodes.length;
+
+        // Update center count
+        if (pnCenterCount) pnCenterCount.textContent = total;
+
+        // Build segments with colors
+        const segments = [];
+        const netColors = {
+            onion: 'var(--net-tor, #da3633)',
+            i2p:   'var(--net-i2p, #d29922)',
+            cjdns: 'var(--net-cjdns, #bc8cff)'
+        };
+        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+        const netColorHex = {
+            onion: getComputedNetColor('--net-tor') || '#da3633',
+            i2p:   getComputedNetColor('--net-i2p') || '#d29922',
+            cjdns: getComputedNetColor('--net-cjdns') || '#bc8cff'
+        };
+
+        for (const net of ['onion', 'i2p', 'cjdns']) {
+            if (counts[net] > 0) {
+                segments.push({ net, count: counts[net], color: netColorHex[net], label: netLabels[net] });
+            }
+        }
+
+        // SVG rounded rectangle path
+        const w = 300, h = 180, rx = 20, ry = 20;
+        const strokeW = 18;
+        const innerW = w - strokeW, innerH = h - strokeW;
+        const cx = w / 2, cy = h / 2;
+
+        // Total perimeter of the rounded rectangle
+        const straightH = innerH - 2 * ry;
+        const straightW = innerW - 2 * rx;
+        const cornerArc = (Math.PI / 2) * ((rx + ry) / 2);
+        const perimeter = 2 * straightW + 2 * straightH + 4 * cornerArc;
+
+        // Build SVG content
+        let svg = '';
+
+        // Background rect ring
+        svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="${strokeW}"/>`;
+
+        if (total === 0 || segments.length === 0) {
+            // Empty state
+            svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="${strokeW}" stroke-dasharray="8 4"/>`;
+        } else {
+            // Draw colored segments using stroke-dasharray on the rounded rect
+            let offset = 0;
+            for (const seg of segments) {
+                const segLen = (seg.count / total) * perimeter;
+                svg += `<rect x="${strokeW/2}" y="${strokeW/2}" width="${innerW}" height="${innerH}" rx="${rx}" ry="${ry}" fill="none" stroke="${seg.color}" stroke-width="${strokeW}" stroke-dasharray="${segLen} ${perimeter - segLen}" stroke-dashoffset="${-offset}" opacity="0.85"/>`;
+                offset += segLen;
+            }
+        }
+
+        pnRectSvg.innerHTML = svg;
+
+        // Update legend
+        if (pnLegendEl) {
+            let legendHtml = '';
+            for (const seg of segments) {
+                legendHtml += `<div class="pn-legend-item" data-net="${seg.net}">`;
+                legendHtml += `<span class="pn-legend-dot" style="background:${seg.color}"></span>`;
+                legendHtml += `<span class="pn-legend-name">${seg.label}</span>`;
+                legendHtml += `<span class="pn-legend-count">${seg.count}</span>`;
+                legendHtml += `</div>`;
+            }
+            if (segments.length === 0) {
+                legendHtml = '<div class="pn-legend-item"><span class="pn-legend-name" style="color:var(--text-muted)">No private peers connected</span></div>';
+            }
+            pnLegendEl.innerHTML = legendHtml;
+        }
+    }
+
+    /** Get computed CSS color variable */
+    function getComputedNetColor(varName) {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        return raw || null;
+    }
+
+    /** Utility: format bytes for display */
+    function fmtBytesShort(bytes) {
+        if (!bytes || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0;
+        let v = bytes;
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+        return v.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    }
+
+    /** Update the private network stats panel */
+    function updatePnStatsPanel() {
+        cachePnElements();
+        if (!pnStatsBodyEl) return;
+
+        const ASD = window.ASDiversity;
+        const rawPeers = ASD ? ASD.getLastPeersRaw() : lastPeers;
+        const privatePeers = rawPeers.filter(p => PRIVATE_NETS.has(p.network));
+
+        if (privatePeers.length === 0) {
+            pnStatsBodyEl.innerHTML = '<div class="pn-stat-section"><div class="pn-stat-section-title">Overview</div><div class="pn-stat-row"><span class="pn-stat-label">No private network peers connected</span></div></div>';
+            return;
+        }
+
+        const counts = { onion: 0, i2p: 0, cjdns: 0 };
+        let inbound = 0, outbound = 0;
+        let totalPing = 0, pingCount = 0;
+        let totalBytesSent = 0, totalBytesRecv = 0;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const softwareMap = {};
+        const servicesMap = {};
+
+        for (const p of privatePeers) {
+            if (counts.hasOwnProperty(p.network)) counts[p.network]++;
+            if (p.direction === 'IN') inbound++; else outbound++;
+            if (p.ping_ms > 0) { totalPing += p.ping_ms; pingCount++; }
+            totalBytesSent += (p.bytessent || 0);
+            totalBytesRecv += (p.bytesrecv || 0);
+            const sw = p.subver || 'Unknown';
+            softwareMap[sw] = (softwareMap[sw] || 0) + 1;
+            const svc = p.services_abbrev || '—';
+            servicesMap[svc] = (servicesMap[svc] || 0) + 1;
+        }
+
+        // Find "most stable" (longest conntime)
+        let mostStable = null;
+        let longestConn = 0;
+        for (const p of privatePeers) {
+            if (p.conntime > 0) {
+                const dur = nowSec - p.conntime;
+                if (dur > longestConn) { longestConn = dur; mostStable = p; }
+            }
+        }
+
+        // Find "fastest" (lowest ping)
+        let fastest = null;
+        let lowestPing = Infinity;
+        for (const p of privatePeers) {
+            if (p.ping_ms > 0 && p.ping_ms < lowestPing) {
+                lowestPing = p.ping_ms;
+                fastest = p;
+            }
+        }
+
+        // Find most bytes sent/recv
+        let topSender = null, topSent = 0;
+        let topReceiver = null, topRecv = 0;
+        for (const p of privatePeers) {
+            if ((p.bytessent || 0) > topSent) { topSent = p.bytessent; topSender = p; }
+            if ((p.bytesrecv || 0) > topRecv) { topRecv = p.bytesrecv; topReceiver = p; }
+        }
+
+        const avgPing = pingCount > 0 ? Math.round(totalPing / pingCount) : null;
+        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+
+        let html = '';
+
+        // ── Overview ──
+        html += '<div class="pn-stat-section">';
+        html += '<div class="pn-stat-section-title">Overview</div>';
+        html += pnStatRow('Total Peers', privatePeers.length);
+        html += pnStatRow('Inbound', inbound);
+        html += pnStatRow('Outbound', outbound);
+        if (avgPing !== null) html += pnStatRow('Avg Ping', avgPing + 'ms');
+        html += pnStatRow('Bytes Sent', fmtBytesShort(totalBytesSent));
+        html += pnStatRow('Bytes Recv', fmtBytesShort(totalBytesRecv));
+        html += '</div>';
+
+        // ── Networks ──
+        html += '<div class="pn-stat-section">';
+        html += '<div class="pn-stat-section-title">Networks</div>';
+        for (const net of ['onion', 'i2p', 'cjdns']) {
+            if (counts[net] > 0) {
+                html += pnStatRow(netLabels[net], counts[net] + ' peer' + (counts[net] !== 1 ? 's' : ''));
+            }
+        }
+        html += '</div>';
+
+        // ── Software ──
+        const swEntries = Object.entries(softwareMap).sort((a, b) => b[1] - a[1]);
+        if (swEntries.length > 0) {
+            html += '<div class="pn-stat-section">';
+            html += '<div class="pn-stat-section-title">Software</div>';
+            for (const [sw, cnt] of swEntries) {
+                html += pnStatRow(sw, cnt);
+            }
+            html += '</div>';
+        }
+
+        // ── Services ──
+        const svcEntries = Object.entries(servicesMap).sort((a, b) => b[1] - a[1]);
+        if (svcEntries.length > 0) {
+            html += '<div class="pn-stat-section">';
+            html += '<div class="pn-stat-section-title">Services</div>';
+            for (const [svc, cnt] of svcEntries) {
+                html += pnStatRow(svc, cnt);
+            }
+            html += '</div>';
+        }
+
+        // ── Highlights ──
+        html += '<div class="pn-stat-section">';
+        html += '<div class="pn-stat-section-title">Highlights</div>';
+        if (mostStable) {
+            html += pnPeerHighlight('Most Stable', mostStable, fmtDurationShort(longestConn));
+        }
+        if (fastest) {
+            html += pnPeerHighlight('Fastest Ping', fastest, lowestPing + 'ms');
+        }
+        if (topSender && topSent > 0) {
+            html += pnPeerHighlight('Most Bytes Sent', topSender, fmtBytesShort(topSent));
+        }
+        if (topReceiver && topRecv > 0) {
+            html += pnPeerHighlight('Most Bytes Recv', topReceiver, fmtBytesShort(topRecv));
+        }
+        html += '</div>';
+
+        pnStatsBodyEl.innerHTML = html;
+
+        // Bind click handlers on peer cards
+        pnStatsBodyEl.querySelectorAll('.pn-peer-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const pid = parseInt(card.dataset.peerId);
+                if (pid) selectPrivatePeer(pid);
+            });
+        });
+    }
+
+    function pnStatRow(label, value) {
+        return `<div class="pn-stat-row"><span class="pn-stat-label">${label}</span><span class="pn-stat-value">${value}</span></div>`;
+    }
+
+    /** Format a duration in seconds to short human-readable */
+    function fmtDurationShort(sec) {
+        if (sec < 60) return sec + 's';
+        if (sec < 3600) return Math.floor(sec / 60) + 'm';
+        if (sec < 86400) return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+        return Math.floor(sec / 86400) + 'd ' + Math.floor((sec % 86400) / 3600) + 'h';
+    }
+
+    /** Build a clickable peer highlight card for stats panel */
+    function pnPeerHighlight(title, peer, valueStr) {
+        const netColors = { onion: 'var(--net-tor)', i2p: 'var(--net-i2p)', cjdns: 'var(--net-cjdns)' };
+        const netLabels = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
+        const netKey = peer.network || 'onion';
+        const dotColor = netColors[netKey] || 'var(--accent)';
+        const netLabel = netLabels[netKey] || netKey.toUpperCase();
+
+        let addrShort = peer.addr || '—';
+        if (addrShort.length > 22) addrShort = addrShort.substring(0, 18) + '...';
+
+        let html = `<div class="pn-peer-card" data-peer-id="${peer.id}">`;
+        html += `<div class="pn-stat-row" style="margin-bottom:2px"><span class="pn-stat-label">${title}</span><span class="pn-stat-highlight">${valueStr}</span></div>`;
+        html += `<div class="pn-peer-card-header">`;
+        html += `<span class="pn-peer-card-dot" style="background:${dotColor}"></span>`;
+        html += `<span class="pn-peer-card-id">#${peer.id}</span>`;
+        html += `<span class="pn-peer-card-net" style="color:${dotColor};border-color:${dotColor}">${netLabel}</span>`;
+        html += `</div>`;
+        html += `<div class="pn-peer-card-meta">${addrShort}</div>`;
+        html += `</div>`;
+        return html;
+    }
+
+    /** Update all private network UI (donut + stats) */
+    function updatePrivateNetUI() {
+        if (!privateNetMode) return;
+        renderPnRectDonut();
+        updatePnStatsPanel();
+    }
+
+    /** Draw "PRIVATE NETWORKS" text across Antarctica on the canvas */
+    function drawPrivateNetworksText() {
+        if (!privateNetMode) return;
+
+        // Position the text across Antarctica
+        const textLat = -78;
+        const positions = [
+            { lon: -30, text: 'P R I V A T E' },
+            { lon: -30, text2: 'N E T W O R K S' }
+        ];
+
+        // Main title
+        const s1 = worldToScreen(-10, -75);
+        const s2 = worldToScreen(-10, -81);
+
+        const fontSize1 = Math.max(12, Math.min(48, 18 * view.zoom));
+        const fontSize2 = Math.max(10, Math.min(40, 15 * view.zoom));
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Big "PRIVATE" text
+        ctx.font = `900 ${fontSize1}px 'Cinzel', serif`;
+        ctx.fillStyle = 'rgba(240, 136, 62, 0.35)';
+        ctx.shadowColor = 'rgba(240, 136, 62, 0.2)';
+        ctx.shadowBlur = 20;
+        ctx.fillText('P R I V A T E', s1.x, s1.y);
+
+        // "NETWORKS" below
+        ctx.font = `700 ${fontSize2}px 'Cinzel', serif`;
+        ctx.fillStyle = 'rgba(240, 136, 62, 0.25)';
+        ctx.shadowBlur = 15;
+        ctx.fillText('N E T W O R K S', s2.x, s2.y);
+
+        // Subtitle
+        const s3 = worldToScreen(-10, -84);
+        const fontSize3 = Math.max(6, Math.min(14, 5 * view.zoom));
+        ctx.font = `600 ${fontSize3}px 'JetBrains Mono', monospace`;
+        ctx.fillStyle = 'rgba(240, 136, 62, 0.15)';
+        ctx.shadowBlur = 8;
+        ctx.fillText('NOT REAL LOCATIONS', s3.x, s3.y);
+
+        ctx.restore();
+    }
+
+    /** Draw a line from the rect donut to a selected private peer */
+    function drawPrivateNetLine(wrapOffsets) {
+        if (!privateNetMode || !privateNetLinePeer) return;
+        const node = nodes.find(n => n.peerId === privateNetLinePeer && n.alive);
+        if (!node) return;
+
+        // Origin: center of the pn-rect-wrap element
+        cachePnElements();
+        const rectWrap = document.getElementById('pn-rect-wrap');
+        if (!rectWrap) return;
+        const rect = rectWrap.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const originX = (rect.left + rect.width / 2 - canvasRect.left) * (W / canvasRect.width);
+        const originY = (rect.bottom - canvasRect.top) * (H / canvasRect.height);
+
+        // Find best screen position for the node
+        let bestS = null;
+        let bestDist = Infinity;
+        for (const off of wrapOffsets) {
+            const s = worldToScreen(node.lon + off, node.lat);
+            const dx = s.x - W / 2;
+            const dy = s.y - H / 2;
+            const d = dx * dx + dy * dy;
+            if (d < bestDist) { bestDist = d; bestS = s; }
+        }
+        if (!bestS) return;
+
+        // Draw the line
+        const netColorMap = {
+            onion: { r: 218, g: 54, b: 51 },
+            i2p:   { r: 210, g: 153, b: 34 },
+            cjdns: { r: 188, g: 140, b: 255 }
+        };
+        const c = netColorMap[node.net] || { r: 240, g: 136, b: 62 };
+
+        ctx.save();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},0.5)`;
+        ctx.setLineDash([6, 4]);
+
+        // Curved line
+        const midX = (originX + bestS.x) / 2;
+        const midY = Math.min(originY, bestS.y) - 30;
+
+        ctx.beginPath();
+        ctx.moveTo(originX, originY);
+        ctx.quadraticCurveTo(midX, midY, bestS.x, bestS.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Small dot at the end
+        ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.7)`;
+        ctx.beginPath();
+        ctx.arc(bestS.x, bestS.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1810,6 +2322,9 @@
 
             // Refresh the peer table panel
             renderPeerTable();
+
+            // [PRIVATE-NET] Update private network UI if in that mode
+            updatePrivateNetUI();
 
             // Reset countdown timer
             lastPeerFetchTime = Date.now();
@@ -4496,11 +5011,13 @@
         const peerId = parseInt(row.dataset.id);
         const rowNet = row.dataset.net;
 
-        // Private networks: don't pan/zoom, show info popup instead
+        // Private networks: enter private network mode and zoom to Antarctica
         const isPrivateNet = (rowNet === 'onion' || rowNet === 'i2p' || rowNet === 'cjdns');
         if (isPrivateNet) {
-            const netName = NET_DISPLAY[rowNet] || rowNet.toUpperCase();
-            showPrivateNetPopup(`${netName} peers cannot be geolocated and are placed in Antarctica for visualization. Minimize the peer table to see them on the map. You can toggle this in Table Settings (gear icon).`);
+            enterPrivateNetMode(peerId);
+            highlightTableRow(peerId, true);
+            row.classList.add('row-selected');
+            setTimeout(() => row.classList.remove('row-selected'), 1500);
             return;
         }
 
@@ -4814,18 +5331,34 @@
         drawStateLabels();
         // 8. City labels (zoom >= 6.0, after states visible)
         drawCities();
-        // 9. Connection mesh lines between nearby peers
-        drawConnectionLines(now, wrapOffsets);
+        // [PRIVATE-NET] Draw "PRIVATE NETWORKS" text across Antarctica
+        if (privateNetMode) {
+            drawPrivateNetworksText();
+        }
+
+        // 9. Connection mesh lines between nearby peers (skip in private net mode)
+        if (!privateNetMode) {
+            drawConnectionLines(now, wrapOffsets);
+        }
 
         // [AS-DIVERSITY] 9b. Draw lines from map center to AS peers (hover/selection)
-        if (asLineGroups && asLineGroups.length > 0) {
-            drawAsLinesAll(wrapOffsets);
-        } else if (asLinePeerIds && asLinePeerIds.length > 0 && asLineColor) {
-            drawAsLines(wrapOffsets);
+        if (!privateNetMode) {
+            if (asLineGroups && asLineGroups.length > 0) {
+                drawAsLinesAll(wrapOffsets);
+            } else if (asLinePeerIds && asLinePeerIds.length > 0 && asLineColor) {
+                drawAsLines(wrapOffsets);
+            }
+        }
+
+        // [PRIVATE-NET] Draw line from rect donut to selected private peer
+        if (privateNetMode) {
+            drawPrivateNetLine(wrapOffsets);
         }
 
         // 10. Peer nodes (alive + fading out)
         for (const node of nodes) {
+            // In private net mode, only draw private network peers
+            if (privateNetMode && !PRIVATE_NETS.has(node.net)) continue;
             drawNode(node, now, wrapOffsets);
         }
 
@@ -4916,9 +5449,36 @@
 
     window.addEventListener('mouseup', (e) => {
         if (dragging && !dragMoved) {
+            // [PRIVATE-NET] In private net mode, handle clicks on private peers
+            if (privateNetMode) {
+                const group = findNodesAtScreen(e.clientX, e.clientY);
+                const privateGroup = group.filter(n => PRIVATE_NETS.has(n.net));
+                if (privateGroup.length > 0) {
+                    selectPrivatePeer(privateGroup[0].peerId);
+                } else {
+                    // Clicked empty space in private mode — deselect peer
+                    privateNetSelectedPeer = null;
+                    privateNetLinePeer = null;
+                    pinnedNode = null;
+                    highlightedPeerId = null;
+                    hideTooltip();
+                }
+                dragging = false;
+                return;
+            }
+
             // This was a click, not a drag
             const group = findNodesAtScreen(e.clientX, e.clientY);
             if (group.length > 0) {
+                // [PRIVATE-NET] If clicking a private peer on the public map, enter private net mode
+                if (group.length === 1 && PRIVATE_NETS.has(group[0].net)) {
+                    enterPrivateNetMode(group[0].peerId);
+                    dragging = false;
+                    return;
+                }
+                // If a mixed group of private/public peers, filter to just public for normal handling
+                // (private peers in multi-dot groups still trigger individual handling above)
+
                 if (group.length === 1) {
                     const node = group[0];
                     // If clicking the same peer that's already shown in detail, close popup instead
@@ -5079,9 +5639,13 @@
         targetView.zoom = clamp(targetView.zoom / CFG.zoomStep, CFG.minZoom, CFG.maxZoom);
     });
     document.getElementById('zoom-reset').addEventListener('click', () => {
-        targetView.x = 0;
-        targetView.y = 0;
-        targetView.zoom = 1;
+        if (privateNetMode) {
+            exitPrivateNetMode();
+        } else {
+            targetView.x = 0;
+            targetView.y = 0;
+            targetView.zoom = 1;
+        }
     });
 
     // ═══════════════════════════════════════════════════════════
@@ -6391,6 +6955,33 @@
                 openDisplaySettingsPopup(topbarStatusMsg);
             });
         }
+
+        // [PRIVATE-NET] Exit button on rectangular donut
+        const pnExitBtn = document.getElementById('pn-exit-btn');
+        if (pnExitBtn) {
+            pnExitBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exitPrivateNetMode();
+            });
+        }
+
+        // [PRIVATE-NET] Stats panel close button
+        const pnStatsClose = document.getElementById('pn-stats-close');
+        if (pnStatsClose) {
+            pnStatsClose.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exitPrivateNetMode();
+            });
+        }
+
+        // [PRIVATE-NET] Double-click on canvas to exit private net mode
+        canvas.addEventListener('dblclick', (e) => {
+            if (privateNetMode) {
+                e.preventDefault();
+                e.stopPropagation();
+                exitPrivateNetMode();
+            }
+        });
 
     }
 

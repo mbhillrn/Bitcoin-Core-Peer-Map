@@ -125,6 +125,30 @@
     <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
 
+    <!-- [PRIVATE-NET] Rectangular donut for private networks — hidden by default -->
+    <div id="pn-container" class="pn-container hidden">
+        <div class="pn-title">Private Networks</div>
+        <div class="pn-rect-wrap" id="pn-rect-wrap">
+            <svg id="pn-rect-donut" class="pn-rect-donut" viewBox="0 0 300 180"></svg>
+            <div id="pn-rect-center" class="pn-rect-center">
+                <div class="pn-center-label">PRIVATE</div>
+                <div class="pn-center-count" id="pn-center-count">0</div>
+                <div class="pn-center-sub">peers</div>
+            </div>
+            <button class="pn-exit-btn" id="pn-exit-btn" title="Return to public network view">&times;</button>
+        </div>
+        <div id="pn-legend" class="pn-legend"></div>
+    </div>
+
+    <!-- [PRIVATE-NET] Stats panel for private networks — slides in from right -->
+    <div id="pn-stats-panel" class="pn-stats-panel hidden">
+        <div class="pn-stats-header">
+            <span class="pn-stats-title">Private Network Stats</span>
+            <button class="pn-stats-close" id="pn-stats-close" title="Close">&times;</button>
+        </div>
+        <div class="pn-stats-body" id="pn-stats-body"></div>
+    </div>
+
     <!-- Antarctica modal (shown on every page load) -->
     <div id="antarctica-modal-overlay" class="ant-modal-overlay hidden">
         <div id="antarctica-note" class="ant-modal">
