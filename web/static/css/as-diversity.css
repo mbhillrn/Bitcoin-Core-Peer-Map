@@ -51,13 +51,21 @@
     line-height: 1.1;
     transition: opacity 0.4s ease, max-height 0.4s ease, margin 0.4s ease;
     overflow: hidden;
-    max-height: 40px;
+    max-height: 52px;
 }
 .as-title-peer {
     color: var(--logo-primary);
 }
 .as-title-provider {
     color: var(--logo-primary);
+}
+.as-title-subtitle {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--logo-accent, #7ec8e3);
+    font-weight: 600;
+    margin-top: 1px;
 }
 
 /* ==========================================================
@@ -473,22 +481,24 @@ body.insight-rect-active .as-focused-close {
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-    pointer-events: auto;
     width: 260px;
-    max-height: 260px;
-    overflow-y: auto;
-    /* Hidden by default, revealed on hover or selection */
+    /* Collapsed by default — no vertical space taken */
+    max-height: 0;
+    overflow: hidden;
     opacity: 0;
     transform: translateY(-4px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease,
+                max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: none;
 }
-/* Show legend when hovering the donut area */
-.as-diversity-container:hover .as-legend,
+/* Show legend when hovering the donut area (but NOT when only hovering the mini private donut) */
+.as-diversity-container:hover:not(:has(.pn-mini-donut:hover)) .as-legend,
 .as-diversity-container.as-legend-visible .as-legend {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
+    max-height: 260px;
+    overflow-y: auto;
 }
 /* "TOP 8" header above the legend list */
 .as-legend-header {
@@ -1710,4 +1720,600 @@ body.as-panel-open .peer-detail-popup {
     background: rgba(88, 166, 255, 0.15);
     border-color: rgba(88, 166, 255, 0.4);
     color: var(--text-primary, #c9d1d9);
+}
+
+/* ============================================================
+   PRIVATE NETWORKS VIEW — Rectangular donut + stats panel
+   ============================================================ */
+
+/* ==========================================================
+   PN-MINI. Mini private donut beneath the public AS donut
+   ========================================================== */
+.pn-mini-donut {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin-top: 8px;
+    cursor: pointer;
+    pointer-events: auto;
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.pn-mini-donut.visible {
+    opacity: 0.88;
+    transform: scale(1);
+}
+.pn-mini-donut.hidden {
+    display: none;
+}
+.pn-mini-donut:hover {
+    opacity: 1;
+}
+.pn-mini-label {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--logo-primary, #f0883e);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: -4px;
+}
+.pn-mini-subtitle {
+    display: block;
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    color: var(--logo-accent, #7ec8e3);
+    font-weight: 600;
+    margin-top: 1px;
+}
+.pn-mini-donut-ring {
+    position: relative;
+    width: 160px;
+    height: 160px;
+}
+.pn-mini-svg {
+    width: 160px;
+    height: 160px;
+}
+.pn-mini-count {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text-primary, #c9d1d9);
+    pointer-events: none;
+}
+/* Mini legend — network breakdown list shown on hover */
+.pn-mini-legend {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 160px;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+.pn-mini-donut:hover .pn-mini-legend {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.pn-mini-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.pn-mini-legend-item:hover {
+    background: rgba(240, 136, 62, 0.1);
+}
+.pn-mini-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.pn-mini-legend-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary, #8b949e);
+    flex: 1;
+}
+.pn-mini-legend-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary, #c9d1d9);
+}
+/* Hide mini donut when in focused mode or private mode */
+body.donut-focused .pn-mini-donut,
+body.private-net-mode .pn-mini-donut {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    max-height: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* ==========================================================
+   PN1. Container — positioned like the AS diversity container
+   ========================================================== */
+.pn-container {
+    position: fixed;
+    top: 52px;
+    right: 14px;
+    left: auto;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    transition: opacity 0.5s ease, top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pn-container.visible {
+    opacity: 1;
+}
+.pn-container.hidden {
+    display: none;
+}
+/* Focused state: segment selected or peer selected → move donut to top-center */
+.pn-container.pn-focused {
+    top: 10px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%) scale(0.72);
+}
+/* When detail panel is open, push donut away from right edge */
+body.pn-panel-open .pn-container:not(.pn-focused) {
+    right: 334px;
+}
+/* Focused mode with panel open: center between left edge and panel */
+body.pn-panel-open .pn-container.pn-focused {
+    left: calc((100vw - 320px) / 2);
+}
+
+/* ==========================================================
+   PN2. Title — "Private Networks" above the circular donut
+   ========================================================== */
+.pn-title {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    text-align: center;
+    color: var(--logo-primary, #f0883e);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    margin-bottom: -6px;
+    pointer-events: auto;
+    line-height: 1.1;
+}
+.pn-title-subtitle {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--logo-accent, #7ec8e3);
+    font-weight: 600;
+    margin-top: 1px;
+}
+
+/* ==========================================================
+   PN3. Circular Donut — SVG arc segments (like AS diversity)
+   ========================================================== */
+.pn-donut-wrap {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    flex-shrink: 0;
+    pointer-events: auto;
+    background: radial-gradient(circle at center, rgba(13, 17, 23, 0.95) 35%, rgba(13, 17, 23, 0.7) 60%, transparent 75%);
+    border-radius: 50%;
+}
+.pn-donut-svg {
+    width: 260px;
+    height: 260px;
+}
+.pn-donut-segment {
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+}
+.pn-donut-segment:hover {
+    filter: brightness(1.2);
+}
+.pn-donut-segment.dimmed {
+    opacity: 0.3;
+}
+
+/* Center label inside the circular donut */
+.pn-donut-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    line-height: 1.2;
+}
+.pn-center-label {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--logo-primary, #f0883e);
+    transition: color 0.2s ease;
+}
+.pn-center-count {
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 38px;
+    font-weight: 800;
+    color: var(--text-primary, #c9d1d9);
+    line-height: 1;
+    margin: 4px 0;
+    transition: color 0.2s ease, font-size 0.2s ease;
+}
+.pn-center-sub {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted, #8b949e);
+    transition: color 0.2s ease;
+}
+
+/* Exit button on donut */
+.pn-exit-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 100;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid rgba(240, 136, 62, 0.4);
+    color: var(--logo-primary, #f0883e);
+    font-size: 16px;
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    line-height: 24px;
+    text-align: center;
+    padding: 0;
+}
+.pn-exit-btn:hover {
+    background: rgba(240, 136, 62, 0.15);
+    border-color: rgba(240, 136, 62, 0.7);
+    transform: scale(1.1);
+}
+
+/* ==========================================================
+   PN4. Legend beneath donut
+   ========================================================== */
+.pn-legend {
+    display: none; /* Network selection happens via donut segments, not a separate legend */
+}
+.pn-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    color: var(--text-secondary, #8b949e);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+.pn-legend-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.pn-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.pn-legend-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pn-legend-count {
+    font-weight: 700;
+    color: var(--text-primary, #c9d1d9);
+}
+
+/* ==========================================================
+   PN5. Detail Panel — slides in from right (like AS detail panel)
+   ========================================================== */
+.pn-detail-panel {
+    position: fixed;
+    top: 46px;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    z-index: 260;
+    background: var(--bg-surface, rgba(22, 27, 34, 0.97));
+    border-left: 1px solid rgba(240, 136, 62, 0.2);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.pn-detail-panel.visible {
+    transform: translateX(0);
+}
+.pn-detail-panel.hidden {
+    pointer-events: none;
+}
+
+/* Detail panel header */
+.pn-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(240, 136, 62, 0.15);
+    flex-shrink: 0;
+}
+.pn-detail-header-info {
+    flex: 1;
+    min-width: 0;
+}
+.pn-detail-net-name {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-primary, #c9d1d9);
+}
+.pn-detail-meta {
+    font-size: 11px;
+    color: var(--text-muted, #8b949e);
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    margin-top: 2px;
+}
+.pn-detail-close {
+    background: none;
+    border: 1px solid rgba(240, 136, 62, 0.3);
+    color: var(--text-muted, #8b949e);
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    line-height: 26px;
+    text-align: center;
+    padding: 0;
+    flex-shrink: 0;
+}
+.pn-detail-close:hover {
+    background: rgba(240, 136, 62, 0.15);
+    color: var(--text-primary, #c9d1d9);
+}
+
+/* Detail panel body — scrollable */
+.pn-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 16px;
+}
+
+/* Section titles inside detail panel — reuse modal-section-title
+   but override color to match orange theme */
+.pn-detail-body .modal-section-title {
+    color: var(--logo-primary, #f0883e);
+    text-decoration-color: rgba(240, 136, 62, 0.3);
+}
+
+/* Interactive rows in the detail panel */
+.pn-interactive-row {
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease, border-left 0.15s ease;
+    border-left: 2px solid transparent;
+}
+.pn-interactive-row:hover {
+    background: rgba(240, 136, 62, 0.1);
+    border-left-color: var(--logo-primary, #f0883e);
+}
+.pn-interactive-row.pn-sub-filter-active {
+    background: rgba(240, 136, 62, 0.16);
+    border-left-color: var(--logo-primary, #f0883e);
+}
+
+/* Empty state inside panel */
+.pn-panel-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted, #8b949e);
+    font-size: 12px;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+}
+
+/* Insight rows — clickable stat highlights */
+.pn-insight-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 11px;
+}
+.pn-insight-row:hover {
+    background: rgba(240, 136, 62, 0.12);
+}
+.pn-insight-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+}
+.pn-insight-label {
+    color: var(--logo-primary, #f0883e);
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 90px;
+}
+.pn-insight-val {
+    color: var(--text-secondary, #8b949e);
+    flex: 1;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Search bar inside detail panel */
+.pn-search-wrap {
+    margin-bottom: 10px;
+}
+.pn-search-input {
+    width: 100%;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(240, 136, 62, 0.25);
+    border-radius: 6px;
+    color: var(--text-primary, #c9d1d9);
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+.pn-search-input:focus {
+    border-color: var(--logo-primary, #f0883e);
+}
+.pn-search-input::placeholder {
+    color: var(--text-muted, #8b949e);
+}
+
+/* ==========================================================
+   PN5b. Push effect — when PN detail panel is open, shift content
+   ========================================================== */
+body.pn-panel-open .peer-panel {
+    right: 320px;
+}
+body.pn-panel-open .footer {
+    right: 320px;
+}
+body.pn-panel-open #worldmap {
+    right: 320px;
+}
+body.private-net-mode .pn-detail-panel {
+    z-index: 260;
+}
+body.private-net-mode .peer-panel {
+    z-index: 80;
+}
+
+/* ==========================================================
+   PN5c. Sub-tooltip — private net variant (orange accent)
+   ========================================================== */
+.pn-sub-tooltip {
+    border-color: rgba(240, 136, 62, 0.25) !important;
+}
+.pn-sub-tooltip .pn-sub-tt-title {
+    font-family: var(--font-data, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--logo-primary, #f0883e);
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(240, 136, 62, 0.15);
+}
+.pn-sub-tooltip .as-sub-tt-peer {
+    cursor: pointer;
+}
+.pn-sub-tooltip .as-sub-tt-peer:hover {
+    background: rgba(240, 136, 62, 0.1);
+}
+.pn-sub-tooltip .pn-sub-tt-id-link {
+    color: var(--logo-primary, #f0883e);
+    cursor: pointer;
+}
+.pn-sub-tooltip .pn-sub-tt-id-link:hover {
+    text-decoration: underline;
+}
+.pn-sub-sub-tooltip {
+    z-index: 330 !important;
+}
+
+/* ==========================================================
+   PN6. Body class for private network mode
+   ========================================================== */
+body.private-net-mode .as-diversity-container {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.3s ease;
+}
+body.private-net-mode .as-detail-panel {
+    display: none !important;
+}
+body.private-net-mode .as-tooltip {
+    display: none !important;
+}
+body.private-net-mode .peer-popup {
+    display: none !important;
+}
+
+/* ==========================================================
+   PN6b. Private peer big popup — full detail in private net mode
+   ========================================================== */
+body.private-net-mode .pn-big-popup {
+    display: flex !important;
+    opacity: 0;
+    left: 260px;
+    top: 160px;
+}
+body.private-net-mode .pn-big-popup.visible {
+    opacity: 1;
+}
+
+/* ==========================================================
+   PN7. Light theme overrides
+   ========================================================== */
+body.theme-light .pn-container { }
+body.theme-light .pn-detail-panel {
+    border-left-color: rgba(240, 136, 62, 0.25);
+}
+body.theme-light .pn-exit-btn {
+    background: rgba(255, 255, 255, 0.9);
+}
+body.theme-light .pn-detail-close {
+    background: rgba(255, 255, 255, 0.5);
 }

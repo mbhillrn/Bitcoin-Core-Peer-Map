@@ -1,3 +1,5 @@
+v7.6.0 — New Private Network Mode for Tor, I2P, and CJDNS peers with dedicated donut visualization, overview panel, and Antarctica map zoom. Flight deck network chips now toggle between public and private modes. Collapsible AS legend keeps the right-side layout clean.
+
 v7.5.4 — Added network badge, resize handle, and 20 new getpeerinfo fields to the peer detail popup. Rewrote README opening and added full peer popup documentation with new screenshot.
 
 v7.5.3 — Fixed donut chart not updating immediately when clicking category rows or toggling connection grid items. Others popup now stays open when selecting a sub-provider for easy switching, with proper map line restoration on hover.

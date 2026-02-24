@@ -102,7 +102,7 @@
 
     <!-- [AS-DIVERSITY] Donut — fixed upper-right corner of map, always visible -->
     <div id="as-diversity-container" class="as-diversity-container">
-        <div class="as-donut-title" id="as-donut-title" title="Autonomous System Peer Service Provider Analysis"><span class="as-title-peer">Peer</span> <span class="as-title-provider">Service Providers</span></div>
+        <div class="as-donut-title" id="as-donut-title" title="Autonomous System Peer Service Provider Analysis"><span class="as-title-peer">Peer</span> <span class="as-title-provider">Service Providers</span><span class="as-title-subtitle" id="as-title-subtitle">(IPv4/IPv6)</span></div>
         <button class="as-focused-close" id="as-focused-close" title="Back">&#x2192;</button>
         <div class="as-donut-wrap" id="as-donut-wrap">
             <svg id="as-donut" class="as-donut" viewBox="0 0 260 260"></svg>
@@ -117,6 +117,15 @@
             <div class="as-loading">Scanning providers&hellip;</div>
         </div>
         <div id="as-legend" class="as-legend"></div>
+        <!-- Mini private donut — shown when private peers exist, click to enter private mode -->
+        <div id="pn-mini-donut" class="pn-mini-donut hidden">
+            <div class="pn-mini-label">Private Networks<span class="pn-mini-subtitle">(TOR/I2P/CJDNS)</span></div>
+            <div class="pn-mini-donut-ring">
+                <svg id="pn-mini-svg" class="pn-mini-svg" viewBox="0 0 160 160"></svg>
+                <div class="pn-mini-count" id="pn-mini-count">0</div>
+            </div>
+            <div id="pn-mini-legend" class="pn-mini-legend"></div>
+        </div>
     </div>
 
     <!-- [AS-DIVERSITY] Hover tooltip -->
@@ -124,6 +133,33 @@
 
     <!-- Net popover -->
     <div id="net-popover" class="net-popover hidden"></div>
+
+    <!-- [PRIVATE-NET] Circular donut for private networks — hidden by default -->
+    <div id="pn-container" class="pn-container hidden">
+        <div class="pn-title">Private Networks<span class="pn-title-subtitle">(TOR/I2P/CJDNS)</span></div>
+        <div class="pn-donut-wrap" id="pn-donut-wrap">
+            <svg id="pn-donut-svg" class="pn-donut-svg" viewBox="0 0 260 260"></svg>
+            <div id="pn-donut-center" class="pn-donut-center">
+                <div class="pn-center-label" id="pn-center-label">PRIVATE</div>
+                <div class="pn-center-count" id="pn-center-count">0</div>
+                <div class="pn-center-sub" id="pn-center-sub">peers</div>
+            </div>
+            <button class="pn-exit-btn" id="pn-exit-btn" title="Return to public network view">&times;</button>
+        </div>
+        <div id="pn-legend" class="pn-legend"></div>
+    </div>
+
+    <!-- [PRIVATE-NET] Detail panel — slides in from right, like AS detail panel -->
+    <div id="pn-detail-panel" class="pn-detail-panel hidden">
+        <div class="pn-detail-header" id="pn-detail-header">
+            <div class="pn-detail-header-info">
+                <div class="pn-detail-net-name" id="pn-detail-net-name"></div>
+                <div class="pn-detail-meta" id="pn-detail-meta"></div>
+            </div>
+            <button class="pn-detail-close" id="pn-detail-close" title="Close">&times;</button>
+        </div>
+        <div class="pn-detail-body" id="pn-detail-body"></div>
+    </div>
 
     <!-- Antarctica modal (shown on every page load) -->
     <div id="antarctica-modal-overlay" class="ant-modal-overlay hidden">
