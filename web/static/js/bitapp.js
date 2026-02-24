@@ -672,6 +672,8 @@
     let privateNetSelectedPeer = null;   // node object of selected private peer (or null)
     let privateNetLinePeer = null;       // peer ID to draw line to in private mode
     let pnBigPopupEl = null;             // DOM element for the private peer big detail popup
+    let pnMiniHover = false;             // true when hovering the mini donut in default view (draws lines)
+    let pnSavedEnabledNets = null;       // saved badge filter state before entering private mode
     const PRIVATE_NETS = new Set(['onion', 'i2p', 'cjdns']);
 
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
@@ -1551,6 +1553,16 @@
         pnSelectedNet = null;
         pnDonutFocused = false;
         hidePnSubTooltip();
+        pnMiniHover = false;
+
+        // Switch badge filters to only active private networks
+        pnSavedEnabledNets = new Set(enabledNets);
+        const activePrivateNets = new Set();
+        for (const n of nodes) {
+            if (n.alive && PRIVATE_NETS.has(n.net)) activePrivateNets.add(n.net);
+        }
+        enabledNets = activePrivateNets.size > 0 ? activePrivateNets : new Set(PRIVATE_NETS);
+        updateBadgeStates();
 
         // Show donut container — centered at top with panel open
         cachePnElements();
@@ -1561,11 +1573,11 @@
             });
         }
 
-        // Zoom to Antarctica
-        const antCenter = project(40, -72);
+        // Zoom to Antarctica — high enough that the clamp allows centering on -68° lat
+        const antCenter = project(40, -68);
         targetView.x = (antCenter.x - 0.5) * W;
         targetView.y = (antCenter.y - 0.5) * H;
-        targetView.zoom = 2.5;
+        targetView.zoom = 3.5;
 
         // Focus the donut and open overview panel
         pnDonutFocused = true;
@@ -1610,10 +1622,19 @@
         highlightedPeerId = null;
         pinnedNode = null;
 
+        // Restore badge filters to All (or previous state)
+        enabledNets = new Set(ALL_NETS);
+        pnSavedEnabledNets = null;
+        updateBadgeStates();
+
         // Zoom back to world view
         targetView.x = 0;
         targetView.y = 0;
         targetView.zoom = 1;
+
+        // Immediately re-show the mini donut (don't wait for next poll cycle)
+        renderPnMiniDonut();
+        renderPeerTable();
     }
 
     /** Select a specific private peer in Antarctica view */
@@ -2536,12 +2557,20 @@
         // Show mini donut
         miniWrap.classList.remove('hidden');
         requestAnimationFrame(() => miniWrap.classList.add('visible'));
-        if (miniCount) miniCount.textContent = total;
 
         // Build mini segments
         const counts = { onion: 0, i2p: 0, cjdns: 0 };
         for (const n of privateNodes) {
             if (counts.hasOwnProperty(n.net)) counts[n.net]++;
+        }
+
+        // Mini center text: show active network labels (e.g. "Tor / I2P") instead of just a count
+        if (miniCount) {
+            const activeLabels = [];
+            for (const net of ['onion', 'i2p', 'cjdns']) {
+                if (counts[net] > 0) activeLabels.push(PN_NET_LABELS[net]);
+            }
+            miniCount.textContent = activeLabels.length > 0 ? activeLabels.join(' / ') : total;
         }
         const segs = [];
         for (const net of ['onion', 'i2p', 'cjdns']) {
@@ -2649,60 +2678,72 @@
         ctx.restore();
     }
 
-    /** Draw a line from the rect donut to a selected private peer */
-    function drawPrivateNetLine(wrapOffsets) {
-        if (!privateNetMode || !privateNetLinePeer) return;
-        const node = nodes.find(n => n.peerId === privateNetLinePeer && n.alive);
-        if (!node) return;
+    /** Network type → RGB color for private-net lines */
+    const PN_LINE_COLORS = {
+        onion: { r: 218, g: 54, b: 51 },
+        i2p:   { r: 210, g: 153, b: 34 },
+        cjdns: { r: 188, g: 140, b: 255 }
+    };
 
-        // Origin: center of the pn-donut-wrap element
-        cachePnElements();
-        const rectWrap = document.getElementById('pn-donut-wrap');
-        if (!rectWrap) return;
-        const rect = rectWrap.getBoundingClientRect();
+    /** Draw lines from the donut to ALL private peers (or just the selected one).
+     *  Also used by the mini donut hover in default view. */
+    function drawPrivateNetLines(wrapOffsets) {
+        if (!privateNetMode && !pnMiniHover) return;
+
+        // Get the correct origin element — big donut in private mode, mini donut in default
+        const originElId = privateNetMode ? 'pn-donut-wrap' : 'pn-mini-donut';
+        const originEl = document.getElementById(originElId);
+        if (!originEl) return;
+        const rect = originEl.getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
         const originX = (rect.left + rect.width / 2 - canvasRect.left) * (W / canvasRect.width);
         const originY = (rect.bottom - canvasRect.top) * (H / canvasRect.height);
 
-        // Find best screen position for the node
-        let bestS = null;
-        let bestDist = Infinity;
-        for (const off of wrapOffsets) {
-            const s = worldToScreen(node.lon + off, node.lat);
-            const dx = s.x - W / 2;
-            const dy = s.y - H / 2;
-            const d = dx * dx + dy * dy;
-            if (d < bestDist) { bestDist = d; bestS = s; }
-        }
-        if (!bestS) return;
+        // Collect nodes to draw lines to
+        const privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+        if (privateNodes.length === 0) return;
 
-        // Draw the line
-        const netColorMap = {
-            onion: { r: 218, g: 54, b: 51 },
-            i2p:   { r: 210, g: 153, b: 34 },
-            cjdns: { r: 188, g: 140, b: 255 }
-        };
-        const c = netColorMap[node.net] || { r: 240, g: 136, b: 62 };
-
-        // Straight line from donut center to peer position
-        const dist = Math.sqrt((originX - bestS.x) ** 2 + (originY - bestS.y) ** 2);
-        const alpha = Math.min(0.45, 0.15 + 0.3 * (1 - dist / Math.max(W, H)));
+        // If a specific peer is selected, highlight its line more
+        const selectedId = privateNetLinePeer;
 
         ctx.save();
-        ctx.lineWidth = Math.max(1.2, 1.5 * Math.min(view.zoom / 1.5, 3));
-        ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha.toFixed(3)})`;
-        ctx.globalAlpha = 1;
+        const lineW = Math.max(1.2, 1.5 * Math.min(view.zoom / 1.5, 3));
+        ctx.lineWidth = lineW;
 
-        ctx.beginPath();
-        ctx.moveTo(originX, originY);
-        ctx.lineTo(bestS.x, bestS.y);
-        ctx.stroke();
+        for (const node of privateNodes) {
+            // Find best screen position
+            let bestS = null;
+            let bestDist = Infinity;
+            for (const off of wrapOffsets) {
+                const s = worldToScreen(node.lon + off, node.lat);
+                const dx = s.x - W / 2;
+                const dy = s.y - H / 2;
+                const d = dx * dx + dy * dy;
+                if (d < bestDist) { bestDist = d; bestS = s; }
+            }
+            if (!bestS) continue;
 
-        // Small dot at the peer position
-        ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.7)`;
-        ctx.beginPath();
-        ctx.arc(bestS.x, bestS.y, 4, 0, Math.PI * 2);
-        ctx.fill();
+            const c = PN_LINE_COLORS[node.net] || { r: 240, g: 136, b: 62 };
+            const dist = Math.sqrt((originX - bestS.x) ** 2 + (originY - bestS.y) ** 2);
+            const isSelected = node.peerId === selectedId;
+            const baseAlpha = isSelected ? 0.6 : 0.25;
+            const alpha = Math.min(baseAlpha, 0.1 + (baseAlpha - 0.05) * (1 - dist / Math.max(W, H)));
+
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha.toFixed(3)})`;
+            ctx.lineWidth = isSelected ? lineW * 1.5 : lineW;
+
+            ctx.beginPath();
+            ctx.moveTo(originX, originY);
+            ctx.lineTo(bestS.x, bestS.y);
+            ctx.stroke();
+
+            // Small dot at the peer position
+            ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${isSelected ? 0.8 : 0.5})`;
+            ctx.beginPath();
+            ctx.arc(bestS.x, bestS.y, isSelected ? 5 : 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }
@@ -6391,10 +6432,10 @@
                 targetView.y = centerY;
             } else {
                 // [PRIVATE-NET] In private mode, restrict northward panning
-                // Keep the user near Antarctica (don't let them scroll above ~20°S)
+                // Keep the user near Antarctica — only see the southern tip of continents
                 let effectiveMinY = minPanY;
                 if (privateNetMode) {
-                    const pnNorthLimit = project(0, -20).y; // ~20°S latitude
+                    const pnNorthLimit = project(0, -50).y; // ~50°S — just below tip of South America
                     const pnMinPanY = (pnNorthLimit - 0.5) * H;
                     effectiveMinY = Math.max(minPanY, pnMinPanY);
                 }
@@ -6458,9 +6499,9 @@
             }
         }
 
-        // [PRIVATE-NET] Draw line from rect donut to selected private peer
-        if (privateNetMode) {
-            drawPrivateNetLine(wrapOffsets);
+        // [PRIVATE-NET] Draw lines from donut to all private peers
+        if (privateNetMode || pnMiniHover) {
+            drawPrivateNetLines(wrapOffsets);
         }
 
         // 10. Peer nodes (alive + fading out)
@@ -8080,12 +8121,18 @@
             });
         }
 
-        // [PRIVATE-NET] Mini donut click → enter private mode
+        // [PRIVATE-NET] Mini donut: hover → draw lines to private peers, click → enter private mode
         const pnMiniDonut = document.getElementById('pn-mini-donut');
         if (pnMiniDonut) {
             pnMiniDonut.addEventListener('click', (e) => {
                 e.stopPropagation();
                 enterPrivateNetMode();
+            });
+            pnMiniDonut.addEventListener('mouseenter', () => {
+                if (!privateNetMode) pnMiniHover = true;
+            });
+            pnMiniDonut.addEventListener('mouseleave', () => {
+                pnMiniHover = false;
             });
         }
 
