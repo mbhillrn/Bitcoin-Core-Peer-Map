@@ -1781,16 +1781,37 @@ body.as-panel-open .peer-detail-popup {
     width: 160px;
     height: 160px;
 }
-.pn-mini-count {
+.pn-mini-center {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    line-height: 1.2;
+}
+.pn-mini-center-label {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--logo-primary, #f0883e);
+}
+.pn-mini-center-count {
     font-family: var(--font-data, 'JetBrains Mono', monospace);
     font-size: 22px;
     font-weight: 800;
     color: var(--text-primary, #c9d1d9);
-    pointer-events: none;
+    line-height: 1;
+    margin: 2px 0;
+}
+.pn-mini-center-sub {
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted, #8b949e);
 }
 /* Mini legend — network breakdown list shown on hover */
 .pn-mini-legend {

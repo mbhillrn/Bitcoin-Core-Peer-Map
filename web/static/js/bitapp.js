@@ -1573,11 +1573,11 @@
             });
         }
 
-        // Zoom to Antarctica — high enough that the clamp allows centering on -68° lat
-        const antCenter = project(40, -68);
+        // Zoom to Antarctica — moderate zoom so the whole continent is visible
+        const antCenter = project(40, -75);
         targetView.x = (antCenter.x - 0.5) * W;
         targetView.y = (antCenter.y - 0.5) * H;
-        targetView.zoom = 3.5;
+        targetView.zoom = 1.8;
 
         // Focus the donut and open overview panel
         pnDonutFocused = true;
@@ -1647,10 +1647,11 @@
         highlightedPeerId = peerId;
         pinnedNode = node;
 
-        // Zoom to the peer in Antarctica
+        // Zoom to the peer in Antarctica — offset slightly so it's not
+        // directly below the donut (avoids an awkward straight vertical line)
         const p = project(node.lon, node.lat);
-        targetView.x = (p.x - 0.5) * W;
-        targetView.y = (p.y - 0.5) * H;
+        targetView.x = (p.x - 0.5) * W - W * 0.08;
+        targetView.y = (p.y - 0.5) * H - H * 0.06;
         targetView.zoom = 4;
 
         hideTooltip();
@@ -1882,11 +1883,14 @@
         // Toggle: click same segment deselects
         if (pnSelectedNet === net) {
             pnSelectedNet = null;
-            pnDonutFocused = false;
             closePnDetailPanel();
-            cachePnElements();
-            if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
             document.body.classList.remove('pn-panel-open');
+            // In private mode, donut always stays centered at top
+            if (!privateNetMode) {
+                pnDonutFocused = false;
+                cachePnElements();
+                if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+            }
         } else {
             pnSelectedNet = net;
             pnDonutFocused = true;
@@ -2564,14 +2568,8 @@
             if (counts.hasOwnProperty(n.net)) counts[n.net]++;
         }
 
-        // Mini center text: show active network labels (e.g. "Tor / I2P") instead of just a count
-        if (miniCount) {
-            const activeLabels = [];
-            for (const net of ['onion', 'i2p', 'cjdns']) {
-                if (counts[net] > 0) activeLabels.push(PN_NET_LABELS[net]);
-            }
-            miniCount.textContent = activeLabels.length > 0 ? activeLabels.join(' / ') : total;
-        }
+        // Mini center count (matches the big donut's "Private / count / Peers" layout)
+        if (miniCount) miniCount.textContent = total;
         const segs = [];
         for (const net of ['onion', 'i2p', 'cjdns']) {
             if (counts[net] > 0) segs.push({ net, count: counts[net], color: getPnNetColor(net) });
@@ -2685,32 +2683,96 @@
         cjdns: { r: 188, g: 140, b: 255 }
     };
 
-    /** Draw lines from the donut to ALL private peers (or just the selected one).
-     *  Also used by the mini donut hover in default view. */
+    /** Get the page-coords origin for a private network's legend dot in the mini donut.
+     *  Returns {x, y} or null. */
+    function getPnMiniLegendDotPos(net) {
+        const legendEl = document.getElementById('pn-mini-legend');
+        if (!legendEl) return null;
+        const items = legendEl.querySelectorAll('.pn-mini-legend-item');
+        for (const item of items) {
+            if (item.dataset.net === net) {
+                const dot = item.querySelector('.pn-mini-legend-dot');
+                if (dot) {
+                    const r = dot.getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) {
+                        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Get the page-coords origin for a private network's legend dot in the big donut.
+     *  Returns {x, y} or null. */
+    function getPnLegendDotPos(net) {
+        const legendEl = document.getElementById('pn-legend');
+        if (!legendEl) return null;
+        const items = legendEl.querySelectorAll('.pn-legend-item');
+        for (const item of items) {
+            if (item.dataset.net === net) {
+                const dot = item.querySelector('.pn-legend-dot');
+                if (dot) {
+                    const r = dot.getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) {
+                        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Draw lines from the donut to private peers.
+     *  In private mode: lines from the big donut center to ALL peers (or just selected).
+     *  In default view (mini donut hover): lines from each legend dot to its network's peers. */
     function drawPrivateNetLines(wrapOffsets) {
         if (!privateNetMode && !pnMiniHover) return;
 
-        // Get the correct origin element — big donut in private mode, mini donut in default
+        const canvasRect = canvas.getBoundingClientRect();
+
+        // Determine a fallback donut center origin
         const originElId = privateNetMode ? 'pn-donut-wrap' : 'pn-mini-donut';
         const originEl = document.getElementById(originElId);
         if (!originEl) return;
-        const rect = originEl.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
-        const originX = (rect.left + rect.width / 2 - canvasRect.left) * (W / canvasRect.width);
-        const originY = (rect.bottom - canvasRect.top) * (H / canvasRect.height);
+        const fallbackRect = originEl.getBoundingClientRect();
+        const fallbackOriginX = (fallbackRect.left + fallbackRect.width / 2 - canvasRect.left) * (W / canvasRect.width);
+        const fallbackOriginY = (fallbackRect.top + fallbackRect.height / 2 - canvasRect.top) * (H / canvasRect.height);
 
         // Collect nodes to draw lines to
-        const privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
-        if (privateNodes.length === 0) return;
-
-        // If a specific peer is selected, highlight its line more
+        let privateNodes;
         const selectedId = privateNetLinePeer;
+        if (privateNetMode && selectedId) {
+            // When a peer is selected in private mode, only draw line to that peer
+            const selectedNode = nodes.find(n => n.peerId === selectedId && n.alive);
+            privateNodes = selectedNode ? [selectedNode] : [];
+        } else {
+            privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+        }
+        if (privateNodes.length === 0) return;
 
         ctx.save();
         const lineW = Math.max(1.2, 1.5 * Math.min(view.zoom / 1.5, 3));
         ctx.lineWidth = lineW;
 
         for (const node of privateNodes) {
+            // Determine origin: in mini donut hover → legend dot per network; in private mode → donut center
+            let originX = fallbackOriginX;
+            let originY = fallbackOriginY;
+            if (pnMiniHover && !privateNetMode) {
+                const dotPos = getPnMiniLegendDotPos(node.net);
+                if (dotPos) {
+                    originX = (dotPos.x - canvasRect.left) * (W / canvasRect.width);
+                    originY = (dotPos.y - canvasRect.top) * (H / canvasRect.height);
+                }
+            } else if (privateNetMode) {
+                const dotPos = getPnLegendDotPos(node.net);
+                if (dotPos) {
+                    originX = (dotPos.x - canvasRect.left) * (W / canvasRect.width);
+                    originY = (dotPos.y - canvasRect.top) * (H / canvasRect.height);
+                }
+            }
+
             // Find best screen position
             let bestS = null;
             let bestDist = Infinity;
@@ -3059,8 +3121,8 @@
                 privateNetLinePeer = null;
                 highlightedPeerId = null;
                 pinnedNode = null;
-                // Return donut to default position (unless panel is open)
-                if (!pnSelectedNet) {
+                // In private mode, donut stays centered; otherwise return to corner
+                if (!privateNetMode && !pnSelectedNet) {
                     pnDonutFocused = false;
                     cachePnElements();
                     if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
@@ -6423,24 +6485,29 @@
             // => y >= (yTop - 0.5) * H + H / (2 * zoom)
             // Similarly, world bottom must be >= H (at or below screen bottom)
             // => y <= (yBot - 0.5) * H - H / (2 * zoom)
-            const minPanY = (yTop - 0.5) * H + H / (2 * view.zoom);
-            const maxPanY = (yBot - 0.5) * H - H / (2 * view.zoom);
+            let minPanY = (yTop - 0.5) * H + H / (2 * view.zoom);
+            let maxPanY = (yBot - 0.5) * H - H / (2 * view.zoom);
+
+            // [PRIVATE-NET] In private mode, relax south bound so camera can center
+            // on Antarctica, and tighten north bound so user stays near the pole
+            if (privateNetMode) {
+                // Allow the view to push past the normal south edge (ocean beyond -85°)
+                // so Antarctica can actually be centered on screen at moderate zoom
+                const extraSouth = H * 0.35;
+                maxPanY += extraSouth;
+                // Restrict northward panning to ~50°S
+                const pnNorthLimit = project(0, -50).y;
+                const pnMinPanY = (pnNorthLimit - 0.5) * H;
+                minPanY = Math.max(minPanY, pnMinPanY);
+            }
 
             if (minPanY >= maxPanY) {
                 // World doesn't fill screen vertically — center it
                 view.y = centerY;
                 targetView.y = centerY;
             } else {
-                // [PRIVATE-NET] In private mode, restrict northward panning
-                // Keep the user near Antarctica — only see the southern tip of continents
-                let effectiveMinY = minPanY;
-                if (privateNetMode) {
-                    const pnNorthLimit = project(0, -50).y; // ~50°S — just below tip of South America
-                    const pnMinPanY = (pnNorthLimit - 0.5) * H;
-                    effectiveMinY = Math.max(minPanY, pnMinPanY);
-                }
-                view.y = clamp(view.y, effectiveMinY, maxPanY);
-                targetView.y = clamp(targetView.y, effectiveMinY, maxPanY);
+                view.y = clamp(view.y, minPanY, maxPanY);
+                targetView.y = clamp(targetView.y, minPanY, maxPanY);
             }
         }
     }
@@ -6620,8 +6687,8 @@
                     hideTooltip();
                     closePnBigPopup();
                     hidePnSubTooltip();
-                    // If no panel is open, un-focus donut
-                    if (!pnSelectedNet) {
+                    // In private mode, donut stays centered; otherwise un-focus if no panel
+                    if (!privateNetMode && !pnSelectedNet) {
                         pnDonutFocused = false;
                         cachePnElements();
                         if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
@@ -6842,15 +6909,39 @@
     }
 
     // Click to toggle network badges (radio-then-additive model)
-    // First click from "All" = radio (show only that network)
-    // Subsequent clicks = additive toggle
-    // Clicking "All" = reset to all
+    // Also routes to panels: private net badges → private mode panel, IPv4/IPv6 → AS diversity
     netBadges.forEach(badge => {
         badge.addEventListener('click', (e) => {
             e.stopPropagation();
             const net = badge.dataset.net;
+
+            // Route private net badges to private mode with that network's panel
+            if (PRIVATE_NETS.has(net)) {
+                if (!privateNetMode) {
+                    enterPrivateNetMode();
+                }
+                // Open that network's detail panel
+                pnSelectedNet = net;
+                pnDonutFocused = true;
+                cachePnElements();
+                if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+                openPnDetailPanel(net);
+                updatePrivateNetUI();
+                return;
+            }
+
+            // Route IPv4/IPv6 badges to AS diversity focused mode
+            if (net === 'ipv4' || net === 'ipv6') {
+                if (privateNetMode) exitPrivateNetMode();
+                if (window.ASDiversity && !window.ASDiversity.isFocusedMode()) {
+                    window.ASDiversity.enterFocusedMode();
+                }
+            }
+
+            // Also do the normal filter toggle
             if (net === 'all') {
-                // "All" → select everything
+                // "All" → select everything and exit private mode if active
+                if (privateNetMode) exitPrivateNetMode();
                 enabledNets = new Set(ALL_NETS);
             } else if (isAllNetsEnabled()) {
                 // Currently showing All → radio: show only the clicked network
@@ -6865,12 +6956,6 @@
                     }
                 } else {
                     enabledNets.add(net);
-                    // If all nets are now enabled, switch back to "All" state
-                    if (enabledNets.size === ALL_NETS.size) {
-                        var allMatch = true;
-                        for (var n of ALL_NETS) { if (!enabledNets.has(n)) { allMatch = false; break; } }
-                        // Already a full set, state is naturally "all"
-                    }
                 }
             }
             updateBadgeStates();
@@ -8181,10 +8266,13 @@
                     updatePrivateNetUI();
                 } else {
                     // If viewing overview, close panel entirely
-                    pnDonutFocused = false;
                     closePnDetailPanel();
-                    cachePnElements();
-                    if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                    // In private mode, donut stays centered
+                    if (!privateNetMode) {
+                        pnDonutFocused = false;
+                        cachePnElements();
+                        if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                    }
                     updatePrivateNetUI();
                 }
             });
@@ -8210,10 +8298,13 @@
                 // Simulate segment click
                 if (pnSelectedNet === net) {
                     pnSelectedNet = null;
-                    pnDonutFocused = false;
                     closePnDetailPanel();
-                    cachePnElements();
-                    if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                    // In private mode, donut stays centered
+                    if (!privateNetMode) {
+                        pnDonutFocused = false;
+                        cachePnElements();
+                        if (pnContainerEl) pnContainerEl.classList.remove('pn-focused');
+                    }
                 } else {
                     pnSelectedNet = net;
                     pnDonutFocused = true;
