@@ -1315,7 +1315,7 @@ body.donut-focused .as-diversity-container {
     top: 14px;
     right: auto;
     left: 50%;
-    transform: translateX(-50%) scale(0.80);
+    transform: translateX(-50%) scale(0.88);
     z-index: 101;
     opacity: 1;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1345,6 +1345,12 @@ body.donut-focused .as-donut-title {
     max-height: 52px;
     margin-bottom: -6px;
     pointer-events: auto;
+    font-size: 19px;
+    letter-spacing: 2px;
+}
+body.donut-focused .as-title-subtitle {
+    font-size: 11px;
+    letter-spacing: 2.5px;
 }
 
 /* --- Legend: ALWAYS hidden in focused mode (lines come from donut center) --- */
