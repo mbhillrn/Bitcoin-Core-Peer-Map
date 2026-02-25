@@ -5959,10 +5959,26 @@ window.ASDiversity = (function () {
             if (orgRefresh) {
                 orgRefresh.textContent = refreshPeers.length + ' peer' + (refreshPeers.length !== 1 ? 's' : '') + ' connected';
             }
-            // Re-apply peer table filter with fresh peer list
-            var refreshIds = refreshPeers.map(function (p) { return p.id; });
-            if (_filterPeerTable) _filterPeerTable(refreshIds);
-            if (_dimMapPeers) _dimMapPeers(refreshIds);
+            // Re-apply the correct dim/filter state: if a sub-filter is active
+            // (user drilled into a country/provider/etc), preserve that narrow set.
+            // Otherwise dim to the full network peer list.
+            if (subSubFilterPeerIds && subSubFilterPeerIds.length > 0) {
+                if (_filterPeerTable) _filterPeerTable(subSubFilterPeerIds);
+                if (_dimMapPeers) _dimMapPeers(subSubFilterPeerIds);
+                var ssAsNum = subSubFilterAsNum;
+                if (ssAsNum && _drawLinesForAs) {
+                    var ssColor = subSubFilterColor || getColorForAsNum(ssAsNum);
+                    _drawLinesForAs(ssAsNum, subSubFilterPeerIds, ssColor);
+                }
+            } else if (subFilterPeerIds && subFilterPeerIds.length > 0) {
+                if (_filterPeerTable) _filterPeerTable(subFilterPeerIds);
+                if (_dimMapPeers) _dimMapPeers(subFilterPeerIds);
+                previewSummaryLines(subFilterPeerIds);
+            } else {
+                var refreshIds = refreshPeers.map(function (p) { return p.id; });
+                if (_filterPeerTable) _filterPeerTable(refreshIds);
+                if (_dimMapPeers) _dimMapPeers(refreshIds);
+            }
             return;
         }
 
