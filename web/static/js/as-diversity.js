@@ -4238,6 +4238,7 @@ window.ASDiversity = (function () {
         if (othersListOpen) closeOthersListInDonut();
 
         // Always go back to diversity summary (clear all state)
+        activeNetworkPanel = null;
         peerDetailActive = false;
         selectedAs = null;
         subFilterPeerIds = null;
@@ -5008,6 +5009,7 @@ window.ASDiversity = (function () {
     }
 
     function deselect() {
+        activeNetworkPanel = null;
         if (summarySelected) {
             deselectSummary();
             return;
@@ -5172,7 +5174,7 @@ window.ASDiversity = (function () {
         if (!nameEl) return;
         var asNum = parseAsNumber(peer.as);
         var provColor = asNum ? getColorForAsNum(asNum) : '#6e7681';
-        var netColors = { 'ipv4': '#58a6ff', 'ipv6': '#3fb950', 'onion': '#da3633', 'tor': '#da3633', 'i2p': '#d29922', 'cjdns': '#bc8cff' };
+        var netColors = { 'ipv4': '#58a6ff', 'ipv6': '#3fb950', 'onion': '#1565c0', 'tor': '#1565c0', 'i2p': '#d29922', 'cjdns': '#bc8cff' };
         var netColor = netColors[(peer.network || 'ipv4').toLowerCase()] || '#58a6ff';
         nameEl.textContent = 'Peer #' + peer.id;
         nameEl.style.color = provColor;
@@ -5194,7 +5196,7 @@ window.ASDiversity = (function () {
         if (!nameEl) return;
         var asNum = parseAsNumber(peer.as);
         var provColor = asNum ? getColorForAsNum(asNum) : '#6e7681';
-        var netColors = { 'ipv4': '#58a6ff', 'ipv6': '#3fb950', 'onion': '#da3633', 'tor': '#da3633', 'i2p': '#d29922', 'cjdns': '#bc8cff' };
+        var netColors = { 'ipv4': '#58a6ff', 'ipv6': '#3fb950', 'onion': '#1565c0', 'tor': '#1565c0', 'i2p': '#d29922', 'cjdns': '#bc8cff' };
         var netColor = netColors[(peer.network || 'ipv4').toLowerCase()] || '#58a6ff';
         nameEl.textContent = 'Peer #' + peer.id;
         nameEl.style.color = provColor;
@@ -5382,8 +5384,8 @@ window.ASDiversity = (function () {
         var netColors = {
             'ipv4': 'var(--net-ipv4, #58a6ff)',
             'ipv6': 'var(--net-ipv6, #3fb950)',
-            'onion': 'var(--net-tor, #da3633)',
-            'tor': 'var(--net-tor, #da3633)',
+            'onion': 'var(--net-tor, #1565c0)',
+            'tor': 'var(--net-tor, #1565c0)',
             'i2p': 'var(--net-i2p, #d29922)',
             'cjdns': 'var(--net-cjdns, #bc8cff)'
         };
@@ -6383,6 +6385,247 @@ window.ASDiversity = (function () {
         return donutSegments;
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // IPv4/IPv6 NETWORK DETAIL PANEL
+    // ═══════════════════════════════════════════════════════════
+
+    /** State for network panels */
+    var activeNetworkPanel = null; // 'ipv4' | 'ipv6' | null
+
+    /** Open a dedicated network detail panel (IPv4 or IPv6) */
+    function openNetworkPanel(netKey) {
+        if (!panelEl) return;
+        if (peerDetailActive) closePeerPopup();
+
+        // Enter focused mode if not already
+        if (!donutFocused) {
+            donutFocused = true;
+            document.body.classList.add('donut-focused');
+        }
+
+        activeNetworkPanel = netKey;
+        var netLabel = netKey === 'ipv4' ? 'IPv4' : 'IPv6';
+        var netColor = netKey === 'ipv4' ? 'var(--net-ipv4, #e3b341)' : 'var(--net-ipv6, #f07178)';
+
+        // Filter peers to this network
+        var netPeers = lastPeersRaw.filter(function (p) {
+            return (p.network || 'ipv4') === netKey;
+        });
+
+        // Set panel history so back button returns to summary
+        panelHistory = [{ type: 'summary', scrollTop: 0 }];
+        renderBackButton();
+
+        // --- Header ---
+        var asnEl = panelEl.querySelector('.as-detail-asn');
+        var orgEl = panelEl.querySelector('.as-detail-org');
+        var metaEl = panelEl.querySelector('.as-detail-meta');
+        var barFill = panelEl.querySelector('.as-detail-bar-fill');
+        var pctEl = panelEl.querySelector('.as-detail-pct');
+        var riskEl = panelEl.querySelector('.as-detail-risk');
+
+        if (asnEl) {
+            asnEl.innerHTML = '<span style="color:' + netColor + '">' + netLabel + '</span> <span style="color:var(--logo-primary, #4a90d9)">Network</span>';
+            asnEl.classList.remove('as-summary-title');
+        }
+        if (orgEl) {
+            orgEl.textContent = netPeers.length + ' peer' + (netPeers.length !== 1 ? 's' : '') + ' connected';
+        }
+        if (metaEl) metaEl.innerHTML = '';
+        if (barFill) barFill.style.width = '0%';
+        if (pctEl) pctEl.textContent = '';
+        if (riskEl) { riskEl.className = 'as-detail-risk'; riskEl.textContent = ''; }
+
+        // --- Body ---
+        var bodyEl = panelEl.querySelector('.as-detail-body');
+        if (!bodyEl) return;
+        var html = '';
+
+        if (netPeers.length === 0) {
+            html += '<div class="pn-panel-empty">No ' + netLabel + ' peers connected</div>';
+            bodyEl.innerHTML = html;
+            bodyEl.scrollTop = 0;
+            showNetworkPanel();
+            return;
+        }
+
+        // ── Section 1: Stats ──
+        var inbound = 0, outbound = 0, totalPing = 0, pingCount = 0;
+        var totalBytesSent = 0, totalBytesRecv = 0;
+        for (var si = 0; si < netPeers.length; si++) {
+            var sp = netPeers[si];
+            if (sp.direction === 'IN') inbound++; else outbound++;
+            if (sp.ping_ms > 0) { totalPing += sp.ping_ms; pingCount++; }
+            totalBytesSent += (sp.bytessent || 0);
+            totalBytesRecv += (sp.bytesrecv || 0);
+        }
+        var avgPing = pingCount > 0 ? Math.round(totalPing / pingCount) : null;
+
+        html += '<div class="modal-section-title">Stats</div>';
+        html += row('Total Peers', netPeers.length);
+        html += row('Inbound', inbound);
+        html += row('Outbound', outbound);
+        if (avgPing !== null) html += row('Avg Ping', avgPing + ' ms');
+        html += row('Bytes Sent', fmtBytes(totalBytesSent));
+        html += row('Bytes Recv', fmtBytes(totalBytesRecv));
+
+        // ── Section 2: Connections by Provider ──
+        var providerMap = {};
+        for (var ci = 0; ci < netPeers.length; ci++) {
+            var cp = netPeers[ci];
+            var cpAsNum = parseAsNumber(cp.as);
+            if (!cpAsNum) continue;
+            if (!providerMap[cpAsNum]) {
+                providerMap[cpAsNum] = {
+                    asNumber: cpAsNum,
+                    name: parseAsOrg(cp.as) || cpAsNum,
+                    color: getColorForAsNum(cpAsNum),
+                    peers: [],
+                    inPeers: [],
+                    outPeers: []
+                };
+            }
+            providerMap[cpAsNum].peers.push(cp);
+            if (cp.connection_type === 'inbound') providerMap[cpAsNum].inPeers.push(cp);
+            else providerMap[cpAsNum].outPeers.push(cp);
+        }
+        var providerList = [];
+        var provKeys = Object.keys(providerMap);
+        for (var pk = 0; pk < provKeys.length; pk++) providerList.push(providerMap[provKeys[pk]]);
+        providerList.sort(function (a, b) { return b.peers.length - a.peers.length; });
+
+        html += '<div class="modal-section-title" title="' + netLabel + ' peer connections grouped by AS provider">' + netLabel + ' Connections by Provider</div>';
+        for (var gi = 0; gi < providerList.length; gi++) {
+            var gItem = providerList[gi];
+            var displayName = gItem.name;
+            if (displayName.length > 20) displayName = displayName.substring(0, 19) + '\u2026';
+            var totalJson = JSON.stringify(gItem.peers.map(function (p) { return p.id; })).replace(/"/g, '&quot;');
+            var inJson = JSON.stringify(gItem.inPeers.map(function (p) { return p.id; })).replace(/"/g, '&quot;');
+            var outJson = JSON.stringify(gItem.outPeers.map(function (p) { return p.id; })).replace(/"/g, '&quot;');
+            // Build outbound subtypes
+            var outSubtypes = {};
+            for (var oj = 0; oj < gItem.outPeers.length; oj++) {
+                var ct = gItem.outPeers[oj].connection_type || 'unknown';
+                if (!outSubtypes[ct]) outSubtypes[ct] = [];
+                outSubtypes[ct].push(gItem.outPeers[oj]);
+            }
+            var outSubList = [];
+            for (var oKey in outSubtypes) {
+                if (!outSubtypes.hasOwnProperty(oKey)) continue;
+                outSubList.push({
+                    type: oKey,
+                    label: CONN_TYPE_LABELS[oKey] || oKey,
+                    count: outSubtypes[oKey].length,
+                    peerIds: outSubtypes[oKey].map(function (p) { return p.id; })
+                });
+            }
+            var outSubJson = JSON.stringify(outSubList).replace(/"/g, '&quot;');
+
+            // Provider name row
+            html += '<div class="as-detail-sub-row as-conn-prov-row" data-peer-ids="' + totalJson + '" data-as="' + gItem.asNumber + '" style="cursor:pointer">';
+            html += '<span class="as-detail-sub-label"><span class="as-grid-dot" style="background:' + gItem.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle"></span>';
+            html += '<span style="color:' + gItem.color + '">' + displayName + '</span></span>';
+            html += '<span class="as-detail-sub-val">' + gItem.peers.length + '</span>';
+            html += '</div>';
+            // In row
+            if (gItem.inPeers.length > 0) {
+                html += '<div class="as-detail-sub-row as-interactive-row as-conn-dir-row" data-peer-ids="' + inJson + '" data-as="' + gItem.asNumber + '" data-category="conntype" style="padding-left:22px">';
+                html += '<span class="as-detail-sub-label">In</span>';
+                html += '<span class="as-detail-sub-val">' + gItem.inPeers.length + '</span>';
+                html += '</div>';
+            }
+            // Out row
+            if (gItem.outPeers.length > 0) {
+                html += '<div class="as-detail-sub-row as-conn-out-row" data-peer-ids="' + outJson + '" data-as="' + gItem.asNumber + '" data-out-subtypes="' + outSubJson + '" data-category="conntype" style="padding-left:22px; cursor:pointer">';
+                html += '<span class="as-detail-sub-label">Out</span>';
+                html += '<span class="as-detail-sub-val">' + gItem.outPeers.length + '</span>';
+                html += '</div>';
+            }
+        }
+
+        // ── Section 3: Hosting ──
+        var hostingData = aggregateSummaryByCategory(netPeers,
+            function (p) {
+                if (p.hosting) return 'cloud';
+                if (p.proxy) return 'proxy';
+                if (p.mobile) return 'mobile';
+                return 'residential';
+            },
+            function (p, key) {
+                var labels = { 'cloud': 'Cloud / Hosting', 'proxy': 'Proxy / VPN', 'mobile': 'Mobile', 'residential': 'Residential' };
+                return labels[key] || key;
+            }
+        );
+        html += '<div class="modal-section-title" title="Peer connections grouped by hosting type">Hosting</div>';
+        for (var hi = 0; hi < hostingData.length; hi++) {
+            html += summaryInteractiveRow(hostingData[hi].label, hostingData[hi].peerCount + 'p / ' + hostingData[hi].providerCount + 'prov', hostingData[hi]);
+        }
+
+        // ── Section 4: Countries ──
+        var countryData = aggregateSummaryByCategory(netPeers,
+            function (p) { return p.countryCode || null; },
+            function (p, key) { return key + '  ' + (p.country || key); }
+        );
+        html += '<div class="modal-section-title" title="Geographic distribution of ' + netLabel + ' peers by country">Countries</div>';
+        for (var coi = 0; coi < countryData.length; coi++) {
+            html += summaryInteractiveRow(countryData[coi].label, countryData[coi].peerCount + 'p / ' + countryData[coi].providerCount + 'prov', countryData[coi]);
+        }
+
+        // ── Section 5: Software ──
+        var swData = aggregateSummaryByCategory(netPeers,
+            function (p) { return p.subver || 'Unknown'; },
+            null
+        );
+        html += '<div class="modal-section-title" title="Bitcoin Core client versions on ' + netLabel + ' peers">Software</div>';
+        for (var swi = 0; swi < swData.length; swi++) {
+            html += summaryInteractiveRow(swData[swi].label, swData[swi].peerCount + 'p / ' + swData[swi].providerCount + 'prov', swData[swi]);
+        }
+
+        // ── Section 6: Services ──
+        var svcData = aggregateSummaryByCategory(netPeers,
+            function (p) { return p.services_abbrev || '\u2014'; },
+            null
+        );
+        html += '<div class="modal-section-title" title="Service flags on ' + netLabel + ' peers">Services</div>';
+        for (var svci = 0; svci < svcData.length; svci++) {
+            html += summaryInteractiveRow(svcData[svci].label, svcData[svci].peerCount + 'p / ' + svcData[svci].providerCount + 'prov', svcData[svci]);
+        }
+
+        bodyEl.innerHTML = html;
+        bodyEl.scrollTop = 0;
+
+        // Attach drill-down handlers (reuse summary pattern)
+        attachSummaryRowHandlers(bodyEl);
+        attachGridHandlers(bodyEl);
+        attachSummaryLinkHandlers(bodyEl);
+        attachPanelBlankClickHandler(bodyEl);
+
+        showNetworkPanel();
+
+        // Filter peer table and map to show only this network's peers
+        var netPeerIds = netPeers.map(function (p) { return p.id; });
+        if (_filterPeerTable) _filterPeerTable(netPeerIds);
+        if (_dimMapPeers) _dimMapPeers(netPeerIds);
+        activateHoverAll();
+    }
+
+    /** Show the network panel (reuses #as-detail-panel) */
+    function showNetworkPanel() {
+        if (!panelEl) return;
+        panelEl.classList.remove('hidden');
+        void panelEl.offsetWidth;
+        panelEl.classList.add('visible');
+        document.body.classList.add('as-panel-open');
+        document.body.classList.add('panel-focus-as');
+        document.body.classList.remove('panel-focus-peers');
+    }
+
+    /** Close network panel and return to default state */
+    function closeNetworkPanel() {
+        activeNetworkPanel = null;
+        navigateBack();
+    }
+
     return {
         init: init,
         setHooks: setHooks,
@@ -6416,5 +6659,8 @@ window.ASDiversity = (function () {
         closePeerPopup: closePeerPopup,
         isPeerDetailActive: function () { return peerDetailActive; },
         getLastPeersRaw: function () { return lastPeersRaw; },
+        // Network panels (IPv4/IPv6)
+        openNetworkPanel: openNetworkPanel,
+        getActiveNetworkPanel: function () { return activeNetworkPanel; },
     };
 })();

@@ -146,7 +146,7 @@
                 '--accent-glow':    'rgba(37, 99, 235, 0.20)',
                 '--net-ipv4':       '#a67c00',
                 '--net-ipv6':       '#c2343f',
-                '--net-tor':        '#1558b0',
+                '--net-tor':        '#0d47a1',
                 '--net-i2p':        '#6d28d9',
                 '--net-cjdns':      '#7e22ce',
                 '--net-unknown':    '#718096',
@@ -181,7 +181,7 @@
             netColors: {
                 ipv4:  { r: 166, g: 124, b: 0   },
                 ipv6:  { r: 194, g: 52,  b: 63  },
-                onion: { r: 21,  g: 88,  b: 176 },
+                onion: { r: 13,  g: 71,  b: 161 },
                 i2p:   { r: 109, g: 40,  b: 217 },
                 cjdns: { r: 126, g: 34,  b: 206 },
             },
@@ -232,7 +232,7 @@
                 '--accent-glow':    'rgba(129, 140, 248, 0.30)',
                 '--net-ipv4':       '#fbbf24',
                 '--net-ipv6':       '#fb7185',
-                '--net-tor':        '#60a5fa',
+                '--net-tor':        '#2979ff',
                 '--net-i2p':        '#a78bfa',
                 '--net-cjdns':      '#c4b5fd',
                 '--net-unknown':    '#566988',
@@ -262,7 +262,7 @@
             netColors: {
                 ipv4:  { r: 251, g: 191, b: 36  },
                 ipv6:  { r: 251, g: 113, b: 133 },
-                onion: { r: 96,  g: 165, b: 250 },
+                onion: { r: 41,  g: 121, b: 255 },
                 i2p:   { r: 167, g: 139, b: 250 },
                 cjdns: { r: 196, g: 181, b: 253 },
             },
@@ -571,7 +571,7 @@
     const NET_COLORS = {
         ipv4:  { r: 227, g: 179, b: 65  },   // gold
         ipv6:  { r: 240, g: 113, b: 120 },   // coral
-        onion: { r: 74,  g: 158, b: 255 },   // sky blue (Tor)
+        onion: { r: 21,  g: 101, b: 192 },   // dark blue (Tor)
         i2p:   { r: 139, g: 92,  b: 246 },   // purple
         cjdns: { r: 210, g: 168, b: 255 },   // lavender
     };
@@ -944,10 +944,14 @@
                     updatePrivateNetUI();
                 }
             } else {
-                // Public network chip (ipv4/ipv6) → exit private mode if active, enter AS focused mode
+                // Public network chip (ipv4/ipv6) → exit private mode if active, open network panel
                 if (privateNetMode) exitPrivateNetMode();
-                if (window.ASDiversity && !window.ASDiversity.isFocusedMode()) {
-                    window.ASDiversity.enterFocusedMode();
+                if (window.ASDiversity) {
+                    if (!window.ASDiversity.isFocusedMode()) {
+                        window.ASDiversity.enterFocusedMode();
+                    }
+                    // Open the dedicated IPv4/IPv6 network detail panel
+                    window.ASDiversity.openNetworkPanel(netKey);
                 }
             }
         });
@@ -1593,6 +1597,9 @@
         targetView.y = (antCenter.y - 0.5) * H;
         targetView.zoom = 1.8;
 
+        // Show mini public donut in upper-right
+        renderPubMiniDonut();
+
         // Focus the donut and open panel
         pnDonutFocused = true;
         updatePrivateNetUI();
@@ -1651,6 +1658,13 @@
         targetView.x = 0;
         targetView.y = 0;
         targetView.zoom = 1;
+
+        // Hide mini public donut
+        const pubMini = document.getElementById('pub-mini-donut');
+        if (pubMini) {
+            pubMini.classList.remove('visible');
+            pubMini.classList.add('hidden');
+        }
 
         // Immediately re-show the mini donut (don't wait for next poll cycle)
         renderPnMiniDonut();
@@ -1719,7 +1733,7 @@
 
     // ── Network metadata ──
 
-    const PN_NET_COLORS_HEX = { onion: '#da3633', i2p: '#d29922', cjdns: '#bc8cff' };
+    const PN_NET_COLORS_HEX = { onion: '#1565c0', i2p: '#d29922', cjdns: '#bc8cff' };
     const PN_NET_LABELS = { onion: 'Tor', i2p: 'I2P', cjdns: 'CJDNS' };
 
     function getPnNetColor(net) {
@@ -2581,6 +2595,9 @@
     function updatePrivateNetUI() {
         if (!privateNetMode) return;
 
+        // Update mini public donut counts
+        renderPubMiniDonut();
+
         // Save donut state before rebuild
         const savedSelectedNet = pnSelectedNet;
         const savedHoveredNet = pnHoveredNet;
@@ -2761,6 +2778,69 @@
                 });
             });
         }
+    }
+
+    /** Render the mini public donut in the upper-right corner (when in private net mode) */
+    function renderPubMiniDonut() {
+        const miniWrap = document.getElementById('pub-mini-donut');
+        const miniSvg = document.getElementById('pub-mini-svg');
+        const miniCount = document.getElementById('pub-mini-count');
+        if (!miniWrap || !miniSvg) return;
+
+        // Count public peers
+        const publicNodes = nodes.filter(n => n.alive && !PRIVATE_NETS.has(n.net));
+        const total = publicNodes.length;
+
+        if (total === 0 || !privateNetMode) {
+            miniWrap.classList.remove('visible');
+            if (!miniWrap.classList.contains('hidden')) miniWrap.classList.add('hidden');
+            return;
+        }
+
+        // Show mini donut
+        miniWrap.classList.remove('hidden');
+        requestAnimationFrame(() => miniWrap.classList.add('visible'));
+
+        if (miniCount) miniCount.textContent = total;
+
+        // Build segments by network type
+        const counts = { ipv4: 0, ipv6: 0 };
+        for (const n of publicNodes) {
+            if (counts.hasOwnProperty(n.net)) counts[n.net]++;
+        }
+        const segs = [];
+        const pubColors = { ipv4: 'var(--net-ipv4, #e3b341)', ipv6: 'var(--net-ipv6, #f07178)' };
+        for (const net of ['ipv4', 'ipv6']) {
+            if (counts[net] > 0) segs.push({ net, count: counts[net], color: getComputedStyle(document.documentElement).getPropertyValue('--net-' + net).trim() || (net === 'ipv4' ? '#e3b341' : '#f07178') });
+        }
+
+        const cx = 40, cy = 40, outerR = 36, innerR = 24;
+        let html = '';
+        if (segs.length === 1) {
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="' + segs[0].color + '" stroke-width="' + (outerR - innerR) + '" />';
+        } else if (segs.length > 1) {
+            const gap = 0.06;
+            const totalGap = gap * segs.length;
+            const totalAngle = 2 * Math.PI - totalGap;
+            let angle = -Math.PI / 2;
+            for (const seg of segs) {
+                const sweep = (seg.count / total) * totalAngle;
+                const endA = angle + sweep;
+                const d = pnDescribeArc(cx, cy, outerR, innerR, angle, endA);
+                html += '<path d="' + d + '" fill="' + seg.color + '" />';
+                angle = endA + gap;
+            }
+        } else {
+            // No segs: draw empty ring
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="var(--text-muted, #8b949e)" stroke-width="' + (outerR - innerR) + '" stroke-opacity="0.3" />';
+        }
+        miniSvg.innerHTML = html;
+
+        // Click: exit private mode and return to public view
+        miniWrap.onclick = function(e) {
+            e.stopPropagation();
+            exitPrivateNetMode();
+        };
     }
 
     /** Draw "PRIVATE NETWORKS" text tiled across Antarctica on the canvas */
@@ -3115,7 +3195,7 @@
 
         // Network display
         const netColorMap = {
-            onion: 'var(--net-tor, #da3633)',
+            onion: 'var(--net-tor, #1565c0)',
             i2p:   'var(--net-i2p, #d29922)',
             cjdns: 'var(--net-cjdns, #bc8cff)',
         };
@@ -7258,14 +7338,22 @@
 
         // Visibility toggle items — the sections on the map
         const visItems = [
-            { id: 'as-diversity-container', label: 'Diversity Score', visible: true },
+            { id: 'as-diversity-container', label: 'Public Donut', visible: true },
+            { id: 'pn-mini-donut', label: 'Private Donut', visible: true },
             { id: 'btc-price-bar', label: 'Bitcoin Price', visible: true },
             { id: 'map-overlay', label: 'System Stats', visible: true },
         ];
         // Check actual visibility
         visItems.forEach(item => {
             const el = document.getElementById(item.id);
-            if (el) item.visible = el.style.display !== 'none';
+            if (el) {
+                // pn-mini-donut uses 'hidden' class instead of display:none
+                if (item.id === 'pn-mini-donut') {
+                    item.visible = el.style.display !== 'none';
+                } else {
+                    item.visible = el.style.display !== 'none';
+                }
+            }
         });
 
         let html = '<div class="dsp-title">Map Settings</div>';
@@ -7331,15 +7419,24 @@
         // Bind show/hide visibility toggles
         popup.querySelectorAll('.dsp-toggle input[data-vis-target]').forEach(cb => {
             cb.addEventListener('change', () => {
-                const target = document.getElementById(cb.dataset.visTarget);
+                const targetId = cb.dataset.visTarget;
+                const target = document.getElementById(targetId);
                 if (!target) return;
                 if (cb.checked) {
                     target.style.display = '';
+                    // For private donut, also re-render if it was hidden
+                    if (targetId === 'pn-mini-donut') {
+                        renderPnMiniDonut();
+                    }
                 } else {
                     target.style.display = 'none';
-                    // If hiding diversity donut, deselect any active AS
-                    if (cb.dataset.visTarget === 'as-diversity-container' && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
+                    // If hiding public donut, deselect any active AS
+                    if (targetId === 'as-diversity-container' && window.ASDiversity && window.ASDiversity.getSelectedAs()) {
                         window.ASDiversity.deselect();
+                    }
+                    // If hiding private donut, exit private mode if active
+                    if (targetId === 'pn-mini-donut' && privateNetMode) {
+                        exitPrivateNetMode();
                     }
                 }
             });
