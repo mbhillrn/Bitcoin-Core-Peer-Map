@@ -1315,7 +1315,8 @@ body.donut-focused .as-diversity-container {
     top: 14px;
     right: auto;
     left: 50%;
-    transform: translateX(-50%) scale(0.82);
+    transform: translateX(-50%) scale(0.88);
+    z-index: 101;
     opacity: 1;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1338,12 +1339,18 @@ body.donut-focused.as-panel-open .peer-panel {
     right: 320px;
 }
 
-/* --- Title: hides in focused mode --- */
+/* --- Title: stays visible in focused mode (matches private donut title) --- */
 body.donut-focused .as-donut-title {
-    opacity: 0;
-    max-height: 0;
-    margin-bottom: 0;
-    pointer-events: none;
+    opacity: 1;
+    max-height: 52px;
+    margin-bottom: -6px;
+    pointer-events: auto;
+    font-size: 19px;
+    letter-spacing: 2px;
+}
+body.donut-focused .as-title-subtitle {
+    font-size: 11px;
+    letter-spacing: 2.5px;
 }
 
 /* --- Legend: ALWAYS hidden in focused mode (lines come from donut center) --- */
@@ -1896,6 +1903,8 @@ body.private-net-mode .pn-mini-donut {
     pointer-events: none;
     user-select: none;
     opacity: 0;
+    transform: scale(0.955);
+    transform-origin: top right;
     transition: opacity 0.5s ease, top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1909,10 +1918,12 @@ body.private-net-mode .pn-mini-donut {
 }
 /* Focused state: segment selected or peer selected → move donut to top-center */
 .pn-container.pn-focused {
-    top: 10px;
+    top: 14px;
     right: auto;
     left: 50%;
-    transform: translateX(-50%) scale(0.72);
+    transform: translateX(-50%) scale(0.84);
+    transform-origin: top center;
+    z-index: 101;
 }
 /* When detail panel is open, push donut away from right edge */
 body.pn-panel-open .pn-container:not(.pn-focused) {
@@ -1921,6 +1932,16 @@ body.pn-panel-open .pn-container:not(.pn-focused) {
 /* Focused mode with panel open: center between left edge and panel */
 body.pn-panel-open .pn-container.pn-focused {
     left: calc((100vw - 320px) / 2);
+}
+
+/* --- PN focused-mode title bump (matches AS focused pattern) --- */
+.pn-container.pn-focused .pn-title {
+    font-size: 18px;
+    letter-spacing: 1.8px;
+}
+.pn-container.pn-focused .pn-title-subtitle {
+    font-size: 10px;
+    letter-spacing: 2.2px;
 }
 
 /* ==========================================================

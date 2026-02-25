@@ -2440,6 +2440,9 @@
     function hidePnSubTooltip() {
         const tip = document.getElementById('pn-sub-tooltip');
         if (tip) {
+            // Clear saved preview state BEFORE hiding, so deferred mouseleave
+            // events (triggered by display:none) can't restore stale peer IDs
+            tip._savedPreviewPeerIds = null;
             tip.classList.add('hidden');
             tip.style.display = 'none';
             tip.style.pointerEvents = 'none';
@@ -2483,8 +2486,9 @@
                 }
             });
             row.addEventListener('mouseleave', () => {
-                highlightedPeerId = pnSelectedNet ? null : (privateNetSelectedPeer ? privateNetSelectedPeer.peerId : null);
-                // Restore parent row preview
+                // Preserve highlight if a peer is actively selected
+                highlightedPeerId = privateNetSelectedPeer ? privateNetSelectedPeer.peerId : null;
+                // Restore parent row preview (unless already cleared by hidePnSubTooltip)
                 pnPreviewPeerIds = tip._savedPreviewPeerIds || null;
                 tip._savedPreviewPeerIds = null;
             });
@@ -2550,6 +2554,8 @@
     function hidePnSubSubTooltip() {
         const tip = document.getElementById('pn-sub-sub-tooltip');
         if (tip) {
+            // Clear saved preview state BEFORE hiding (same deferred mouseleave fix)
+            tip._savedPreviewPeerIds = null;
             tip.classList.add('hidden');
             tip.style.display = 'none';
             tip.style.pointerEvents = 'none';
