@@ -1312,7 +1312,7 @@ body.theme-light .as-sub-sub-tooltip {
 
 /* --- Donut container: moves from upper-right to top-center --- */
 body.donut-focused .as-diversity-container {
-    top: 34px;
+    top: 46px;
     right: auto;
     left: 50%;
     transform: translateX(-50%) scale(0.80);
