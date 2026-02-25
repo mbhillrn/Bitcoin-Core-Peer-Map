@@ -1,3 +1,5 @@
+v7.6.5 — Minor bug fixes and UI improvements.
+
 v7.6.4 — Dedicated IPv4/IPv6 network panels with full drill-down from top bar chips, darker TOR color, and comprehensive refresh stability fixes for network panel dim state, sub-filter persistence, and panel close behavior. Updated README with Private Network Mode documentation and new screenshots.
 
 v7.6.2 — Fixed private network panel rows displaying peer counts jammed against the network name (e.g. "Tor6") instead of right-aligned. Added flex layout to panel interactive rows to match the public AS diversity panel styling.

@@ -98,6 +98,12 @@
 }
 body.donut-focused .as-focused-close {
     display: block;
+    top: 38px;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+body.donut-focused .as-diversity-container:has(:hover) .as-focused-close {
+    opacity: 1;
 }
 /* Hide blue back arrow when insight rect is showing (it has its own back arrow) */
 body.insight-rect-active .as-focused-close {
@@ -1312,10 +1318,11 @@ body.theme-light .as-sub-sub-tooltip {
 
 /* --- Donut container: moves from upper-right to top-center --- */
 body.donut-focused .as-diversity-container {
-    top: 14px;
+    top: 52px;
     right: auto;
     left: 50%;
     transform: translateX(-50%) scale(0.88);
+    transform-origin: top center;
     z-index: 101;
     opacity: 1;
     transition: top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1761,7 +1768,7 @@ body.as-panel-open .peer-detail-popup {
 }
 .pn-mini-label {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.5px;
@@ -1769,24 +1776,24 @@ body.as-panel-open .peer-detail-popup {
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
     text-align: center;
     line-height: 1.1;
-    margin-bottom: -4px;
+    margin-bottom: -6px;
 }
 .pn-mini-subtitle {
     display: block;
-    font-size: 8px;
-    letter-spacing: 1.5px;
+    font-size: 9px;
+    letter-spacing: 2px;
     color: var(--logo-accent, #7ec8e3);
     font-weight: 600;
     margin-top: 1px;
 }
 .pn-mini-donut-ring {
     position: relative;
-    width: 160px;
-    height: 160px;
+    width: 180px;
+    height: 180px;
 }
 .pn-mini-svg {
-    width: 160px;
-    height: 160px;
+    width: 180px;
+    height: 180px;
 }
 .pn-mini-center {
     position: absolute;
@@ -1799,7 +1806,7 @@ body.as-panel-open .peer-detail-popup {
 }
 .pn-mini-center-label {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.5px;
     text-transform: uppercase;
@@ -1807,14 +1814,14 @@ body.as-panel-open .peer-detail-popup {
 }
 .pn-mini-center-count {
     font-family: var(--font-data, 'JetBrains Mono', monospace);
-    font-size: 22px;
+    font-size: 26px;
     font-weight: 800;
     color: var(--text-primary, #c9d1d9);
     line-height: 1;
     margin: 2px 0;
 }
 .pn-mini-center-sub {
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -1826,7 +1833,7 @@ body.as-panel-open .peer-detail-popup {
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-    width: 160px;
+    width: 180px;
     opacity: 0;
     transform: translateY(-4px);
     transition: opacity 0.25s ease, transform 0.25s ease;
@@ -1918,10 +1925,10 @@ body.private-net-mode .pn-mini-donut {
 }
 /* Focused state: segment selected or peer selected → move donut to top-center */
 .pn-container.pn-focused {
-    top: 14px;
+    top: 52px;
     right: auto;
     left: 50%;
-    transform: translateX(-50%) scale(0.84);
+    transform: translateX(-50%) scale(0.78);
     transform-origin: top center;
     z-index: 101;
 }
@@ -1936,12 +1943,22 @@ body.pn-panel-open .pn-container.pn-focused {
 
 /* --- PN focused-mode title bump (matches AS focused pattern) --- */
 .pn-container.pn-focused .pn-title {
-    font-size: 18px;
-    letter-spacing: 1.8px;
+    font-size: 19px;
+    letter-spacing: 2px;
 }
 .pn-container.pn-focused .pn-title-subtitle {
-    font-size: 10px;
-    letter-spacing: 2.2px;
+    font-size: 11px;
+    letter-spacing: 2.5px;
+}
+/* --- PN focused-mode: compensate donut text for smaller scale --- */
+.pn-container.pn-focused .pn-center-label {
+    font-size: 14px;
+}
+.pn-container.pn-focused .pn-center-count {
+    font-size: 41px;
+}
+.pn-container.pn-focused .pn-center-sub {
+    font-size: 12px;
 }
 
 /* ==========================================================
@@ -2033,7 +2050,7 @@ body.pn-panel-open .pn-container.pn-focused {
     transition: color 0.2s ease;
 }
 
-/* Exit button on donut */
+/* Exit button on donut — arrow style matching AS focused-close */
 .pn-exit-btn {
     position: absolute;
     top: 6px;
@@ -2042,16 +2059,20 @@ body.pn-panel-open .pn-container.pn-focused {
     background: rgba(22, 27, 34, 0.85);
     border: 1px solid rgba(240, 136, 62, 0.4);
     color: var(--logo-primary, #f0883e);
-    font-size: 16px;
-    width: 26px;
-    height: 26px;
-    border-radius: 4px;
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
     cursor: pointer;
     pointer-events: auto;
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-    line-height: 24px;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    line-height: 26px;
     text-align: center;
     padding: 0;
+}
+.pn-container:has(:hover) .pn-exit-btn {
+    opacity: 1;
 }
 .pn-exit-btn:hover {
     background: rgba(240, 136, 62, 0.15);
