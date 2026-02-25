@@ -2,6 +2,8 @@
 
 ### A real-time monitoring dashboard for your Bitcoin Core node. Geolocates connected peers on an interactive world map, analyzes service provider diversity across your connections, and provides tools to manage peers directly from a browser-based GUI.
 
+![MBCore Dashboard](docs/images/firsthero.png)
+
 ![MBCore Dashboard](docs/images/hero1.png)
 
 ![MBCore Dashboard](docs/images/hero2.png)
@@ -99,6 +101,12 @@ The top bar provides all primary information, navigation, and tools at a glance.
 - **Red/gray dot:** the network is disabled or has no connected peers
 
 Each chip shows real-time counts like `3↓ 5↑`. When a peer connects or disconnects, an animated delta indicator briefly appears next to the affected count.
+
+**Clicking a network chip** opens that network's dedicated detail panel inside the appropriate mode. Public network chips (IPv4, IPv6) open a network breakdown panel within the public donut view. Private network chips (Tor, I2P, CJDNS) automatically enter Private Network Mode first, then navigate directly to that network's panel. This means you can jump straight to any network's full analysis from the top bar with a single click.
+
+![Top Bar Network Chips to IPv6 Panel](docs/images/topnetworkbartoipv6panel.png)
+
+*Clicking the IPv6 chip on the top bar opens a dedicated IPv6 network panel with full stats, provider drill-down, hosting breakdown, country distribution, software versions, and service flags. Every row drills down to individual peers. Click blank map space or press Escape to return to the summary.*
 
 **Right (top row):** Update countdown, map load status, sync indicator, and current time.
 
@@ -375,7 +383,37 @@ The full-screen HTML5 Canvas map displays your node's connected peers as color-c
 
 #### Private Networks (Antarctica)
 
-Peers on private networks (Tor, I2P, CJDNS) don't have real geographic coordinates. These peers are placed at Antarctic research stations for visualization. Their real locations are hidden by design. Toggle Antarctica visibility from the Table Settings gear menu on the peer list.
+Peers on private overlay networks (Tor, I2P, CJDNS) route traffic through encrypted tunnels, so their real geographic coordinates are never exposed. These peers are placed at Antarctic research stations on the map purely for visualization. The continent of Antarctica serves as the dedicated home for all anonymous peers, keeping them visually grouped and immediately recognizable.
+
+When you enter Private Network Mode, the map automatically zooms to Antarctica and the text **"PRIVATE NETWORKS"** is displayed across the continent as a reminder that the locations shown are not real and that you are viewing privacy-preserving connections.
+
+Toggle Antarctica visibility from the Table Settings gear menu on the peer list.
+
+---
+
+### Private Network Mode
+
+![Private Networks Main View](docs/images/privatenetworksmain.png)
+
+If your node is connected to any of the private overlay networks (Tor, I2P, CJDNS), a dedicated **Private Networks** donut chart becomes available. Click any private network chip on the top bar, or click the Private Networks mini donut, to enter Private Network Mode.
+
+Private Network Mode behaves similarly to the public peer provider analysis but is purpose-built for anonymous connections. The donut chart shows the distribution of your private peers across Tor, I2P, and CJDNS, with the total anonymous peer count displayed in the center. The map zooms to Antarctica where all private peers are visualized, and the accompanying panel provides a full breakdown of your anonymous connections.
+
+The Private Networks panel lets you explore your anonymous peers through multiple dimensions:
+
+- **Most Stable Peer:** peers ranked by connection duration, showing your longest-running anonymous connections
+- **Fastest Peer:** peers ranked by ping latency across all private networks
+- **Most Data Sent To / Received By:** peers ranked by data volume in each direction
+- **Software:** Bitcoin Core versions running across your private network peers
+- **Services:** service flag combinations advertised by anonymous peers
+
+Because these are privacy networks, location and provider information are intentionally absent — there are no countries, ISPs, or AS numbers to display. Every other drill-down works the same way: click a category to see ranked peers, click any peer to open its full detail popup and see its connection on the map.
+
+![Private Network Peer Info](docs/images/privatenetworkpeerinfo.png)
+
+*Selecting the I2P segment on the private donut opens the I2P network panel. Clicking an individual I2P peer zooms to its position in Antarctica and opens the full peer detail popup with connection stats, software version, service flags, and more. The peer's `.b32.i2p` address is shown but its real location remains hidden by design.*
+
+You can exit Private Network Mode at any time by clicking blank space on the map or pressing Escape, which zooms back to the world view and returns to the public peer analysis.
 
 ---
 

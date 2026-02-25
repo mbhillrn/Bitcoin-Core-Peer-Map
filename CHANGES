@@ -1,3 +1,5 @@
+v7.6.3 — Added dedicated IPv4/IPv6 network panels accessible from top bar chips, darker TOR network color for better visibility, and improved panel stability across data refresh cycles. Updated README with Private Network Mode documentation and new screenshots.
+
 v7.6.2 — Fixed private network panel rows displaying peer counts jammed against the network name (e.g. "Tor6") instead of right-aligned. Added flex layout to panel interactive rows to match the public AS diversity panel styling.
 
 v7.6.1 — Refined Private Network Mode interactions: mini donut segments now hover-preview and click-enter specific networks, donut selection persists through map refreshes, and clicking blank map space progressively deselects. Panel row hover previews lines to grouped peers, sub-tooltip peer hover previews individual connections, and flight deck chips correctly route to the right network panel.

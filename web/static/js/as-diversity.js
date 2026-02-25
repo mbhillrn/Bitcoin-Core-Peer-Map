@@ -5950,14 +5950,14 @@ window.ASDiversity = (function () {
             renderDonut();
             renderCenter();
             renderLegend();
-            // Update the header peer count
+            // Update the header peer count (displayed in .as-detail-org)
             var netKey = activeNetworkPanel;
             var refreshPeers = lastPeersRaw.filter(function (p) {
                 return (p.network || 'ipv4') === netKey;
             });
-            var metaRefresh = panelEl ? panelEl.querySelector('.as-detail-meta') : null;
-            if (metaRefresh) {
-                metaRefresh.textContent = refreshPeers.length + ' peer' + (refreshPeers.length !== 1 ? 's' : '') + ' connected';
+            var orgRefresh = panelEl ? panelEl.querySelector('.as-detail-org') : null;
+            if (orgRefresh) {
+                orgRefresh.textContent = refreshPeers.length + ' peer' + (refreshPeers.length !== 1 ? 's' : '') + ' connected';
             }
             // Re-apply peer table filter with fresh peer list
             var refreshIds = refreshPeers.map(function (p) { return p.id; });
