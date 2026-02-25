@@ -2195,6 +2195,11 @@ body.pn-panel-open .pn-container.pn-focused {
 
 /* Interactive rows in the detail panel */
 .pn-interactive-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0 2px 8px;
+    gap: 8px;
     cursor: pointer;
     border-radius: 3px;
     transition: background 0.15s ease, border-left 0.15s ease;

@@ -1,3 +1,5 @@
+v7.6.2 — Fixed private network panel rows displaying peer counts jammed against the network name (e.g. "Tor6") instead of right-aligned. Added flex layout to panel interactive rows to match the public AS diversity panel styling.
+
 v7.6.1 — Refined Private Network Mode interactions: mini donut segments now hover-preview and click-enter specific networks, donut selection persists through map refreshes, and clicking blank map space progressively deselects. Panel row hover previews lines to grouped peers, sub-tooltip peer hover previews individual connections, and flight deck chips correctly route to the right network panel.
 
 v7.6.0 — New Private Network Mode for Tor, I2P, and CJDNS peers with dedicated donut visualization, overview panel, and Antarctica map zoom. Flight deck network chips now toggle between public and private modes. Collapsible AS legend keeps the right-side layout clean.
