@@ -98,6 +98,8 @@ window.ASDiversity = (function () {
     let insightRectEl = null;       // DOM ref for insight rectangle overlay
     let insightRectVisible = false; // Whether the insight rectangle is currently shown
     let hoveredPeerId = null;       // Peer ID currently being hovered in a subtooltip (for update preservation)
+    let summaryPreviewPeerIds = null;  // Peer IDs for active summary hover preview (preservation across refresh)
+    let summaryPreviewLabel = null;    // Label for active summary hover preview
     let selectedPeerId = null;      // Peer ID that was clicked/selected (persists through hover cycles)
 
     // Integration hooks (set by bitapp.js)
@@ -1338,6 +1340,12 @@ window.ASDiversity = (function () {
             return;
         }
 
+        // If a summary row hover preview is active, preserve it across data refresh
+        if (donutFocused && summarySelected && summaryPreviewPeerIds && summaryPreviewLabel && !selectedAs) {
+            previewSummaryCenterText(summaryPreviewPeerIds, summaryPreviewLabel);
+            return;
+        }
+
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
         var headingEl = donutCenter.querySelector('.as-score-heading');
         var scoreVal = donutCenter.querySelector('.as-score-value');
@@ -1368,14 +1376,14 @@ window.ASDiversity = (function () {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
-                // Show "← Others" back link for sub-providers, else "Internet Provider:" label
+                // Show "← Others" back link for sub-providers, else "ISP" label
                 var isSubProv = isOthersSubProvider(selectedAs);
                 if (diversityEl) {
                     if (isSubProv && donutFocused) {
                         diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
                         diversityEl.style.color = '';
                     } else {
-                        diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'Internet Provider:';
+                        diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'ISP';
                         diversityEl.style.color = 'var(--logo-primary)';
                     }
                     diversityEl.style.display = '';
@@ -2667,6 +2675,8 @@ window.ASDiversity = (function () {
      *  Checks for active sub-filters, insights, or selections and restores appropriately
      *  instead of blindly reverting to the default diversity score display. */
     function restoreDonutAfterPreview() {
+        summaryPreviewPeerIds = null;
+        summaryPreviewLabel = null;
         if (!donutFocused) return;
         if (insightActiveAsNum) {
             // An insight is active (Most Stable, Fastest, etc.) — keep donut on that provider
@@ -2731,6 +2741,8 @@ window.ASDiversity = (function () {
      *  Shows the category label, peer count, and percentage without changing state. */
     function previewSummaryCenterText(peerIds, label) {
         if (!donutFocused || !donutCenter) return;
+        summaryPreviewPeerIds = peerIds;
+        summaryPreviewLabel = label;
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
         var headingEl = donutCenter.querySelector('.as-score-heading');
         var scoreVal = donutCenter.querySelector('.as-score-value');
@@ -4689,14 +4701,14 @@ window.ASDiversity = (function () {
         var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
 
-        // Show "← Others" back link for sub-providers, else "Internet Provider:" label
+        // Show "← Others" back link for sub-providers, else "ISP" label
         var isSubProv = isOthersSubProvider(asNum);
         if (diversityEl) {
             if (isSubProv) {
                 diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
                 diversityEl.style.color = '';
             } else {
-                diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'Internet Provider:';
+                diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'ISP';
                 diversityEl.style.color = 'var(--logo-primary)';
             }
             diversityEl.style.display = '';
@@ -4775,26 +4787,30 @@ window.ASDiversity = (function () {
                 item.appendChild(countSpan);
                 item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
 
-                // Hover: preview lines to this provider's peers
+                // Hover: preview lines and donut center for this provider's peers
                 item.addEventListener('mouseenter', function () {
                     if (_drawLinesForAs) _drawLinesForAs(g.asNumber, g.peerIds, othersSeg.color);
                     if (_dimMapPeers) _dimMapPeers(g.peerIds);
+                    showFocusedCenterText(g.asNumber);
                 });
                 item.dataset.as = g.asNumber;
                 item.addEventListener('mouseleave', function () {
-                    // Restore lines for current selection
+                    // Restore lines and donut center for current selection
                     if (selectedAs === 'Others') {
                         if (_drawLinesForAs) _drawLinesForAs('Others', othersSeg.peerIds, othersSeg.color);
                         if (_dimMapPeers) _dimMapPeers(othersSeg.peerIds);
+                        showFocusedCenterText('Others');
                     } else if (selectedAs && isOthersSubProvider(selectedAs)) {
                         // Restore selected sub-provider's lines
                         var peerIds = getPeerIdsForAnyAs(selectedAs);
                         var color = getColorForAsNum(selectedAs);
                         if (_drawLinesForAs) _drawLinesForAs(selectedAs, peerIds, color);
                         if (_dimMapPeers) _dimMapPeers(peerIds);
+                        showFocusedCenterText(selectedAs);
                     } else {
                         activateHoverAll();
                         if (_dimMapPeers) _dimMapPeers(null);
+                        renderCenter();
                     }
                 });
 

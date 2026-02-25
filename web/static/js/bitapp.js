@@ -1513,6 +1513,8 @@
     let pnPinnedSubSrc = null;
     let pnPinnedSubHtml = '';
     let pnSubSubTooltipPinned = false;
+    let pnCenterPreviewLabel = null;   // Label of active PN center preview (for data refresh preservation)
+    let pnCenterPreviewPeerIds = null; // Peer IDs of active PN center preview
 
     function cachePnElements() {
         if (!pnContainerEl) {
@@ -1759,7 +1761,16 @@
 
         // Update center text
         if (pnCenterLabel && pnCenterCount && pnCenterSub) {
-            if (privateNetSelectedPeer) {
+            // If a category row preview is active (hover or pinned), preserve it across refresh
+            if (pnCenterPreviewLabel && pnCenterPreviewPeerIds) {
+                pnCenterLabel.textContent = pnCenterPreviewLabel.toUpperCase();
+                pnCenterLabel.style.color = '';
+                pnCenterCount.textContent = pnCenterPreviewPeerIds.length + ' peer' + (pnCenterPreviewPeerIds.length !== 1 ? 's' : '');
+                pnCenterCount.style.fontSize = '';
+                pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
+                var pct = total > 0 ? ((pnCenterPreviewPeerIds.length / total) * 100).toFixed(1) : '0.0';
+                pnCenterSub.innerHTML = pct + '% of<br>anonymous peers';
+            } else if (privateNetSelectedPeer) {
                 pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
                 pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
                 pnCenterCount.style.fontSize = '22px';
@@ -2372,18 +2383,22 @@
     function previewPnCenterText(peerIds, label, totalNetPeers) {
         cachePnElements();
         if (!pnCenterLabel || !pnCenterCount || !pnCenterSub) return;
+        pnCenterPreviewLabel = label;
+        pnCenterPreviewPeerIds = peerIds;
         pnCenterLabel.textContent = label.toUpperCase();
         pnCenterLabel.style.color = '';
-        pnCenterCount.textContent = peerIds.length;
+        pnCenterCount.textContent = peerIds.length + ' peer' + (peerIds.length !== 1 ? 's' : '');
         pnCenterCount.style.fontSize = '';
         pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
         var pct = totalNetPeers > 0 ? ((peerIds.length / totalNetPeers) * 100).toFixed(1) : '0.0';
-        pnCenterSub.textContent = pct + '% of peers';
+        pnCenterSub.innerHTML = pct + '% of<br>anonymous peers';
     }
 
     /** Restore the PN donut center to its current state (selected net, selected peer, or default) */
     function restorePnCenterText() {
         cachePnElements();
+        pnCenterPreviewLabel = null;
+        pnCenterPreviewPeerIds = null;
         if (!pnCenterLabel || !pnCenterCount || !pnCenterSub) return;
         if (privateNetSelectedPeer) {
             pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
