@@ -2727,6 +2727,40 @@ window.ASDiversity = (function () {
         }
     }
 
+    /** Preview category info in the donut center during hover (focused mode only).
+     *  Shows the category label, peer count, and percentage without changing state. */
+    function previewSummaryCenterText(peerIds, label) {
+        if (!donutFocused || !donutCenter) return;
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+
+        if (diversityEl) { diversityEl.style.display = 'none'; }
+        if (headingEl) {
+            headingEl.textContent = peerIds.length + ' PEER' + (peerIds.length !== 1 ? 'S' : '');
+            headingEl.style.color = 'var(--accent)';
+            headingEl.style.display = '';
+        }
+        if (scoreVal) {
+            scoreVal.textContent = label;
+            scoreVal.className = 'as-score-value as-selected-mode';
+            scoreVal.style.color = 'var(--text-primary)';
+            scoreVal.title = label + ' \u2014 ' + peerIds.length + ' peers';
+        }
+        if (qualityEl) {
+            var pctOfTotal = totalPeers > 0 ? ((peerIds.length / totalPeers) * 100).toFixed(1) : '0.0';
+            qualityEl.textContent = pctOfTotal + '% of peers';
+            qualityEl.className = 'as-score-quality';
+            qualityEl.style.color = 'var(--text-secondary)';
+        }
+        if (scoreLbl) {
+            scoreLbl.textContent = '';
+            scoreLbl.className = 'as-score-label';
+        }
+    }
+
     /** Restore lines/filter/dim after a hover preview ends (summary mode) */
     function restoreSummaryFromPreview() {
         // Don't restore if big peer popup is active — it manages its own line state
@@ -2827,6 +2861,8 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     // Preview lines/filter for hovered category
                     previewSummaryLines(peerIds);
+                    // Preview category info in donut center
+                    previewSummaryCenterText(peerIds, catLabel);
                 });
                 rowEl.addEventListener('mousemove', function (e) {
                     if (!subTooltipPinned) positionSubTooltip(e);

@@ -2324,6 +2324,8 @@
                 showPnSubTooltip(html, e);
                 // Preview lines to these peers
                 pnPreviewPeerIds = peerIds;
+                // Preview category info in PN donut center
+                previewPnCenterText(peerIds, label, allNetPeers.length);
             });
             rowEl.addEventListener('mousemove', (e) => {
                 if (!pnSubTooltipPinned) positionPnSubTooltip(e);
@@ -2332,6 +2334,8 @@
                 if (pnSubTooltipPinned) return;
                 hidePnSubTooltip();
                 pnPreviewPeerIds = null;
+                // Restore PN donut center to its previous state
+                restorePnCenterText();
             });
             rowEl.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2344,6 +2348,8 @@
                     hidePnSubTooltip();
                     rowEl.classList.remove('pn-sub-filter-active');
                     pnPreviewPeerIds = null;  // Unlock lines
+                    // Restore PN donut center
+                    restorePnCenterText();
                     return;
                 }
 
@@ -2356,8 +2362,53 @@
                 pinPnSubTooltip(html, rowEl);
                 // Lock preview lines to this row's peers
                 pnPreviewPeerIds = peerIds;
+                // Show category info in PN donut center (stays while pinned)
+                previewPnCenterText(peerIds, label, allNetPeers.length);
             });
         });
+    }
+
+    /** Preview category info in the PN donut center (label, count, percentage) */
+    function previewPnCenterText(peerIds, label, totalNetPeers) {
+        cachePnElements();
+        if (!pnCenterLabel || !pnCenterCount || !pnCenterSub) return;
+        pnCenterLabel.textContent = label.toUpperCase();
+        pnCenterLabel.style.color = '';
+        pnCenterCount.textContent = peerIds.length;
+        pnCenterCount.style.fontSize = '';
+        pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
+        var pct = totalNetPeers > 0 ? ((peerIds.length / totalNetPeers) * 100).toFixed(1) : '0.0';
+        pnCenterSub.textContent = pct + '% of peers';
+    }
+
+    /** Restore the PN donut center to its current state (selected net, selected peer, or default) */
+    function restorePnCenterText() {
+        cachePnElements();
+        if (!pnCenterLabel || !pnCenterCount || !pnCenterSub) return;
+        if (privateNetSelectedPeer) {
+            pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
+            pnCenterLabel.style.color = '';
+            pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
+            pnCenterCount.style.fontSize = '22px';
+            pnCenterCount.style.color = '';
+            pnCenterSub.textContent = privateNetSelectedPeer.direction === 'IN' ? 'inbound' : 'outbound';
+        } else if (pnSelectedNet) {
+            var seg = pnSegments.find(function (s) { return s.net === pnSelectedNet; });
+            pnCenterLabel.textContent = PN_NET_LABELS[pnSelectedNet] || pnSelectedNet.toUpperCase();
+            pnCenterLabel.style.color = '';
+            pnCenterCount.textContent = seg ? seg.count : 0;
+            pnCenterCount.style.fontSize = '';
+            pnCenterCount.style.color = '';
+            pnCenterSub.textContent = 'peers';
+        } else {
+            var total = pnSegments.reduce(function (s, seg) { return s + seg.count; }, 0);
+            pnCenterLabel.textContent = 'PRIVATE';
+            pnCenterLabel.style.color = '';
+            pnCenterCount.textContent = total;
+            pnCenterCount.style.fontSize = '';
+            pnCenterCount.style.color = '';
+            pnCenterSub.textContent = 'peers';
+        }
     }
 
     /** Build peer list HTML for the sub-tooltip */
@@ -6890,14 +6941,15 @@
             // This was a click, not a drag
             const group = findNodesAtScreen(e.clientX, e.clientY);
             if (group.length > 0) {
-                // [PRIVATE-NET] If clicking a private peer on the public map, enter private net mode
-                if (group.length === 1 && PRIVATE_NETS.has(group[0].net)) {
-                    enterPrivateNetMode(group[0].peerId);
+                // [PRIVATE-NET] If clicking private peers on the public map, enter private net mode
+                // Handles both single private peers and groups of overlapping private peers
+                if (group.some(function(n) { return PRIVATE_NETS.has(n.net); })) {
+                    // Find the first private peer in the group and enter private mode with it
+                    var privatePeer = group.find(function(n) { return PRIVATE_NETS.has(n.net); });
+                    enterPrivateNetMode(privatePeer.peerId);
                     dragging = false;
                     return;
                 }
-                // If a mixed group of private/public peers, filter to just public for normal handling
-                // (private peers in multi-dot groups still trigger individual handling above)
 
                 if (group.length === 1) {
                     const node = group[0];

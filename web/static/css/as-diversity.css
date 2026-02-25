@@ -2411,7 +2411,7 @@ body.private-net-mode .pn-big-popup {
     display: flex !important;
     opacity: 0;
     left: 260px;
-    top: 160px;
+    top: 172px;
 }
 body.private-net-mode .pn-big-popup.visible {
     opacity: 1;
