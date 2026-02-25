@@ -1903,6 +1903,8 @@ body.private-net-mode .pn-mini-donut {
     pointer-events: none;
     user-select: none;
     opacity: 0;
+    transform: scale(0.955);
+    transform-origin: top right;
     transition: opacity 0.5s ease, top 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 right 0.45s cubic-bezier(0.4, 0, 0.2, 1),
                 left 0.45s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1920,6 +1922,7 @@ body.private-net-mode .pn-mini-donut {
     right: auto;
     left: 50%;
     transform: translateX(-50%) scale(0.84);
+    transform-origin: top center;
     z-index: 101;
 }
 /* When detail panel is open, push donut away from right edge */
@@ -1931,15 +1934,25 @@ body.pn-panel-open .pn-container.pn-focused {
     left: calc((100vw - 320px) / 2);
 }
 
+/* --- PN focused-mode title bump (matches AS focused pattern) --- */
+.pn-container.pn-focused .pn-title {
+    font-size: 18px;
+    letter-spacing: 1.8px;
+}
+.pn-container.pn-focused .pn-title-subtitle {
+    font-size: 10px;
+    letter-spacing: 2.2px;
+}
+
 /* ==========================================================
    PN2. Title — "Private Networks" above the circular donut
    ========================================================== */
 .pn-title {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.8px;
+    letter-spacing: 1.5px;
     text-align: center;
     color: var(--logo-primary, #f0883e);
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
@@ -1949,8 +1962,8 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-title-subtitle {
     display: block;
-    font-size: 10px;
-    letter-spacing: 2.2px;
+    font-size: 9px;
+    letter-spacing: 2px;
     color: var(--logo-accent, #7ec8e3);
     font-weight: 600;
     margin-top: 1px;
