@@ -1763,28 +1763,41 @@
         if (pnCenterLabel && pnCenterCount && pnCenterSub) {
             // If a category row preview is active (hover or pinned), preserve it across refresh
             if (pnCenterPreviewLabel && pnCenterPreviewPeerIds) {
-                pnCenterLabel.textContent = pnCenterPreviewLabel.toUpperCase();
-                pnCenterLabel.style.color = '';
-                pnCenterCount.textContent = pnCenterPreviewPeerIds.length;
-                pnCenterCount.style.fontSize = '';
-                pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
-                var pct = total > 0 ? ((pnCenterPreviewPeerIds.length / total) * 100).toFixed(1) : '0.0';
-                pnCenterSub.innerHTML = 'peer' + (pnCenterPreviewPeerIds.length !== 1 ? 's' : '') + ' · ' + pct + '%<br>of anonymous peers';
+                var cnt = pnCenterPreviewPeerIds.length;
+                pnCenterLabel.textContent = cnt + ' PEER' + (cnt !== 1 ? 'S' : '');
+                pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+                pnCenterCount.textContent = pnCenterPreviewLabel.toUpperCase();
+                pnCenterCount.style.fontSize = '17px';
+                pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
+                pnCenterCount.style.color = '';
+                var pct = total > 0 ? ((cnt / total) * 100).toFixed(1) : '0.0';
+                pnCenterSub.textContent = pct + '% anonymous';
             } else if (privateNetSelectedPeer) {
                 pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
+                pnCenterLabel.style.color = '';
                 pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
                 pnCenterCount.style.fontSize = '22px';
+                pnCenterCount.style.fontFamily = '';
+                pnCenterCount.style.color = '';
                 pnCenterSub.textContent = privateNetSelectedPeer.direction === 'IN' ? 'inbound' : 'outbound';
             } else if (pnSelectedNet) {
                 const seg = pnSegments.find(s => s.net === pnSelectedNet);
-                pnCenterLabel.textContent = PN_NET_LABELS[pnSelectedNet] || pnSelectedNet.toUpperCase();
-                pnCenterCount.textContent = seg ? seg.count : 0;
-                pnCenterCount.style.fontSize = '';
-                pnCenterSub.textContent = 'peers';
+                var netCount = seg ? seg.count : 0;
+                var netPct = total > 0 ? ((netCount / total) * 100).toFixed(1) : '0.0';
+                pnCenterLabel.textContent = netCount + ' PEER' + (netCount !== 1 ? 'S' : '');
+                pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+                pnCenterCount.textContent = (PN_NET_LABELS[pnSelectedNet] || pnSelectedNet).toUpperCase();
+                pnCenterCount.style.fontSize = '22px';
+                pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
+                pnCenterCount.style.color = seg ? seg.color : '';
+                pnCenterSub.textContent = netPct + '% anonymous';
             } else {
                 pnCenterLabel.textContent = 'PRIVATE';
+                pnCenterLabel.style.color = '';
                 pnCenterCount.textContent = total;
                 pnCenterCount.style.fontSize = '';
+                pnCenterCount.style.fontFamily = '';
+                pnCenterCount.style.color = '';
                 pnCenterSub.textContent = 'peers';
             }
         }
@@ -2240,7 +2253,7 @@
         for (const seg of pnSegments) {
             const peerIds = JSON.stringify(allPrivate.filter(p => p.network === seg.net).map(p => p.id));
             html += '<div class="pn-interactive-row pn-net-link-row" data-net="' + seg.net + '" data-peer-ids=\'' + peerIds + '\' data-category="network">';
-            html += '<span class="as-detail-sub-label"><span style="color:' + seg.color + '">\u25cf</span> ' + seg.label + '</span>';
+            html += '<span class="as-detail-sub-label">' + seg.label + '</span>';
             html += '<span class="as-detail-sub-val">' + seg.count + '</span>';
             html += '</div>';
         }
@@ -2385,13 +2398,15 @@
         if (!pnCenterLabel || !pnCenterCount || !pnCenterSub) return;
         pnCenterPreviewLabel = label;
         pnCenterPreviewPeerIds = peerIds;
-        pnCenterLabel.textContent = label.toUpperCase();
-        pnCenterLabel.style.color = '';
-        pnCenterCount.textContent = peerIds.length;
-        pnCenterCount.style.fontSize = '';
-        pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
-        var pct = totalNetPeers > 0 ? ((peerIds.length / totalNetPeers) * 100).toFixed(1) : '0.0';
-        pnCenterSub.innerHTML = 'peer' + (peerIds.length !== 1 ? 's' : '') + ' · ' + pct + '%<br>of anonymous peers';
+        var cnt = peerIds.length;
+        pnCenterLabel.textContent = cnt + ' PEER' + (cnt !== 1 ? 'S' : '');
+        pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+        pnCenterCount.textContent = label.toUpperCase();
+        pnCenterCount.style.fontSize = '17px';
+        pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
+        pnCenterCount.style.color = '';
+        var pct = totalNetPeers > 0 ? ((cnt / totalNetPeers) * 100).toFixed(1) : '0.0';
+        pnCenterSub.textContent = pct + '% anonymous';
     }
 
     /** Restore the PN donut center to its current state (selected net, selected peer, or default) */
@@ -2405,22 +2420,28 @@
             pnCenterLabel.style.color = '';
             pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
             pnCenterCount.style.fontSize = '22px';
+            pnCenterCount.style.fontFamily = '';
             pnCenterCount.style.color = '';
             pnCenterSub.textContent = privateNetSelectedPeer.direction === 'IN' ? 'inbound' : 'outbound';
         } else if (pnSelectedNet) {
             var seg = pnSegments.find(function (s) { return s.net === pnSelectedNet; });
-            pnCenterLabel.textContent = PN_NET_LABELS[pnSelectedNet] || pnSelectedNet.toUpperCase();
-            pnCenterLabel.style.color = '';
-            pnCenterCount.textContent = seg ? seg.count : 0;
-            pnCenterCount.style.fontSize = '';
-            pnCenterCount.style.color = '';
-            pnCenterSub.textContent = 'peers';
+            var netCount = seg ? seg.count : 0;
+            var totalAll = pnSegments.reduce(function (s, sg) { return s + sg.count; }, 0);
+            var netPct = totalAll > 0 ? ((netCount / totalAll) * 100).toFixed(1) : '0.0';
+            pnCenterLabel.textContent = netCount + ' PEER' + (netCount !== 1 ? 'S' : '');
+            pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+            pnCenterCount.textContent = (PN_NET_LABELS[pnSelectedNet] || pnSelectedNet).toUpperCase();
+            pnCenterCount.style.fontSize = '22px';
+            pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
+            pnCenterCount.style.color = seg ? seg.color : '';
+            pnCenterSub.textContent = netPct + '% anonymous';
         } else {
             var total = pnSegments.reduce(function (s, seg) { return s + seg.count; }, 0);
             pnCenterLabel.textContent = 'PRIVATE';
             pnCenterLabel.style.color = '';
             pnCenterCount.textContent = total;
             pnCenterCount.style.fontSize = '';
+            pnCenterCount.style.fontFamily = '';
             pnCenterCount.style.color = '';
             pnCenterSub.textContent = 'peers';
         }
