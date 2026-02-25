@@ -1318,6 +1318,7 @@ window.ASDiversity = (function () {
             if (headingEl2) {
                 headingEl2.textContent = subFilterPeerIds.length + ' PEER' + (subFilterPeerIds.length !== 1 ? 'S' : '');
                 headingEl2.style.color = 'var(--accent)';
+                headingEl2.style.display = '';
             }
             if (scoreVal2) {
                 scoreVal2.textContent = subFilterLabel;
@@ -1367,19 +1368,22 @@ window.ASDiversity = (function () {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
-                // Show "← Others" back link for sub-providers inside the Others bucket
+                // Show "← Others" back link for sub-providers, else "Internet Provider:" label
                 var isSubProv = isOthersSubProvider(selectedAs);
                 if (diversityEl) {
                     if (isSubProv && donutFocused) {
                         diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
-                        diversityEl.style.display = '';
+                        diversityEl.style.color = '';
                     } else {
-                        diversityEl.style.display = 'none';
+                        diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'Internet Provider:';
+                        diversityEl.style.color = 'var(--logo-primary)';
                     }
+                    diversityEl.style.display = '';
                 }
+                // Hide the heading row — peer count moves to bottom label
                 if (headingEl) {
-                    headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
-                    headingEl.style.color = seg.color;
+                    headingEl.textContent = '';
+                    headingEl.style.display = 'none';
                 }
                 scoreVal.textContent = displayName;
                 scoreVal.className = 'as-score-value as-selected-mode';
@@ -1387,29 +1391,39 @@ window.ASDiversity = (function () {
                 scoreVal.title = seg.asNumber + ' \u00b7 ' + (seg.asName || '') + '\n'
                     + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
                 if (qualityEl) {
-                    qualityEl.textContent = seg.percentage.toFixed(1) + '%';
+                    qualityEl.textContent = seg.asNumber === 'Others' ? '' : seg.asNumber;
                     qualityEl.className = 'as-score-quality';
                     qualityEl.style.color = seg.color;
                 }
-                scoreLbl.textContent = seg.asNumber;
+                if (scoreLbl) {
+                    scoreLbl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+                    scoreLbl.className = 'as-score-label as-provider-peers';
+                    scoreLbl.style.color = '';
+                }
                 scoreLbl.classList.remove('as-summary-link');
                 attachOthersBackHandler();
                 return;
             }
         }
 
-        // Reset any selected-mode styling
+        // Reset any selected-mode / provider styling
         scoreVal.className = 'as-score-value';
         scoreVal.style.color = '';
         if (diversityEl) {
             diversityEl.textContent = 'DIVERSITY';
             diversityEl.style.display = '';
+            diversityEl.style.color = '';
         }
         if (headingEl) {
             headingEl.style.color = '';
+            headingEl.style.display = '';
         }
         if (qualityEl) {
             qualityEl.style.color = '';
+        }
+        if (scoreLbl) {
+            scoreLbl.className = 'as-score-label';
+            scoreLbl.style.color = '';
         }
 
         // Edge case: no locatable peers (all private/tor/i2p/cjdns)
@@ -4639,25 +4653,29 @@ window.ASDiversity = (function () {
         var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
 
-        // Show "← Others" back link for sub-providers inside the Others bucket
+        // Show "← Others" back link for sub-providers, else "Internet Provider:" label
         var isSubProv = isOthersSubProvider(asNum);
         if (diversityEl) {
             if (isSubProv) {
                 diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
-                diversityEl.style.display = '';
+                diversityEl.style.color = '';
             } else {
-                diversityEl.style.display = 'none';
+                diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'Internet Provider:';
+                diversityEl.style.color = 'var(--logo-primary)';
             }
+            diversityEl.style.display = '';
+        }
+
+        // Hide the heading row — peer count moves to bottom label
+        if (headingEl) {
+            headingEl.textContent = '';
+            headingEl.style.display = 'none';
         }
 
         // Build display name — smart line-breaking for names with dashes
         var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
         var displayLines = formatNameForDonut(name);
 
-        if (headingEl) {
-            headingEl.textContent = seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '');
-            headingEl.style.color = seg.color;
-        }
         if (scoreVal) {
             scoreVal.textContent = displayLines;
             scoreVal.className = 'as-score-value as-focused-provider';
@@ -4670,8 +4688,9 @@ window.ASDiversity = (function () {
             qualityEl.style.color = seg.color;
         }
         if (scoreLbl) {
-            scoreLbl.textContent = '';
-            scoreLbl.classList.remove('as-summary-link');
+            scoreLbl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+            scoreLbl.className = 'as-score-label as-provider-peers';
+            scoreLbl.style.color = '';
         }
         attachOthersBackHandler();
     }
@@ -5755,6 +5774,7 @@ window.ASDiversity = (function () {
         if (headingEl) {
             headingEl.textContent = 'PEER #' + peer.id;
             headingEl.style.color = color;
+            headingEl.style.display = '';
         }
         if (scoreVal) {
             var provName = peer.asname || parseAsOrg(peer.as) || '';
