@@ -29,7 +29,7 @@
     /* Network colours */
     --net-ipv4:       #e3b341;
     --net-ipv6:       #f07178;
-    --net-tor:        #4a9eff;
+    --net-tor:        #1565c0;
     --net-i2p:        #8b5cf6;
     --net-cjdns:      #d2a8ff;
     --net-unknown:    #4a5568;
@@ -1574,14 +1574,14 @@ body.donut-focused .map-controls {
 /* Network-coloured left border + text tint on rows */
 .peer-table tbody tr[data-net="ipv4"]  { border-left: 2px solid var(--net-ipv4); color: rgba(227,179,65,0.85); }
 .peer-table tbody tr[data-net="ipv6"]  { border-left: 2px solid var(--net-ipv6); color: rgba(240,113,120,0.85); }
-.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor);  color: rgba(74,158,255,0.85); }
+.peer-table tbody tr[data-net="onion"] { border-left: 2px solid var(--net-tor);  color: rgba(21,101,192,0.85); }
 .peer-table tbody tr[data-net="i2p"]   { border-left: 2px solid var(--net-i2p);  color: rgba(139,92,246,0.85); }
 .peer-table tbody tr[data-net="cjdns"] { border-left: 2px solid var(--net-cjdns);color: rgba(210,168,255,0.85); }
 
 /* Network tint intensifies on hover */
 .peer-table tbody tr[data-net="ipv4"]:hover  { border-left: 3px solid var(--net-ipv4);  background: rgba(227,179,65,0.06);  color: rgba(227,179,65,1); }
 .peer-table tbody tr[data-net="ipv6"]:hover  { border-left: 3px solid var(--net-ipv6);  background: rgba(240,113,120,0.06); color: rgba(240,113,120,1); }
-.peer-table tbody tr[data-net="onion"]:hover { border-left: 3px solid var(--net-tor);   background: rgba(74,158,255,0.06);  color: rgba(74,158,255,1); }
+.peer-table tbody tr[data-net="onion"]:hover { border-left: 3px solid var(--net-tor);   background: rgba(21,101,192,0.06);  color: rgba(21,101,192,1); }
 .peer-table tbody tr[data-net="i2p"]:hover   { border-left: 3px solid var(--net-i2p);   background: rgba(139,92,246,0.06);  color: rgba(139,92,246,1); }
 .peer-table tbody tr[data-net="cjdns"]:hover { border-left: 3px solid var(--net-cjdns); background: rgba(210,168,255,0.06); color: rgba(210,168,255,1); }
 
@@ -1616,7 +1616,7 @@ body.donut-focused .map-controls {
 }
 .net-ipv4  { color: var(--net-ipv4);  background: rgba(227,179,65,0.12);  border: 1px solid rgba(227,179,65,0.25); }
 .net-ipv6  { color: var(--net-ipv6);  background: rgba(240,113,120,0.12); border: 1px solid rgba(240,113,120,0.25); }
-.net-tor   { color: var(--net-tor);   background: rgba(74,158,255,0.12);  border: 1px solid rgba(74,158,255,0.25); }
+.net-tor   { color: var(--net-tor);   background: rgba(21,101,192,0.12);  border: 1px solid rgba(21,101,192,0.25); }
 .net-i2p   { color: var(--net-i2p);   background: rgba(139,92,246,0.12);  border: 1px solid rgba(139,92,246,0.25); }
 .net-cjdns { color: var(--net-cjdns); background: rgba(210,168,255,0.12); border: 1px solid rgba(210,168,255,0.25); }
 /* ALL badge: WHITE text, not accent blue */
