@@ -4325,6 +4325,7 @@ window.ASDiversity = (function () {
         // Stage 0: If a network panel (IPv4/IPv6) is open, close it and return to summary
         if (activeNetworkPanel) {
             activeNetworkPanel = null;
+            selectedAs = null;
             // If sub-tooltips are open, close those first
             if (subTooltipPinned || subSubTooltipPinned) {
                 hideSubTooltip();
@@ -5110,6 +5111,7 @@ window.ASDiversity = (function () {
             // If a network panel is open, Escape goes back to summary
             if (activeNetworkPanel) {
                 activeNetworkPanel = null;
+                selectedAs = null;
                 if (subTooltipPinned || subSubTooltipPinned) {
                     hideSubTooltip();
                     hideSubSubTooltip();
