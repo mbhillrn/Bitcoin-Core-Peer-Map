@@ -1161,7 +1161,7 @@ body.donut-focused .map-controls {
     display: flex;
     flex-direction: column;
     max-height: 340px;
-    transition: max-height 0.3s ease;
+    transition: max-height 0.3s ease, right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: auto;
 }
 /* Collapsed: only show handle */
