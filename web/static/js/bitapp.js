@@ -932,13 +932,17 @@
             const netKey = chip.dataset.net;
             if (PRIVATE_NETS.has(netKey)) {
                 // Private network chip → enter private mode + open that network's panel
-                if (!privateNetMode) enterPrivateNetMode();
-                pnSelectedNet = netKey;
-                pnDonutFocused = true;
-                cachePnElements();
-                if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
-                openPnDetailPanel(netKey);
-                updatePrivateNetUI();
+                if (!privateNetMode) {
+                    enterPrivateNetMode(null, netKey);
+                } else {
+                    // Already in private mode — just switch to this network
+                    pnSelectedNet = netKey;
+                    pnDonutFocused = true;
+                    cachePnElements();
+                    if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+                    openPnDetailPanel(netKey);
+                    updatePrivateNetUI();
+                }
             } else {
                 // Public network chip (ipv4/ipv6) → exit private mode if active, enter AS focused mode
                 if (privateNetMode) exitPrivateNetMode();
@@ -1536,7 +1540,9 @@
     }
 
     /** Enter private network mode: zoom to Antarctica, show circular donut */
-    function enterPrivateNetMode(selectedPeerId) {
+    /** Enter private network mode: zoom to Antarctica, show circular donut.
+     *  If targetNet is provided, skip overview and go directly to that net's panel. */
+    function enterPrivateNetMode(selectedPeerId, targetNet) {
         if (privateNetMode) {
             if (selectedPeerId) selectPrivatePeer(selectedPeerId);
             return;
@@ -1557,8 +1563,8 @@
         highlightedPeerId = null;
         pinnedNode = null;
 
-        // Reset state
-        pnSelectedNet = null;
+        // Reset state — but apply targetNet if provided
+        pnSelectedNet = targetNet || null;
         pnDonutFocused = false;
         hidePnSubTooltip();
         pnMiniHover = false;
@@ -1587,10 +1593,15 @@
         targetView.y = (antCenter.y - 0.5) * H;
         targetView.zoom = 1.8;
 
-        // Focus the donut and open overview panel
+        // Focus the donut and open panel
         pnDonutFocused = true;
         updatePrivateNetUI();
-        setTimeout(() => openPnOverviewPanel(), 200);
+        if (targetNet) {
+            // Go directly to the target network's detail panel
+            setTimeout(() => openPnDetailPanel(targetNet), 200);
+        } else {
+            setTimeout(() => openPnOverviewPanel(), 200);
+        }
 
         // Select the triggering peer if provided
         if (selectedPeerId) {
@@ -2697,16 +2708,9 @@
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const net = el.dataset.net;
-                // Enter private mode with this specific network selected
                 pnMiniHover = false;
                 pnMiniHoverNet = null;
-                enterPrivateNetMode();
-                pnSelectedNet = net;
-                pnDonutFocused = true;
-                cachePnElements();
-                if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
-                openPnDetailPanel(net);
-                renderPnDonut();
+                enterPrivateNetMode(null, net);
             });
         });
 
@@ -2753,13 +2757,7 @@
                     const net = item.dataset.net;
                     pnMiniHover = false;
                     pnMiniHoverNet = null;
-                    enterPrivateNetMode();
-                    pnSelectedNet = net;
-                    pnDonutFocused = true;
-                    cachePnElements();
-                    if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
-                    openPnDetailPanel(net);
-                    renderPnDonut();
+                    enterPrivateNetMode(null, net);
                 });
             });
         }
@@ -6975,6 +6973,32 @@
                     hideTooltip();
                     highlightTableRow(null);
                     clearMapDotFilter();
+                }
+                // [PRIVATE-NET] Two-stage deselect: first deselect peer, then deselect segment → overview
+                if (privateNetMode) {
+                    if (privateNetSelectedPeer || privateNetLinePeer) {
+                        // Stage 1: deselect peer, go back to segment/overview view
+                        privateNetSelectedPeer = null;
+                        privateNetLinePeer = null;
+                        closePnBigPopup();
+                        highlightedPeerId = null;
+                        // Zoom back to Antarctica overview
+                        const antCenter = project(40, -75);
+                        targetView.x = (antCenter.x - 0.5) * W;
+                        targetView.y = (antCenter.y - 0.5) * H;
+                        targetView.zoom = 1.8;
+                        renderPnDonut();
+                    } else if (pnSelectedNet) {
+                        // Stage 2: deselect segment → go to overview
+                        pnSelectedNet = null;
+                        pnHoveredNet = null;
+                        hidePnSubTooltip();
+                        pnPreviewPeerIds = null;
+                        closePnDetailPanel();
+                        document.body.classList.remove('pn-panel-open');
+                        openPnOverviewPanel();
+                        renderPnDonut();
+                    }
                 }
                 // [AS-DIVERSITY] Two-stage collapse: first close sub-panels, then main panel
                 if (window.ASDiversity) {
