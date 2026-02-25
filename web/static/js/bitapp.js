@@ -674,6 +674,8 @@
     let pnBigPopupEl = null;             // DOM element for the private peer big detail popup
     let pnMiniHover = false;             // true when hovering the mini donut in default view (draws lines)
     let pnSavedEnabledNets = null;       // saved badge filter state before entering private mode
+    let pnPreviewPeerIds = null;         // peer IDs to preview lines for (panel row hover)
+    let pnMiniHoverNet = null;           // which network segment is hovered on the mini donut
     const PRIVATE_NETS = new Set(['onion', 'i2p', 'cjdns']);
 
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
@@ -1605,6 +1607,7 @@
         pnSelectedNet = null;
         pnHoveredNet = null;
         pnDonutFocused = false;
+        pnPreviewPeerIds = null;
         document.body.classList.remove('private-net-mode', 'pn-panel-open');
 
         // Hide sub-tooltips
@@ -2304,6 +2307,8 @@
                 const label = rowEl.querySelector('.as-detail-sub-label').textContent;
                 const html = buildPnPeerListHtml(peerIds, allNetPeers, category, label);
                 showPnSubTooltip(html, e);
+                // Preview lines to these peers
+                pnPreviewPeerIds = peerIds;
             });
             rowEl.addEventListener('mousemove', (e) => {
                 if (!pnSubTooltipPinned) positionPnSubTooltip(e);
@@ -2311,6 +2316,7 @@
             rowEl.addEventListener('mouseleave', () => {
                 if (pnSubTooltipPinned) return;
                 hidePnSubTooltip();
+                pnPreviewPeerIds = null;
             });
             rowEl.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -2322,6 +2328,7 @@
                 if (pnSubTooltipPinned && pnPinnedSubSrc === rowEl) {
                     hidePnSubTooltip();
                     rowEl.classList.remove('pn-sub-filter-active');
+                    pnPreviewPeerIds = null;  // Unlock lines
                     return;
                 }
 
@@ -2332,6 +2339,8 @@
                 const html = buildPnPeerListHtml(peerIds, allNetPeers, category, label);
                 showPnSubTooltip(html, e);
                 pinPnSubTooltip(html, rowEl);
+                // Lock preview lines to this row's peers
+                pnPreviewPeerIds = peerIds;
             });
         });
     }
@@ -2423,6 +2432,7 @@
         pnSubTooltipPinned = false;
         pnPinnedSubSrc = null;
         pnPinnedSubHtml = '';
+        pnPreviewPeerIds = null;
         hidePnSubSubTooltip();
     }
 
@@ -2446,14 +2456,22 @@
             });
         });
 
-        // Peer row hover → preview
+        // Peer row hover → preview individual peer line
         tip.querySelectorAll('.as-sub-tt-peer[data-peer-id]').forEach(row => {
             row.addEventListener('mouseenter', () => {
                 const peerId = parseInt(row.dataset.peerId);
-                if (!isNaN(peerId)) highlightedPeerId = peerId;
+                if (!isNaN(peerId)) {
+                    highlightedPeerId = peerId;
+                    // Save current preview (from parent row hover) and show single peer
+                    if (!tip._savedPreviewPeerIds) tip._savedPreviewPeerIds = pnPreviewPeerIds;
+                    pnPreviewPeerIds = [peerId];
+                }
             });
             row.addEventListener('mouseleave', () => {
                 highlightedPeerId = pnSelectedNet ? null : (privateNetSelectedPeer ? privateNetSelectedPeer.peerId : null);
+                // Restore parent row preview
+                pnPreviewPeerIds = tip._savedPreviewPeerIds || null;
+                tip._savedPreviewPeerIds = null;
             });
         });
 
@@ -2546,10 +2564,41 @@
         return Math.floor(sec / 86400) + 'd ' + Math.floor((sec % 86400) / 3600) + 'h';
     }
 
-    /** Update all private network UI (donut + panel if open) */
+    /** Update all private network UI (donut + panel if open).
+     *  Preserves donut visual state (selected/hovered segment, center text)
+     *  so the 10-second poll refresh doesn't reset the UI. */
     function updatePrivateNetUI() {
         if (!privateNetMode) return;
+
+        // Save donut state before rebuild
+        const savedSelectedNet = pnSelectedNet;
+        const savedHoveredNet = pnHoveredNet;
+        const savedLinePeer = privateNetLinePeer;
+        const savedSelectedPeer = privateNetSelectedPeer;
+
         renderPnDonut();
+
+        // Restore donut visual state after SVG rebuild
+        // (renderPnDonut resets innerHTML, losing DOM classes)
+        if (savedSelectedNet && pnDonutSvg) {
+            pnDonutSvg.querySelectorAll('.pn-donut-segment').forEach(el => {
+                if (el.dataset.net === savedSelectedNet) el.classList.add('selected');
+                else el.classList.add('dimmed');
+            });
+        } else if (savedHoveredNet && pnDonutSvg) {
+            pnDonutSvg.querySelectorAll('.pn-donut-segment').forEach(el => {
+                if (el.dataset.net !== savedHoveredNet) el.classList.add('dimmed');
+            });
+            const pnLegendEl = document.getElementById('pn-legend');
+            if (pnLegendEl) {
+                pnLegendEl.querySelectorAll('.pn-legend-item').forEach(el => {
+                    if (el.dataset.net !== savedHoveredNet) el.classList.add('dimmed');
+                    else { el.classList.remove('dimmed'); el.classList.add('highlighted'); }
+                });
+            }
+        }
+
+        // Only update detail panel content — do NOT close/reopen it
         if (pnDetailPanelEl && pnDetailPanelEl.classList.contains('visible')) {
             if (pnSelectedNet) {
                 updatePnDetailPanel(pnSelectedNet);
@@ -2597,7 +2646,7 @@
         const cx = 80, cy = 80, outerR = 72, innerR = 54;
         let html = '';
         if (segs.length === 1) {
-            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="' + segs[0].color + '" stroke-width="' + (outerR - innerR) + '" />';
+            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="' + segs[0].color + '" stroke-width="' + (outerR - innerR) + '" class="pn-mini-segment" data-net="' + segs[0].net + '" style="cursor:pointer" />';
         } else if (segs.length > 1) {
             const gap = 0.04;
             const totalGap = gap * segs.length;
@@ -2607,11 +2656,59 @@
                 const sweep = (seg.count / total) * totalAngle;
                 const endA = angle + sweep;
                 const d = pnDescribeArc(cx, cy, outerR, innerR, angle, endA);
-                html += '<path d="' + d + '" fill="' + seg.color + '" />';
+                html += '<path d="' + d + '" fill="' + seg.color + '" class="pn-mini-segment" data-net="' + seg.net + '" style="cursor:pointer" />';
                 angle = endA + gap;
             }
         }
         miniSvg.innerHTML = html;
+
+        // Attach hover/click to mini donut segments
+        miniSvg.querySelectorAll('.pn-mini-segment').forEach(el => {
+            el.addEventListener('mouseenter', (e) => {
+                e.stopPropagation();
+                const net = el.dataset.net;
+                pnMiniHoverNet = net;
+                pnMiniHover = true;
+                // Dim other segments
+                miniSvg.querySelectorAll('.pn-mini-segment').forEach(s => {
+                    if (s.dataset.net !== net) s.style.opacity = '0.3';
+                    else s.style.opacity = '1';
+                });
+                // Dim other legend items
+                const miniLegendEl = document.getElementById('pn-mini-legend');
+                if (miniLegendEl) {
+                    miniLegendEl.querySelectorAll('.pn-mini-legend-item').forEach(item => {
+                        if (item.dataset.net !== net) item.classList.add('dimmed');
+                        else { item.classList.remove('dimmed'); item.classList.add('highlighted'); }
+                    });
+                }
+            });
+            el.addEventListener('mouseleave', () => {
+                pnMiniHoverNet = null;
+                // Undim all segments
+                miniSvg.querySelectorAll('.pn-mini-segment').forEach(s => s.style.opacity = '');
+                const miniLegendEl = document.getElementById('pn-mini-legend');
+                if (miniLegendEl) {
+                    miniLegendEl.querySelectorAll('.pn-mini-legend-item').forEach(item => {
+                        item.classList.remove('dimmed', 'highlighted');
+                    });
+                }
+            });
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const net = el.dataset.net;
+                // Enter private mode with this specific network selected
+                pnMiniHover = false;
+                pnMiniHoverNet = null;
+                enterPrivateNetMode();
+                pnSelectedNet = net;
+                pnDonutFocused = true;
+                cachePnElements();
+                if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+                openPnDetailPanel(net);
+                renderPnDonut();
+            });
+        });
 
         // Build mini legend (network breakdown list, sorted by count descending)
         const miniLegendEl = document.getElementById('pn-mini-legend');
@@ -2627,6 +2724,44 @@
                 legendHtml += '</div>';
             }
             miniLegendEl.innerHTML = legendHtml;
+
+            // Attach hover/click to mini legend items (same behavior as segment hover)
+            miniLegendEl.querySelectorAll('.pn-mini-legend-item').forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    const net = item.dataset.net;
+                    pnMiniHoverNet = net;
+                    pnMiniHover = true;
+                    // Dim other segments
+                    miniSvg.querySelectorAll('.pn-mini-segment').forEach(s => {
+                        s.style.opacity = s.dataset.net !== net ? '0.3' : '1';
+                    });
+                    // Dim other legend items
+                    miniLegendEl.querySelectorAll('.pn-mini-legend-item').forEach(li => {
+                        if (li.dataset.net !== net) li.classList.add('dimmed');
+                        else { li.classList.remove('dimmed'); li.classList.add('highlighted'); }
+                    });
+                });
+                item.addEventListener('mouseleave', () => {
+                    pnMiniHoverNet = null;
+                    miniSvg.querySelectorAll('.pn-mini-segment').forEach(s => s.style.opacity = '');
+                    miniLegendEl.querySelectorAll('.pn-mini-legend-item').forEach(li => {
+                        li.classList.remove('dimmed', 'highlighted');
+                    });
+                });
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const net = item.dataset.net;
+                    pnMiniHover = false;
+                    pnMiniHoverNet = null;
+                    enterPrivateNetMode();
+                    pnSelectedNet = net;
+                    pnDonutFocused = true;
+                    cachePnElements();
+                    if (pnContainerEl) pnContainerEl.classList.add('pn-focused');
+                    openPnDetailPanel(net);
+                    renderPnDonut();
+                });
+            });
         }
     }
 
@@ -2743,11 +2878,14 @@
     }
 
     /** Draw lines from the donut to private peers.
-     *  In private mode: lines from legend dots to peers.
-     *  - Hovered segment: lines to only that network's peers
-     *  - Selected peer: line to only that peer
-     *  - No hover/selection: no lines (matches AS diversity behavior)
-     *  In default view (mini donut hover): lines from legend dots to all private peers. */
+     *  Priority chain (first match wins):
+     *  1. pnPreviewPeerIds set (panel row hover) → lines to those specific peers
+     *  2. privateNetLinePeer set (selected peer) → line to that one peer
+     *  3. pnHoveredNet set (donut segment hover) → lines to that net's peers
+     *  4. pnSelectedNet set (donut segment selected) → lines to that net's peers
+     *  5. privateNetMode with nothing selected → lines to ALL private peers
+     *  6. pnMiniHover (default view) → lines from mini legend dots to private peers
+     *  7. pnMiniHoverNet (default view segment hover) → lines from that legend dot */
     function drawPrivateNetLines(wrapOffsets) {
         if (!privateNetMode && !pnMiniHover) return;
 
@@ -2761,21 +2899,34 @@
         const fallbackOriginX = (fallbackRect.left + fallbackRect.width / 2 - canvasRect.left) * (W / canvasRect.width);
         const fallbackOriginY = (fallbackRect.top + fallbackRect.height / 2 - canvasRect.top) * (H / canvasRect.height);
 
-        // Collect nodes to draw lines to
+        // Determine which nodes to draw lines to (priority chain)
         let privateNodes;
         const selectedId = privateNetLinePeer;
-        if (privateNetMode && selectedId) {
-            // Selected peer → only draw line to that peer
+
+        if (privateNetMode && pnPreviewPeerIds && pnPreviewPeerIds.length > 0) {
+            // Panel row hover preview → specific peer IDs
+            const idSet = new Set(pnPreviewPeerIds);
+            privateNodes = nodes.filter(n => n.alive && idSet.has(n.peerId));
+        } else if (privateNetMode && selectedId) {
+            // Selected peer → only that peer
             const selectedNode = nodes.find(n => n.peerId === selectedId && n.alive);
             privateNodes = selectedNode ? [selectedNode] : [];
         } else if (privateNetMode && pnHoveredNet) {
-            // Hovered donut segment → only draw lines to that network's peers
+            // Hovered donut segment → that network's peers
             privateNodes = nodes.filter(n => n.alive && n.net === pnHoveredNet);
+        } else if (privateNetMode && pnSelectedNet) {
+            // Selected donut segment → that network's peers
+            privateNodes = nodes.filter(n => n.alive && n.net === pnSelectedNet);
+        } else if (privateNetMode) {
+            // No selection/hover → ALL private peers
+            privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+        } else if (pnMiniHover && pnMiniHoverNet) {
+            // Mini donut segment hover → that network's peers
+            privateNodes = nodes.filter(n => n.alive && n.net === pnMiniHoverNet);
         } else if (pnMiniHover) {
             // Mini donut hover → all private peers
             privateNodes = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
         } else {
-            // In private mode with no hover/selection → no lines (like AS diversity)
             return;
         }
         if (privateNodes.length === 0) return;
@@ -2785,7 +2936,7 @@
         ctx.lineWidth = lineW;
 
         for (const node of privateNodes) {
-            // Determine origin: in mini donut hover → legend dot per network; in private mode → donut center
+            // Determine origin: legend dot per network when available, else donut center
             let originX = fallbackOriginX;
             let originY = fallbackOriginY;
             if (pnMiniHover && !privateNetMode) {
@@ -8229,6 +8380,7 @@
             });
             pnMiniDonut.addEventListener('mouseleave', () => {
                 pnMiniHover = false;
+                pnMiniHoverNet = null;
             });
         }
 

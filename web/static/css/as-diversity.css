@@ -1845,6 +1845,14 @@ body.as-panel-open .peer-detail-popup {
 .pn-mini-legend-item:hover {
     background: rgba(240, 136, 62, 0.1);
 }
+.pn-mini-legend-item.dimmed {
+    opacity: 0.25;
+    transition: opacity 0.15s ease;
+}
+.pn-mini-legend-item.highlighted {
+    opacity: 1;
+    background: rgba(240, 136, 62, 0.08);
+}
 .pn-mini-legend-dot {
     width: 9px;
     height: 9px;
