@@ -1916,10 +1916,11 @@ body.private-net-mode .pn-mini-donut {
 }
 /* Focused state: segment selected or peer selected → move donut to top-center */
 .pn-container.pn-focused {
-    top: 10px;
+    top: 14px;
     right: auto;
     left: 50%;
-    transform: translateX(-50%) scale(0.72);
+    transform: translateX(-50%) scale(0.84);
+    z-index: 101;
 }
 /* When detail panel is open, push donut away from right edge */
 body.pn-panel-open .pn-container:not(.pn-focused) {
@@ -1935,10 +1936,10 @@ body.pn-panel-open .pn-container.pn-focused {
    ========================================================== */
 .pn-title {
     font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.8px;
     text-align: center;
     color: var(--logo-primary, #f0883e);
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
@@ -1948,8 +1949,8 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-title-subtitle {
     display: block;
-    font-size: 9px;
-    letter-spacing: 2px;
+    font-size: 10px;
+    letter-spacing: 2.2px;
     color: var(--logo-accent, #7ec8e3);
     font-weight: 600;
     margin-top: 1px;
