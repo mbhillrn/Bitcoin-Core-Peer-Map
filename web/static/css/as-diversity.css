@@ -1338,12 +1338,12 @@ body.donut-focused.as-panel-open .peer-panel {
     right: 320px;
 }
 
-/* --- Title: hides in focused mode --- */
+/* --- Title: stays visible in focused mode (matches private donut title) --- */
 body.donut-focused .as-donut-title {
-    opacity: 0;
-    max-height: 0;
-    margin-bottom: 0;
-    pointer-events: none;
+    opacity: 1;
+    max-height: 52px;
+    margin-bottom: -6px;
+    pointer-events: auto;
 }
 
 /* --- Legend: ALWAYS hidden in focused mode (lines come from donut center) --- */
