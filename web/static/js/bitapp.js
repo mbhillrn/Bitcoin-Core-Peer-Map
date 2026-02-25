@@ -1765,11 +1765,11 @@
             if (pnCenterPreviewLabel && pnCenterPreviewPeerIds) {
                 pnCenterLabel.textContent = pnCenterPreviewLabel.toUpperCase();
                 pnCenterLabel.style.color = '';
-                pnCenterCount.textContent = pnCenterPreviewPeerIds.length + ' peer' + (pnCenterPreviewPeerIds.length !== 1 ? 's' : '');
+                pnCenterCount.textContent = pnCenterPreviewPeerIds.length;
                 pnCenterCount.style.fontSize = '';
                 pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
                 var pct = total > 0 ? ((pnCenterPreviewPeerIds.length / total) * 100).toFixed(1) : '0.0';
-                pnCenterSub.innerHTML = pct + '% of<br>anonymous peers';
+                pnCenterSub.innerHTML = 'peer' + (pnCenterPreviewPeerIds.length !== 1 ? 's' : '') + ' · ' + pct + '%<br>of anonymous peers';
             } else if (privateNetSelectedPeer) {
                 pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
                 pnCenterCount.textContent = '#' + privateNetSelectedPeer.peerId;
@@ -2387,11 +2387,11 @@
         pnCenterPreviewPeerIds = peerIds;
         pnCenterLabel.textContent = label.toUpperCase();
         pnCenterLabel.style.color = '';
-        pnCenterCount.textContent = peerIds.length + ' peer' + (peerIds.length !== 1 ? 's' : '');
+        pnCenterCount.textContent = peerIds.length;
         pnCenterCount.style.fontSize = '';
         pnCenterCount.style.color = 'var(--logo-accent, #7ec8e3)';
         var pct = totalNetPeers > 0 ? ((peerIds.length / totalNetPeers) * 100).toFixed(1) : '0.0';
-        pnCenterSub.innerHTML = pct + '% of<br>anonymous peers';
+        pnCenterSub.innerHTML = 'peer' + (peerIds.length !== 1 ? 's' : '') + ' · ' + pct + '%<br>of anonymous peers';
     }
 
     /** Restore the PN donut center to its current state (selected net, selected peer, or default) */
