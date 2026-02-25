@@ -4322,6 +4322,30 @@ window.ASDiversity = (function () {
      *    1st click: close sub-panels
      *    2nd click: close main panel */
     function onMapClick() {
+        // Stage 0: If a network panel (IPv4/IPv6) is open, close it and return to summary
+        if (activeNetworkPanel) {
+            activeNetworkPanel = null;
+            // If sub-tooltips are open, close those first
+            if (subTooltipPinned || subSubTooltipPinned) {
+                hideSubTooltip();
+                hideSubSubTooltip();
+                subFilterPeerIds = null;
+                subFilterLabel = null;
+                subFilterCategory = null;
+            }
+            // Return to summary view
+            summarySelected = true;
+            panelHistory = [];
+            openSummaryPanel();
+            if (_filterPeerTable) _filterPeerTable(null);
+            if (_dimMapPeers) _dimMapPeers(null);
+            activateHoverAll();
+            renderDonut();
+            renderCenter();
+            renderLegend();
+            return true;
+        }
+
         // Stage 1: If peer detail popup is active, close it (and any sub-tooltips) in one click
         if (peerDetailActive) {
             closePeerPopup();
@@ -5083,6 +5107,27 @@ window.ASDiversity = (function () {
                 }
                 return;
             }
+            // If a network panel is open, Escape goes back to summary
+            if (activeNetworkPanel) {
+                activeNetworkPanel = null;
+                if (subTooltipPinned || subSubTooltipPinned) {
+                    hideSubTooltip();
+                    hideSubSubTooltip();
+                    subFilterPeerIds = null;
+                    subFilterLabel = null;
+                    subFilterCategory = null;
+                }
+                summarySelected = true;
+                panelHistory = [];
+                openSummaryPanel();
+                if (_filterPeerTable) _filterPeerTable(null);
+                if (_dimMapPeers) _dimMapPeers(null);
+                activateHoverAll();
+                renderDonut();
+                renderCenter();
+                renderLegend();
+                return;
+            }
             if (summarySelected) {
                 if (donutFocused) {
                     exitFocusedMode();
@@ -5130,6 +5175,7 @@ window.ASDiversity = (function () {
         donutFocused = false;
         focusedHoverAs = null;
         peerDetailActive = false;
+        activeNetworkPanel = null;
         if (othersListOpen) closeOthersListInDonut();
         document.body.classList.remove('donut-focused');
 
@@ -5139,9 +5185,13 @@ window.ASDiversity = (function () {
 
         // Deselect everything
         if (summarySelected) deselectSummary();
-        if (selectedAs) deselect();
+        else if (selectedAs) deselect();
+        else closePanel(); // Network panel or other non-summary/non-AS state
         hoveredAll = false;
         deactivateHoverAll();
+        if (_filterPeerTable) _filterPeerTable(null);
+        if (_dimMapPeers) _dimMapPeers(null);
+        if (_clearAsLines) _clearAsLines();
 
         // Auto zoom-out to default map view
         if (_resetMapZoom) _resetMapZoom();
@@ -5892,17 +5942,27 @@ window.ASDiversity = (function () {
             return;
         }
 
-        // If a network panel (IPv4/IPv6) is open, refresh it in-place and skip
-        // normal summary/selection re-rendering to prevent the panel from reverting.
+        // If a network panel (IPv4/IPv6) is open, do a lightweight refresh:
+        // update the donut visuals and peer count in the header, but leave the
+        // panel body DOM intact so that drill-down state, scroll position, and
+        // pinned sub-tooltips are all preserved across the poll cycle.
         if (activeNetworkPanel) {
             renderDonut();
             renderCenter();
             renderLegend();
-            // Refresh the network panel content with fresh data
-            var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
-            var savedScroll = bodyEl ? bodyEl.scrollTop : 0;
-            openNetworkPanel(activeNetworkPanel);
-            if (bodyEl && savedScroll > 0) bodyEl.scrollTop = savedScroll;
+            // Update the header peer count
+            var netKey = activeNetworkPanel;
+            var refreshPeers = lastPeersRaw.filter(function (p) {
+                return (p.network || 'ipv4') === netKey;
+            });
+            var metaRefresh = panelEl ? panelEl.querySelector('.as-detail-meta') : null;
+            if (metaRefresh) {
+                metaRefresh.textContent = refreshPeers.length + ' peer' + (refreshPeers.length !== 1 ? 's' : '') + ' connected';
+            }
+            // Re-apply peer table filter with fresh peer list
+            var refreshIds = refreshPeers.map(function (p) { return p.id; });
+            if (_filterPeerTable) _filterPeerTable(refreshIds);
+            if (_dimMapPeers) _dimMapPeers(refreshIds);
             return;
         }
 
