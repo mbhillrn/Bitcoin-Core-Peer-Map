@@ -2051,6 +2051,13 @@ body.pn-panel-open .pn-container.pn-focused {
 .pn-legend-item:hover {
     background: rgba(255, 255, 255, 0.05);
 }
+.pn-legend-item.dimmed {
+    opacity: 0.25;
+}
+.pn-legend-item.highlighted {
+    opacity: 1;
+    background: rgba(240, 136, 62, 0.08);
+}
 .pn-legend-dot {
     width: 8px;
     height: 8px;
@@ -2123,6 +2130,26 @@ body.pn-panel-open .pn-container.pn-focused {
     font-family: var(--font-data, 'JetBrains Mono', monospace);
     margin-top: 2px;
 }
+.pn-detail-back {
+    background: none;
+    border: 1px solid rgba(240, 136, 62, 0.3);
+    color: var(--text-muted, #8b949e);
+    font-size: 16px;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    line-height: 26px;
+    text-align: center;
+    padding: 0;
+    flex-shrink: 0;
+}
+.pn-detail-back:hover {
+    background: rgba(240, 136, 62, 0.15);
+    color: var(--text-primary, #c9d1d9);
+}
+.pn-detail-back.hidden { display: none; }
 .pn-detail-close {
     background: none;
     border: 1px solid rgba(240, 136, 62, 0.3);
