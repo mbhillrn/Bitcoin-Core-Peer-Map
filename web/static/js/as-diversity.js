@@ -5892,6 +5892,20 @@ window.ASDiversity = (function () {
             return;
         }
 
+        // If a network panel (IPv4/IPv6) is open, refresh it in-place and skip
+        // normal summary/selection re-rendering to prevent the panel from reverting.
+        if (activeNetworkPanel) {
+            renderDonut();
+            renderCenter();
+            renderLegend();
+            // Refresh the network panel content with fresh data
+            var bodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
+            var savedScroll = bodyEl ? bodyEl.scrollTop : 0;
+            openNetworkPanel(activeNetworkPanel);
+            if (bodyEl && savedScroll > 0) bodyEl.scrollTop = savedScroll;
+            return;
+        }
+
         // Toggle no-data state on the container
         if (containerEl) {
             if (totalPeers === 0 && !isGeoLoading) containerEl.classList.add('no-data');
@@ -6397,6 +6411,8 @@ window.ASDiversity = (function () {
         if (!panelEl) return;
         if (peerDetailActive) closePeerPopup();
 
+        var isRefresh = (activeNetworkPanel === netKey);
+
         // Enter focused mode if not already
         if (!donutFocused) {
             donutFocused = true;
@@ -6412,9 +6428,11 @@ window.ASDiversity = (function () {
             return (p.network || 'ipv4') === netKey;
         });
 
-        // Set panel history so back button returns to summary
-        panelHistory = [{ type: 'summary', scrollTop: 0 }];
-        renderBackButton();
+        // Only set panel history on initial open, not on refresh
+        if (!isRefresh) {
+            panelHistory = [{ type: 'summary', scrollTop: 0 }];
+            renderBackButton();
+        }
 
         // --- Header ---
         var asnEl = panelEl.querySelector('.as-detail-asn');
@@ -6469,7 +6487,8 @@ window.ASDiversity = (function () {
         html += row('Bytes Sent', fmtBytes(totalBytesSent));
         html += row('Bytes Recv', fmtBytes(totalBytesRecv));
 
-        // ── Section 2: Connections by Provider ──
+        // ── Section 2: Connections by Provider — collapsed "See providers" link ──
+        // Build provider data for the drill-down sub-tooltip
         var providerMap = {};
         for (var ci = 0; ci < netPeers.length; ci++) {
             var cp = netPeers[ci];
@@ -6480,68 +6499,31 @@ window.ASDiversity = (function () {
                     asNumber: cpAsNum,
                     name: parseAsOrg(cp.as) || cpAsNum,
                     color: getColorForAsNum(cpAsNum),
-                    peers: [],
-                    inPeers: [],
-                    outPeers: []
+                    peerCount: 0,
+                    peerIds: [],
+                    peers: []
                 };
             }
+            providerMap[cpAsNum].peerCount++;
+            providerMap[cpAsNum].peerIds.push(cp.id);
             providerMap[cpAsNum].peers.push(cp);
-            if (cp.connection_type === 'inbound') providerMap[cpAsNum].inPeers.push(cp);
-            else providerMap[cpAsNum].outPeers.push(cp);
         }
-        var providerList = [];
-        var provKeys = Object.keys(providerMap);
-        for (var pk = 0; pk < provKeys.length; pk++) providerList.push(providerMap[provKeys[pk]]);
-        providerList.sort(function (a, b) { return b.peers.length - a.peers.length; });
+        var npProviders = [];
+        var npProvKeys = Object.keys(providerMap);
+        for (var npk = 0; npk < npProvKeys.length; npk++) npProviders.push(providerMap[npProvKeys[npk]]);
+        npProviders.sort(function (a, b) { return b.peerCount - a.peerCount; });
 
+        // Use a single interactive row that opens the provider list (same as summary Networks rows)
+        var allNetPeerIds = netPeers.map(function (p) { return p.id; });
+        var npCatData = {
+            label: netLabel + ' Connections by Provider',
+            peerCount: netPeers.length,
+            providerCount: npProviders.length,
+            peerIds: allNetPeerIds,
+            providers: npProviders
+        };
         html += '<div class="modal-section-title" title="' + netLabel + ' peer connections grouped by AS provider">' + netLabel + ' Connections by Provider</div>';
-        for (var gi = 0; gi < providerList.length; gi++) {
-            var gItem = providerList[gi];
-            var displayName = gItem.name;
-            if (displayName.length > 20) displayName = displayName.substring(0, 19) + '\u2026';
-            var totalJson = JSON.stringify(gItem.peers.map(function (p) { return p.id; })).replace(/"/g, '&quot;');
-            var inJson = JSON.stringify(gItem.inPeers.map(function (p) { return p.id; })).replace(/"/g, '&quot;');
-            var outJson = JSON.stringify(gItem.outPeers.map(function (p) { return p.id; })).replace(/"/g, '&quot;');
-            // Build outbound subtypes
-            var outSubtypes = {};
-            for (var oj = 0; oj < gItem.outPeers.length; oj++) {
-                var ct = gItem.outPeers[oj].connection_type || 'unknown';
-                if (!outSubtypes[ct]) outSubtypes[ct] = [];
-                outSubtypes[ct].push(gItem.outPeers[oj]);
-            }
-            var outSubList = [];
-            for (var oKey in outSubtypes) {
-                if (!outSubtypes.hasOwnProperty(oKey)) continue;
-                outSubList.push({
-                    type: oKey,
-                    label: CONN_TYPE_LABELS[oKey] || oKey,
-                    count: outSubtypes[oKey].length,
-                    peerIds: outSubtypes[oKey].map(function (p) { return p.id; })
-                });
-            }
-            var outSubJson = JSON.stringify(outSubList).replace(/"/g, '&quot;');
-
-            // Provider name row
-            html += '<div class="as-detail-sub-row as-conn-prov-row" data-peer-ids="' + totalJson + '" data-as="' + gItem.asNumber + '" style="cursor:pointer">';
-            html += '<span class="as-detail-sub-label"><span class="as-grid-dot" style="background:' + gItem.color + '; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle"></span>';
-            html += '<span style="color:' + gItem.color + '">' + displayName + '</span></span>';
-            html += '<span class="as-detail-sub-val">' + gItem.peers.length + '</span>';
-            html += '</div>';
-            // In row
-            if (gItem.inPeers.length > 0) {
-                html += '<div class="as-detail-sub-row as-interactive-row as-conn-dir-row" data-peer-ids="' + inJson + '" data-as="' + gItem.asNumber + '" data-category="conntype" style="padding-left:22px">';
-                html += '<span class="as-detail-sub-label">In</span>';
-                html += '<span class="as-detail-sub-val">' + gItem.inPeers.length + '</span>';
-                html += '</div>';
-            }
-            // Out row
-            if (gItem.outPeers.length > 0) {
-                html += '<div class="as-detail-sub-row as-conn-out-row" data-peer-ids="' + outJson + '" data-as="' + gItem.asNumber + '" data-out-subtypes="' + outSubJson + '" data-category="conntype" style="padding-left:22px; cursor:pointer">';
-                html += '<span class="as-detail-sub-label">Out</span>';
-                html += '<span class="as-detail-sub-val">' + gItem.outPeers.length + '</span>';
-                html += '</div>';
-            }
-        }
+        html += summaryInteractiveRow('See providers (' + npProviders.length + ')', netPeers.length + 'p / ' + npProviders.length + 'prov', npCatData);
 
         // ── Section 3: Hosting ──
         var hostingData = aggregateSummaryByCategory(netPeers,
@@ -6592,7 +6574,7 @@ window.ASDiversity = (function () {
         }
 
         bodyEl.innerHTML = html;
-        bodyEl.scrollTop = 0;
+        if (!isRefresh) bodyEl.scrollTop = 0;
 
         // Attach drill-down handlers (reuse summary pattern)
         attachSummaryRowHandlers(bodyEl);

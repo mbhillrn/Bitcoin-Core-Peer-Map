@@ -1870,40 +1870,14 @@ body.as-panel-open .peer-detail-popup {
     font-weight: 700;
     color: var(--text-primary, #c9d1d9);
 }
-/* Hide mini donut when in private mode */
+/* Hide mini donut when in focused mode or private mode */
+body.donut-focused .pn-mini-donut,
 body.private-net-mode .pn-mini-donut {
     opacity: 0 !important;
     pointer-events: none !important;
     max-height: 0;
     margin: 0;
     overflow: hidden;
-}
-
-/* In focused mode: squeeze private mini donut into upper-right as a small ring */
-body.donut-focused .pn-mini-donut {
-    position: fixed;
-    top: 56px;
-    right: 14px;
-    left: auto;
-    z-index: 86;
-    margin: 0;
-    transform: scale(0.6);
-    transform-origin: top right;
-    opacity: 0.85 !important;
-    pointer-events: auto !important;
-    max-height: none;
-    overflow: visible;
-}
-body.donut-focused .pn-mini-donut.visible {
-    opacity: 0.85;
-}
-body.donut-focused .pn-mini-donut:hover {
-    opacity: 1 !important;
-    transform: scale(0.65);
-}
-/* When AS panel is also open in focused mode, push mini donut left of panel */
-body.donut-focused.as-panel-open .pn-mini-donut {
-    right: 334px;
 }
 
 /* ==========================================================
@@ -2358,84 +2332,6 @@ body.private-net-mode .peer-panel {
 }
 .pn-sub-sub-tooltip {
     z-index: 330 !important;
-}
-
-/* ==========================================================
-   PUB-MINI. Mini public donut — shown upper-right in private net mode
-   ========================================================== */
-.pub-mini-donut {
-    position: fixed;
-    top: 56px;
-    right: 14px;
-    z-index: 86;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    cursor: pointer;
-    pointer-events: auto;
-    opacity: 0;
-    transform: scale(0.9);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.pub-mini-donut.visible {
-    opacity: 0.85;
-    transform: scale(1);
-}
-.pub-mini-donut.hidden {
-    display: none;
-}
-.pub-mini-donut:hover {
-    opacity: 1;
-    transform: scale(1.05);
-}
-.pub-mini-label {
-    font-family: var(--font-display, 'Cinzel', serif);
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--logo-primary, #4a90d9);
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    text-align: center;
-    line-height: 1.1;
-    margin-bottom: 2px;
-}
-.pub-mini-donut-ring {
-    position: relative;
-    width: 80px;
-    height: 80px;
-}
-.pub-mini-svg {
-    width: 80px;
-    height: 80px;
-}
-.pub-mini-center {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    pointer-events: none;
-    line-height: 1.2;
-}
-.pub-mini-center-count {
-    font-family: var(--font-data, 'JetBrains Mono', monospace);
-    font-size: 16px;
-    font-weight: 800;
-    color: var(--text-primary, #c9d1d9);
-    line-height: 1;
-}
-.pub-mini-center-sub {
-    font-size: 7px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--text-muted, #8b949e);
-}
-/* Push mini public donut left of panel when panel is open */
-body.pn-panel-open .pub-mini-donut {
-    right: 334px;
 }
 
 /* ==========================================================

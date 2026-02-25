@@ -1597,9 +1597,6 @@
         targetView.y = (antCenter.y - 0.5) * H;
         targetView.zoom = 1.8;
 
-        // Show mini public donut in upper-right
-        renderPubMiniDonut();
-
         // Focus the donut and open panel
         pnDonutFocused = true;
         updatePrivateNetUI();
@@ -1658,13 +1655,6 @@
         targetView.x = 0;
         targetView.y = 0;
         targetView.zoom = 1;
-
-        // Hide mini public donut
-        const pubMini = document.getElementById('pub-mini-donut');
-        if (pubMini) {
-            pubMini.classList.remove('visible');
-            pubMini.classList.add('hidden');
-        }
 
         // Immediately re-show the mini donut (don't wait for next poll cycle)
         renderPnMiniDonut();
@@ -2595,9 +2585,6 @@
     function updatePrivateNetUI() {
         if (!privateNetMode) return;
 
-        // Update mini public donut counts
-        renderPubMiniDonut();
-
         // Save donut state before rebuild
         const savedSelectedNet = pnSelectedNet;
         const savedHoveredNet = pnHoveredNet;
@@ -2778,69 +2765,6 @@
                 });
             });
         }
-    }
-
-    /** Render the mini public donut in the upper-right corner (when in private net mode) */
-    function renderPubMiniDonut() {
-        const miniWrap = document.getElementById('pub-mini-donut');
-        const miniSvg = document.getElementById('pub-mini-svg');
-        const miniCount = document.getElementById('pub-mini-count');
-        if (!miniWrap || !miniSvg) return;
-
-        // Count public peers
-        const publicNodes = nodes.filter(n => n.alive && !PRIVATE_NETS.has(n.net));
-        const total = publicNodes.length;
-
-        if (total === 0 || !privateNetMode) {
-            miniWrap.classList.remove('visible');
-            if (!miniWrap.classList.contains('hidden')) miniWrap.classList.add('hidden');
-            return;
-        }
-
-        // Show mini donut
-        miniWrap.classList.remove('hidden');
-        requestAnimationFrame(() => miniWrap.classList.add('visible'));
-
-        if (miniCount) miniCount.textContent = total;
-
-        // Build segments by network type
-        const counts = { ipv4: 0, ipv6: 0 };
-        for (const n of publicNodes) {
-            if (counts.hasOwnProperty(n.net)) counts[n.net]++;
-        }
-        const segs = [];
-        const pubColors = { ipv4: 'var(--net-ipv4, #e3b341)', ipv6: 'var(--net-ipv6, #f07178)' };
-        for (const net of ['ipv4', 'ipv6']) {
-            if (counts[net] > 0) segs.push({ net, count: counts[net], color: getComputedStyle(document.documentElement).getPropertyValue('--net-' + net).trim() || (net === 'ipv4' ? '#e3b341' : '#f07178') });
-        }
-
-        const cx = 40, cy = 40, outerR = 36, innerR = 24;
-        let html = '';
-        if (segs.length === 1) {
-            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="' + segs[0].color + '" stroke-width="' + (outerR - innerR) + '" />';
-        } else if (segs.length > 1) {
-            const gap = 0.06;
-            const totalGap = gap * segs.length;
-            const totalAngle = 2 * Math.PI - totalGap;
-            let angle = -Math.PI / 2;
-            for (const seg of segs) {
-                const sweep = (seg.count / total) * totalAngle;
-                const endA = angle + sweep;
-                const d = pnDescribeArc(cx, cy, outerR, innerR, angle, endA);
-                html += '<path d="' + d + '" fill="' + seg.color + '" />';
-                angle = endA + gap;
-            }
-        } else {
-            // No segs: draw empty ring
-            html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ((outerR + innerR) / 2) + '" fill="none" stroke="var(--text-muted, #8b949e)" stroke-width="' + (outerR - innerR) + '" stroke-opacity="0.3" />';
-        }
-        miniSvg.innerHTML = html;
-
-        // Click: exit private mode and return to public view
-        miniWrap.onclick = function(e) {
-            e.stopPropagation();
-            exitPrivateNetMode();
-        };
     }
 
     /** Draw "PRIVATE NETWORKS" text tiled across Antarctica on the canvas */
