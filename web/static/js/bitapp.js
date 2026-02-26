@@ -2542,6 +2542,10 @@
         pnPinnedSubSrc = null;
         pnPinnedSubHtml = '';
         pnPreviewPeerIds = null;
+        // Clear PN center preview state so stale category text doesn't persist
+        // across refreshes when the tooltip is dismissed without restorePnCenterText()
+        pnCenterPreviewLabel = null;
+        pnCenterPreviewPeerIds = null;
         hidePnSubSubTooltip();
     }
 
@@ -6981,11 +6985,12 @@
             // This was a click, not a drag
             const group = findNodesAtScreen(e.clientX, e.clientY);
             if (group.length > 0) {
-                // [PRIVATE-NET] If clicking private peers on the public map, enter private net mode
-                // Handles both single private peers and groups of overlapping private peers
-                if (group.some(function(n) { return PRIVATE_NETS.has(n.net); })) {
+                // [PRIVATE-NET] If ALL peers in the group are private, enter private net mode.
+                // Mixed groups (private + public) fall through to the normal selection flow
+                // so public peers remain selectable from the multi-peer list.
+                if (group.every(function(n) { return PRIVATE_NETS.has(n.net); })) {
                     // Find the first private peer in the group and enter private mode with it
-                    var privatePeer = group.find(function(n) { return PRIVATE_NETS.has(n.net); });
+                    var privatePeer = group[0];
                     enterPrivateNetMode(privatePeer.peerId);
                     dragging = false;
                     return;
