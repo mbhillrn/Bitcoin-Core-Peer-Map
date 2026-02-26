@@ -1,3 +1,5 @@
+v7.6.6 — Redesigned donut center text for both public and private donuts. Public donut now shows "ISP" label (was "Internet Provider:") with provider name in display font, AS number, and peer count. Private donut center shows "X PEERS / NETWORK NAME / % of anonymous peers" layout with "PRIVATE NETWORKS / % of total connections" as the default. Added hover preview in donut center for Others popup provider list. Fixed map update bug where 10-second data refreshes would overwrite donut center text, resetting hover previews and pinned selections in both public and private donuts. Removed font-size CSS transition on PN donut to prevent flash of huge text when switching modes. Removed colored dots from private network overview panel rows.
+
 v7.6.5 — Minor bug fixes and UI improvements.
 
 v7.6.4 — Dedicated IPv4/IPv6 network panels with full drill-down from top bar chips, darker TOR color, and comprehensive refresh stability fixes for network panel dim state, sub-filter persistence, and panel close behavior. Updated README with Private Network Mode documentation and new screenshots.

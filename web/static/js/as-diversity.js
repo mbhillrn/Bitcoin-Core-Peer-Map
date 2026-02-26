@@ -98,6 +98,8 @@ window.ASDiversity = (function () {
     let insightRectEl = null;       // DOM ref for insight rectangle overlay
     let insightRectVisible = false; // Whether the insight rectangle is currently shown
     let hoveredPeerId = null;       // Peer ID currently being hovered in a subtooltip (for update preservation)
+    let summaryPreviewPeerIds = null;  // Peer IDs for active summary hover preview (preservation across refresh)
+    let summaryPreviewLabel = null;    // Label for active summary hover preview
     let selectedPeerId = null;      // Peer ID that was clicked/selected (persists through hover cycles)
 
     // Integration hooks (set by bitapp.js)
@@ -1318,6 +1320,7 @@ window.ASDiversity = (function () {
             if (headingEl2) {
                 headingEl2.textContent = subFilterPeerIds.length + ' PEER' + (subFilterPeerIds.length !== 1 ? 'S' : '');
                 headingEl2.style.color = 'var(--accent)';
+                headingEl2.style.display = '';
             }
             if (scoreVal2) {
                 scoreVal2.textContent = subFilterLabel;
@@ -1334,6 +1337,12 @@ window.ASDiversity = (function () {
             if (scoreLbl2) {
                 scoreLbl2.textContent = '';
             }
+            return;
+        }
+
+        // If a summary row hover preview is active, preserve it across data refresh
+        if (donutFocused && summarySelected && summaryPreviewPeerIds && summaryPreviewLabel && !selectedAs) {
+            previewSummaryCenterText(summaryPreviewPeerIds, summaryPreviewLabel);
             return;
         }
 
@@ -1367,19 +1376,22 @@ window.ASDiversity = (function () {
                 var displayName = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
                 if (displayName.length > 14) displayName = displayName.substring(0, 13) + '\u2026';
 
-                // Show "← Others" back link for sub-providers inside the Others bucket
+                // Show "← Others" back link for sub-providers, else "ISP" label
                 var isSubProv = isOthersSubProvider(selectedAs);
                 if (diversityEl) {
                     if (isSubProv && donutFocused) {
                         diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
-                        diversityEl.style.display = '';
+                        diversityEl.style.color = '';
                     } else {
-                        diversityEl.style.display = 'none';
+                        diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'ISP';
+                        diversityEl.style.color = 'var(--logo-primary)';
                     }
+                    diversityEl.style.display = '';
                 }
+                // Hide the heading row — peer count moves to bottom label
                 if (headingEl) {
-                    headingEl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
-                    headingEl.style.color = seg.color;
+                    headingEl.textContent = '';
+                    headingEl.style.display = 'none';
                 }
                 scoreVal.textContent = displayName;
                 scoreVal.className = 'as-score-value as-selected-mode';
@@ -1387,29 +1399,39 @@ window.ASDiversity = (function () {
                 scoreVal.title = seg.asNumber + ' \u00b7 ' + (seg.asName || '') + '\n'
                     + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
                 if (qualityEl) {
-                    qualityEl.textContent = seg.percentage.toFixed(1) + '%';
+                    qualityEl.textContent = seg.asNumber === 'Others' ? '' : seg.asNumber;
                     qualityEl.className = 'as-score-quality';
                     qualityEl.style.color = seg.color;
                 }
-                scoreLbl.textContent = seg.asNumber;
+                if (scoreLbl) {
+                    scoreLbl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+                    scoreLbl.className = 'as-score-label as-provider-peers';
+                    scoreLbl.style.color = '';
+                }
                 scoreLbl.classList.remove('as-summary-link');
                 attachOthersBackHandler();
                 return;
             }
         }
 
-        // Reset any selected-mode styling
+        // Reset any selected-mode / provider styling
         scoreVal.className = 'as-score-value';
         scoreVal.style.color = '';
         if (diversityEl) {
             diversityEl.textContent = 'DIVERSITY';
             diversityEl.style.display = '';
+            diversityEl.style.color = '';
         }
         if (headingEl) {
             headingEl.style.color = '';
+            headingEl.style.display = '';
         }
         if (qualityEl) {
             qualityEl.style.color = '';
+        }
+        if (scoreLbl) {
+            scoreLbl.className = 'as-score-label';
+            scoreLbl.style.color = '';
         }
 
         // Edge case: no locatable peers (all private/tor/i2p/cjdns)
@@ -2653,6 +2675,8 @@ window.ASDiversity = (function () {
      *  Checks for active sub-filters, insights, or selections and restores appropriately
      *  instead of blindly reverting to the default diversity score display. */
     function restoreDonutAfterPreview() {
+        summaryPreviewPeerIds = null;
+        summaryPreviewLabel = null;
         if (!donutFocused) return;
         if (insightActiveAsNum) {
             // An insight is active (Most Stable, Fastest, etc.) — keep donut on that provider
@@ -2710,6 +2734,42 @@ window.ASDiversity = (function () {
         if (selectedAs && _drawLinesForAs) {
             var color = getColorForAsNum(selectedAs);
             _drawLinesForAs(selectedAs, peerIds, color);
+        }
+    }
+
+    /** Preview category info in the donut center during hover (focused mode only).
+     *  Shows the category label, peer count, and percentage without changing state. */
+    function previewSummaryCenterText(peerIds, label) {
+        if (!donutFocused || !donutCenter) return;
+        summaryPreviewPeerIds = peerIds;
+        summaryPreviewLabel = label;
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+
+        if (diversityEl) { diversityEl.style.display = 'none'; }
+        if (headingEl) {
+            headingEl.textContent = peerIds.length + ' PEER' + (peerIds.length !== 1 ? 'S' : '');
+            headingEl.style.color = 'var(--accent)';
+            headingEl.style.display = '';
+        }
+        if (scoreVal) {
+            scoreVal.textContent = label;
+            scoreVal.className = 'as-score-value as-selected-mode';
+            scoreVal.style.color = 'var(--text-primary)';
+            scoreVal.title = label + ' \u2014 ' + peerIds.length + ' peers';
+        }
+        if (qualityEl) {
+            var pctOfTotal = totalPeers > 0 ? ((peerIds.length / totalPeers) * 100).toFixed(1) : '0.0';
+            qualityEl.textContent = pctOfTotal + '% of peers';
+            qualityEl.className = 'as-score-quality';
+            qualityEl.style.color = 'var(--text-secondary)';
+        }
+        if (scoreLbl) {
+            scoreLbl.textContent = '';
+            scoreLbl.className = 'as-score-label';
         }
     }
 
@@ -2813,6 +2873,8 @@ window.ASDiversity = (function () {
                     showSubTooltip(html, e);
                     // Preview lines/filter for hovered category
                     previewSummaryLines(peerIds);
+                    // Preview category info in donut center
+                    previewSummaryCenterText(peerIds, catLabel);
                 });
                 rowEl.addEventListener('mousemove', function (e) {
                     if (!subTooltipPinned) positionSubTooltip(e);
@@ -4639,25 +4701,29 @@ window.ASDiversity = (function () {
         var qualityEl = donutCenter.querySelector('.as-score-quality');
         var scoreLbl = donutCenter.querySelector('.as-score-label');
 
-        // Show "← Others" back link for sub-providers inside the Others bucket
+        // Show "← Others" back link for sub-providers, else "ISP" label
         var isSubProv = isOthersSubProvider(asNum);
         if (diversityEl) {
             if (isSubProv) {
                 diversityEl.innerHTML = '<span class="as-others-back-link">\u2190 Others</span>';
-                diversityEl.style.display = '';
+                diversityEl.style.color = '';
             } else {
-                diversityEl.style.display = 'none';
+                diversityEl.textContent = seg.isOthers ? 'Bucket:' : 'ISP';
+                diversityEl.style.color = 'var(--logo-primary)';
             }
+            diversityEl.style.display = '';
+        }
+
+        // Hide the heading row — peer count moves to bottom label
+        if (headingEl) {
+            headingEl.textContent = '';
+            headingEl.style.display = 'none';
         }
 
         // Build display name — smart line-breaking for names with dashes
         var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
         var displayLines = formatNameForDonut(name);
 
-        if (headingEl) {
-            headingEl.textContent = seg.peerCount + ' peer' + (seg.peerCount !== 1 ? 's' : '');
-            headingEl.style.color = seg.color;
-        }
         if (scoreVal) {
             scoreVal.textContent = displayLines;
             scoreVal.className = 'as-score-value as-focused-provider';
@@ -4670,8 +4736,9 @@ window.ASDiversity = (function () {
             qualityEl.style.color = seg.color;
         }
         if (scoreLbl) {
-            scoreLbl.textContent = '';
-            scoreLbl.classList.remove('as-summary-link');
+            scoreLbl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+            scoreLbl.className = 'as-score-label as-provider-peers';
+            scoreLbl.style.color = '';
         }
         attachOthersBackHandler();
     }
@@ -4720,26 +4787,30 @@ window.ASDiversity = (function () {
                 item.appendChild(countSpan);
                 item.title = g.asNumber + ' \u00b7 ' + (g.asName || g.asShort || '') + ' \u00b7 ' + g.peerCount + ' peer' + (g.peerCount !== 1 ? 's' : '');
 
-                // Hover: preview lines to this provider's peers
+                // Hover: preview lines and donut center for this provider's peers
                 item.addEventListener('mouseenter', function () {
                     if (_drawLinesForAs) _drawLinesForAs(g.asNumber, g.peerIds, othersSeg.color);
                     if (_dimMapPeers) _dimMapPeers(g.peerIds);
+                    showFocusedCenterText(g.asNumber);
                 });
                 item.dataset.as = g.asNumber;
                 item.addEventListener('mouseleave', function () {
-                    // Restore lines for current selection
+                    // Restore lines and donut center for current selection
                     if (selectedAs === 'Others') {
                         if (_drawLinesForAs) _drawLinesForAs('Others', othersSeg.peerIds, othersSeg.color);
                         if (_dimMapPeers) _dimMapPeers(othersSeg.peerIds);
+                        showFocusedCenterText('Others');
                     } else if (selectedAs && isOthersSubProvider(selectedAs)) {
                         // Restore selected sub-provider's lines
                         var peerIds = getPeerIdsForAnyAs(selectedAs);
                         var color = getColorForAsNum(selectedAs);
                         if (_drawLinesForAs) _drawLinesForAs(selectedAs, peerIds, color);
                         if (_dimMapPeers) _dimMapPeers(peerIds);
+                        showFocusedCenterText(selectedAs);
                     } else {
                         activateHoverAll();
                         if (_dimMapPeers) _dimMapPeers(null);
+                        renderCenter();
                     }
                 });
 
@@ -5755,6 +5826,7 @@ window.ASDiversity = (function () {
         if (headingEl) {
             headingEl.textContent = 'PEER #' + peer.id;
             headingEl.style.color = color;
+            headingEl.style.display = '';
         }
         if (scoreVal) {
             var provName = peer.asname || parseAsOrg(peer.as) || '';
