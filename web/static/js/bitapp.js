@@ -1770,8 +1770,8 @@
                 pnCenterCount.style.fontSize = '17px';
                 pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
                 pnCenterCount.style.color = '';
-                var pct = total > 0 ? ((cnt / total) * 100).toFixed(1) : '0.0';
-                pnCenterSub.textContent = pct + '% anonymous';
+                var pct = total > 0 ? Math.round((cnt / total) * 100) : 0;
+                pnCenterSub.innerHTML = pct + '% of anonymous<br>peers';
             } else if (privateNetSelectedPeer) {
                 pnCenterLabel.textContent = PN_NET_LABELS[privateNetSelectedPeer.net] || 'PEER';
                 pnCenterLabel.style.color = '';
@@ -1783,22 +1783,24 @@
             } else if (pnSelectedNet) {
                 const seg = pnSegments.find(s => s.net === pnSelectedNet);
                 var netCount = seg ? seg.count : 0;
-                var netPct = total > 0 ? ((netCount / total) * 100).toFixed(1) : '0.0';
+                var netPct = total > 0 ? Math.round((netCount / total) * 100) : 0;
                 pnCenterLabel.textContent = netCount + ' PEER' + (netCount !== 1 ? 'S' : '');
                 pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
                 pnCenterCount.textContent = (PN_NET_LABELS[pnSelectedNet] || pnSelectedNet).toUpperCase();
                 pnCenterCount.style.fontSize = '22px';
                 pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
                 pnCenterCount.style.color = seg ? seg.color : '';
-                pnCenterSub.textContent = netPct + '% anonymous';
+                pnCenterSub.innerHTML = netPct + '% of anonymous<br>peers';
             } else {
-                pnCenterLabel.textContent = 'PRIVATE';
-                pnCenterLabel.style.color = '';
-                pnCenterCount.textContent = total;
-                pnCenterCount.style.fontSize = '';
-                pnCenterCount.style.fontFamily = '';
+                var totalAllPeers = lastPeers.length || total;
+                var pnPct = totalAllPeers > 0 ? Math.round((total / totalAllPeers) * 100) : 0;
+                pnCenterLabel.textContent = total + ' PEER' + (total !== 1 ? 'S' : '');
+                pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+                pnCenterCount.textContent = 'PRIVATE NETWORKS';
+                pnCenterCount.style.fontSize = '13px';
+                pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
                 pnCenterCount.style.color = '';
-                pnCenterSub.textContent = 'peers';
+                pnCenterSub.innerHTML = pnPct + '% of total<br>connections';
             }
         }
 
@@ -2405,8 +2407,8 @@
         pnCenterCount.style.fontSize = '17px';
         pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
         pnCenterCount.style.color = '';
-        var pct = totalNetPeers > 0 ? ((cnt / totalNetPeers) * 100).toFixed(1) : '0.0';
-        pnCenterSub.textContent = pct + '% anonymous';
+        var pct = totalNetPeers > 0 ? Math.round((cnt / totalNetPeers) * 100) : 0;
+        pnCenterSub.innerHTML = pct + '% of anonymous<br>peers';
     }
 
     /** Restore the PN donut center to its current state (selected net, selected peer, or default) */
@@ -2427,23 +2429,25 @@
             var seg = pnSegments.find(function (s) { return s.net === pnSelectedNet; });
             var netCount = seg ? seg.count : 0;
             var totalAll = pnSegments.reduce(function (s, sg) { return s + sg.count; }, 0);
-            var netPct = totalAll > 0 ? ((netCount / totalAll) * 100).toFixed(1) : '0.0';
+            var netPct = totalAll > 0 ? Math.round((netCount / totalAll) * 100) : 0;
             pnCenterLabel.textContent = netCount + ' PEER' + (netCount !== 1 ? 'S' : '');
             pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
             pnCenterCount.textContent = (PN_NET_LABELS[pnSelectedNet] || pnSelectedNet).toUpperCase();
             pnCenterCount.style.fontSize = '22px';
             pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
             pnCenterCount.style.color = seg ? seg.color : '';
-            pnCenterSub.textContent = netPct + '% anonymous';
+            pnCenterSub.innerHTML = netPct + '% of anonymous<br>peers';
         } else {
             var total = pnSegments.reduce(function (s, seg) { return s + seg.count; }, 0);
-            pnCenterLabel.textContent = 'PRIVATE';
-            pnCenterLabel.style.color = '';
-            pnCenterCount.textContent = total;
-            pnCenterCount.style.fontSize = '';
-            pnCenterCount.style.fontFamily = '';
+            var totalAllPeers = lastPeers.length || total;
+            var pnPct = totalAllPeers > 0 ? Math.round((total / totalAllPeers) * 100) : 0;
+            pnCenterLabel.textContent = total + ' PEER' + (total !== 1 ? 'S' : '');
+            pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+            pnCenterCount.textContent = 'PRIVATE NETWORKS';
+            pnCenterCount.style.fontSize = '13px';
+            pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
             pnCenterCount.style.color = '';
-            pnCenterSub.textContent = 'peers';
+            pnCenterSub.innerHTML = pnPct + '% of total<br>connections';
         }
     }
 

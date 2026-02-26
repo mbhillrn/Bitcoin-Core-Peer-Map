@@ -2049,7 +2049,7 @@ body.pn-panel-open .pn-container.pn-focused {
     color: var(--text-primary, #c9d1d9);
     line-height: 1;
     margin: 4px 0;
-    transition: color 0.2s ease, font-size 0.2s ease;
+    transition: color 0.2s ease;
 }
 .pn-center-sub {
     font-size: 11px;
