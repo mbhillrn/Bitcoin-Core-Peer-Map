@@ -1346,6 +1346,74 @@ window.ASDiversity = (function () {
             return;
         }
 
+        // If a network panel (IPv4/IPv6) is open, show network info in center
+        if (donutFocused && activeNetworkPanel && !selectedAs) {
+            // If a sub-filter is active within the network panel, show that category
+            if (subFilterPeerIds && subFilterLabel) {
+                var diversityEl2 = donutCenter.querySelector('.as-score-diversity');
+                var headingEl2 = donutCenter.querySelector('.as-score-heading');
+                var scoreVal2 = donutCenter.querySelector('.as-score-value');
+                var qualityEl2 = donutCenter.querySelector('.as-score-quality');
+                var scoreLbl2 = donutCenter.querySelector('.as-score-label');
+                if (diversityEl2) diversityEl2.style.display = 'none';
+                if (headingEl2) {
+                    headingEl2.textContent = subFilterPeerIds.length + ' PEER' + (subFilterPeerIds.length !== 1 ? 'S' : '');
+                    headingEl2.style.color = 'var(--accent)';
+                    headingEl2.style.display = '';
+                }
+                if (scoreVal2) {
+                    scoreVal2.textContent = subFilterLabel;
+                    scoreVal2.className = 'as-score-value as-selected-mode';
+                    scoreVal2.style.color = 'var(--text-primary)';
+                    scoreVal2.title = subFilterLabel + ' — ' + subFilterPeerIds.length + ' peers';
+                }
+                if (qualityEl2) {
+                    var pctOfTotal = totalPeers > 0 ? ((subFilterPeerIds.length / totalPeers) * 100).toFixed(1) : '0.0';
+                    qualityEl2.textContent = pctOfTotal + '% of peers';
+                    qualityEl2.className = 'as-score-quality';
+                    qualityEl2.style.color = 'var(--text-secondary)';
+                }
+                if (scoreLbl2) {
+                    scoreLbl2.textContent = '';
+                }
+                return;
+            }
+            // No sub-filter — show the network overview
+            var npNetKey = activeNetworkPanel;
+            var npNetLabel = npNetKey === 'ipv4' ? 'IPv4' : 'IPv6';
+            var npNetColor = npNetKey === 'ipv4' ? 'var(--net-ipv4, #e3b341)' : 'var(--net-ipv6, #f07178)';
+            var npNetPeers = lastPeersRaw.filter(function (p) {
+                return (p.network || 'ipv4') === npNetKey;
+            });
+            var diversityEl3 = donutCenter.querySelector('.as-score-diversity');
+            var headingEl3 = donutCenter.querySelector('.as-score-heading');
+            var scoreVal3 = donutCenter.querySelector('.as-score-value');
+            var qualityEl3 = donutCenter.querySelector('.as-score-quality');
+            var scoreLbl3 = donutCenter.querySelector('.as-score-label');
+            if (diversityEl3) diversityEl3.style.display = 'none';
+            if (headingEl3) {
+                headingEl3.textContent = npNetPeers.length + ' PEER' + (npNetPeers.length !== 1 ? 'S' : '');
+                headingEl3.style.color = 'var(--accent)';
+                headingEl3.style.display = '';
+            }
+            if (scoreVal3) {
+                scoreVal3.textContent = npNetLabel;
+                scoreVal3.className = 'as-score-value as-selected-mode';
+                scoreVal3.style.color = npNetColor;
+                scoreVal3.title = npNetLabel + ' Network — ' + npNetPeers.length + ' peers';
+            }
+            if (qualityEl3) {
+                var pctOfTotal = totalPeers > 0 ? ((npNetPeers.length / totalPeers) * 100).toFixed(1) : '0.0';
+                qualityEl3.textContent = pctOfTotal + '% of peers';
+                qualityEl3.className = 'as-score-quality';
+                qualityEl3.style.color = 'var(--text-secondary)';
+            }
+            if (scoreLbl3) {
+                scoreLbl3.textContent = '';
+            }
+            return;
+        }
+
         var diversityEl = donutCenter.querySelector('.as-score-diversity');
         var headingEl = donutCenter.querySelector('.as-score-heading');
         var scoreVal = donutCenter.querySelector('.as-score-value');
@@ -6739,6 +6807,9 @@ window.ASDiversity = (function () {
         if (_filterPeerTable) _filterPeerTable(netPeerIds);
         if (_dimMapPeers) _dimMapPeers(netPeerIds);
         activateHoverAll();
+
+        // Update donut center to show network info (IPv4/IPv6 label, peer count, %)
+        renderCenter();
     }
 
     /** Show the network panel (reuses #as-detail-panel) */
