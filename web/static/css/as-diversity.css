@@ -1285,6 +1285,14 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-conn-out-row:hover {
     background: rgba(88, 166, 255, 0.06);
 }
+.as-conn-prov-row.sub-filter-active {
+    background: rgba(88, 166, 255, 0.16);
+}
+.as-conn-dir-row.sub-filter-active,
+.as-conn-out-row.sub-filter-active {
+    background: rgba(88, 166, 255, 0.16);
+    color: var(--text-primary);
+}
 
 /* Summary interactive rows (sections 3-7) — clickable with provider drill-down */
 .as-summary-row {

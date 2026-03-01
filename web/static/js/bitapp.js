@@ -1934,12 +1934,19 @@
         if (pnSelectedNet || privateNetSelectedPeer) return;
         pnHoveredNet = null;
         const total = pnSegments.reduce((s, seg) => s + seg.count, 0);
-        if (pnCenterLabel) pnCenterLabel.textContent = 'PRIVATE';
+        var totalAllPeers = lastPeers.length || total;
+        var pnPct = totalAllPeers > 0 ? Math.round((total / totalAllPeers) * 100) : 0;
+        if (pnCenterLabel) {
+            pnCenterLabel.textContent = total + ' PEER' + (total !== 1 ? 'S' : '');
+            pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
+        }
         if (pnCenterCount) {
-            pnCenterCount.textContent = total;
+            pnCenterCount.textContent = 'PRIVATE NETWORKS';
+            pnCenterCount.style.fontSize = '13px';
+            pnCenterCount.style.fontFamily = 'var(--font-display, Cinzel, serif)';
             pnCenterCount.style.color = '';
         }
-        if (pnCenterSub) pnCenterSub.textContent = 'peers';
+        if (pnCenterSub) pnCenterSub.innerHTML = pnPct + '% of total<br>connections';
 
         // Undim all segments
         if (pnDonutSvg) {

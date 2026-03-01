@@ -968,6 +968,11 @@ window.ASDiversity = (function () {
 
     /** Start donut expansion animation for a selected segment */
     function animateDonutExpand(asNum) {
+        // Skip re-animation if already expanded to the same target
+        if (donutAnimState === 'expanded' && donutAnimTarget === asNum) {
+            renderDonut();  // Just re-render with fresh data (no animation)
+            return;
+        }
         if (donutAnimFrame) cancelAnimationFrame(donutAnimFrame);
         if (donutAnimSafetyTimer) clearTimeout(donutAnimSafetyTimer);
         donutAnimTarget = asNum;
@@ -2194,8 +2199,9 @@ window.ASDiversity = (function () {
             var loc = (p.city || '') + (p.city && p.country ? ', ' : '') + (p.country || '');
             // Truncate location to keep layout tight
             if (loc.length > 16) loc = loc.substring(0, 15) + '\u2026';
+            var peerAs = parseAsNumber(p.as) || '';
             var extraClass = pi >= initialShow ? ' as-sub-tt-peer-extra' : '';
-            html += '<div class="as-sub-tt-peer' + extraClass + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
+            html += '<div class="as-sub-tt-peer' + extraClass + '" data-peer-id="' + p.id + '" data-as="' + peerAs + '"' + (pi >= initialShow ? ' style="display:none"' : '') + '>';
             html += '<span class="as-sub-tt-id as-sub-tt-id-link" data-peer-id="' + p.id + '">ID\u00a0' + p.id + '</span>';
             html += '<span class="as-sub-tt-type">' + ctLabel + '</span>';
             if (loc) html += '<span class="as-sub-tt-loc">' + loc + '</span>';
@@ -2746,7 +2752,11 @@ window.ASDiversity = (function () {
         summaryPreviewPeerIds = null;
         summaryPreviewLabel = null;
         if (!donutFocused) return;
-        if (insightActiveAsNum) {
+        if (subSubFilterAsNum && subSubTooltipPinned) {
+            // A Level 3 provider is selected (sub-sub pinned) — keep donut on that provider
+            showFocusedCenterText(subSubFilterAsNum);
+            animateDonutExpand(subSubFilterAsNum);
+        } else if (insightActiveAsNum) {
             // An insight is active (Most Stable, Fastest, etc.) — keep donut on that provider
             if (insightRectVisible) {
                 restoreInsightRectProvider();
@@ -2995,7 +3005,7 @@ window.ASDiversity = (function () {
                 provRow.style.cursor = 'pointer';
                 // Hover preview: show lines + filter for this provider's peers
                 provRow.addEventListener('mouseenter', function () {
-                    if (peerDetailActive) return;
+                    if (peerDetailActive || subSubTooltipPinned) return;
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
                     // Focus legend on this provider
@@ -3012,7 +3022,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    if (peerDetailActive) return;
+                    if (peerDetailActive || subSubTooltipPinned) return;
                     clearLegendFocus();
                     restoreSummaryFromPreview();
                     restoreDonutAfterPreview();
@@ -3142,6 +3152,8 @@ window.ASDiversity = (function () {
                     // Clear all highlights before setting new ones
                     var activeBodyEl = panelEl ? panelEl.querySelector('.as-detail-body') : null;
                     if (activeBodyEl) { var prev = activeBodyEl.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
+                    // Highlight this row as the active selection
+                    rowEl.classList.add('sub-filter-active');
                     // Track sub-filter state for data refresh preservation
                     var asNum = rowEl.dataset.as;
                     subFilterPeerIds = peerIds;
@@ -3244,6 +3256,8 @@ window.ASDiversity = (function () {
                     if (insightActiveAsNum || insightActiveType) { insightActiveAsNum = null; insightActiveData = null; insightActiveType = null; hideInsightRect(); }
                     var activeBodyOut = panelEl ? panelEl.querySelector('.as-detail-body') : null;
                     if (activeBodyOut) { var prev = activeBodyOut.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
+                    // Highlight this row as the active selection
+                    rowEl.classList.add('sub-filter-active');
                     // Track sub-filter state for data refresh preservation
                     subFilterPeerIds = peerIds;
                     subFilterCategory = 'conn-out';
@@ -3329,6 +3343,8 @@ window.ASDiversity = (function () {
                     if (insightActiveAsNum || insightActiveType) { insightActiveAsNum = null; insightActiveData = null; insightActiveType = null; hideInsightRect(); }
                     var activeBodyIn = panelEl ? panelEl.querySelector('.as-detail-body') : null;
                     if (activeBodyIn) { var prev = activeBodyIn.querySelectorAll('.sub-filter-active'); for (var ai = 0; ai < prev.length; ai++) prev[ai].classList.remove('sub-filter-active'); }
+                    // Highlight this row as the active selection
+                    rowEl.classList.add('sub-filter-active');
                     // Track sub-filter state for data refresh preservation
                     subFilterPeerIds = peerIds;
                     subFilterCategory = 'conn-in';
@@ -3872,7 +3888,7 @@ window.ASDiversity = (function () {
             (function (provRow) {
                 provRow.style.cursor = 'pointer';
                 provRow.addEventListener('mouseenter', function () {
-                    if (peerDetailActive) return;
+                    if (peerDetailActive || subSubTooltipPinned) return;
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
                     var rank = parseInt(provRow.dataset.rank) || 0;
@@ -3902,7 +3918,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    if (peerDetailActive) return;
+                    if (peerDetailActive || subSubTooltipPinned) return;
                     // On leave, restore to the pinned insight provider
                     if (insightRectVisible) {
                         restoreInsightRectProvider();
@@ -4004,7 +4020,7 @@ window.ASDiversity = (function () {
                 provRow.style.cursor = 'pointer';
                 // Hover preview: show lines + filter for this provider's peers
                 provRow.addEventListener('mouseenter', function () {
-                    if (peerDetailActive) return;
+                    if (peerDetailActive || subSubTooltipPinned) return;
                     var asNum = provRow.dataset.as;
                     var peerIds = JSON.parse(provRow.dataset.peerIds);
                     var rank = parseInt(provRow.dataset.rank) || 0;
@@ -4035,7 +4051,7 @@ window.ASDiversity = (function () {
                     }
                 });
                 provRow.addEventListener('mouseleave', function () {
-                    if (peerDetailActive) return;
+                    if (peerDetailActive || subSubTooltipPinned) return;
                     // On leave, restore to the pinned insight provider
                     if (insightRectVisible) {
                         restoreInsightRectProvider();
@@ -4239,11 +4255,25 @@ window.ASDiversity = (function () {
         // Clear ALL highlights first (summary rows + insight rows + grid rows)
         var allActive = bodyEl.querySelectorAll('.sub-filter-active');
         for (var ai = 0; ai < allActive.length; ai++) allActive[ai].classList.remove('sub-filter-active');
-        // Re-apply highlight only to matching summary row
-        var rows = bodyEl.querySelectorAll('.as-summary-row');
-        for (var ri = 0; ri < rows.length; ri++) {
-            if (subFilterLabel && rows[ri].dataset.catLabel === subFilterLabel) {
-                rows[ri].classList.add('sub-filter-active');
+        // Re-apply highlight to matching summary row
+        if (subFilterCategory === 'summary' && subFilterLabel) {
+            var rows = bodyEl.querySelectorAll('.as-summary-row');
+            for (var ri = 0; ri < rows.length; ri++) {
+                if (rows[ri].dataset.catLabel === subFilterLabel) {
+                    rows[ri].classList.add('sub-filter-active');
+                }
+            }
+        }
+        // Re-apply highlight to matching grid rows (conn-provider, conn-out, conn-in)
+        if (subFilterCategory && subFilterCategory.indexOf('conn-') === 0 && subFilterLabel) {
+            var gridSelector = subFilterCategory === 'conn-provider' ? '.as-conn-prov-row'
+                : subFilterCategory === 'conn-out' ? '.as-conn-out-row'
+                : '.as-conn-dir-row';
+            var gridRows = bodyEl.querySelectorAll(gridSelector);
+            for (var gi = 0; gi < gridRows.length; gi++) {
+                if (gridRows[gi].dataset.as === subFilterLabel) {
+                    gridRows[gi].classList.add('sub-filter-active');
+                }
             }
         }
     }
