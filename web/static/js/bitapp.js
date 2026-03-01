@@ -3189,9 +3189,9 @@
         ctx.restore();
     }
 
-    /** Network type → RGB color for private-net lines */
+    /** Network type → RGB color for private-net lines (must match PN_NET_COLORS_HEX) */
     const PN_LINE_COLORS = {
-        onion: { r: 218, g: 54, b: 51 },
+        onion: { r: 21, g: 101, b: 192 },
         i2p:   { r: 210, g: 153, b: 34 },
         cjdns: { r: 188, g: 140, b: 255 }
     };
