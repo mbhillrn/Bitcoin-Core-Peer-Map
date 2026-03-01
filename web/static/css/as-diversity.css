@@ -2313,7 +2313,7 @@ body.pn-panel-open .pn-container.pn-focused {
 
 /* ==========================================================
    PN Insight Rectangle — replaces donut for Score & Insights
-   (mirrors .as-insight-rect but uses #c11c84 accent)
+   (mirrors .as-insight-rect — same gold #d4a017 accent)
    ========================================================== */
 .pn-insight-rect {
     position: absolute;
@@ -2337,7 +2337,7 @@ body.pn-panel-open .pn-container.pn-focused {
     position: relative;
     width: 100%;
     height: 100%;
-    border: 3px solid #c11c84;
+    border: 3px solid #d4a017;
     border-radius: 10px;
     background: rgba(22, 27, 34, 0.94);
     backdrop-filter: blur(12px);
@@ -2346,7 +2346,7 @@ body.pn-panel-open .pn-container.pn-focused {
     display: flex;
     flex-direction: column;
     align-items: center;
-    box-shadow: 0 0 8px rgba(193, 28, 132, 0.25), inset 0 0 12px rgba(193, 28, 132, 0.06);
+    box-shadow: 0 0 8px rgba(212, 160, 23, 0.25), inset 0 0 12px rgba(212, 160, 23, 0.06);
 }
 /* "Scores & Insights" badge at top — integrates into the rect top border */
 .pn-insight-rect-badge {
@@ -2355,7 +2355,7 @@ body.pn-panel-open .pn-container.pn-focused {
     left: 50%;
     transform: translateX(-50%);
     background: rgba(22, 27, 34, 0.95);
-    border: 2px solid #c11c84;
+    border: 2px solid #d4a017;
     border-radius: 10px;
     padding: 2px 14px;
     font-family: var(--font-display);
@@ -2363,7 +2363,7 @@ body.pn-panel-open .pn-container.pn-focused {
     font-weight: 700;
     letter-spacing: 1.2px;
     text-transform: uppercase;
-    color: #c11c84;
+    color: #d4a017;
     white-space: nowrap;
     z-index: 6;
 }
@@ -2372,7 +2372,7 @@ body.pn-panel-open .pn-container.pn-focused {
     content: '\2605';
     margin-left: 4px;
     font-size: 10px;
-    color: #c11c84;
+    color: #d4a017;
 }
 /* Close/back button */
 .pn-insight-rect-close {
@@ -2381,8 +2381,8 @@ body.pn-panel-open .pn-container.pn-focused {
     right: -28px;
     z-index: 6;
     background: rgba(22, 27, 34, 0.85);
-    border: 1px solid rgba(193, 28, 132, 0.4);
-    color: #c11c84;
+    border: 1px solid rgba(212, 160, 23, 0.4);
+    color: #d4a017;
     font-size: 14px;
     width: 22px;
     height: 22px;
@@ -2395,8 +2395,8 @@ body.pn-panel-open .pn-container.pn-focused {
     padding: 0;
 }
 .pn-insight-rect-close:hover {
-    background: rgba(193, 28, 132, 0.15);
-    border-color: rgba(193, 28, 132, 0.7);
+    background: rgba(212, 160, 23, 0.15);
+    border-color: rgba(212, 160, 23, 0.7);
 }
 /* Content area */
 .pn-insight-rect-content {
@@ -2416,7 +2416,7 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-insight-rect-content::-webkit-scrollbar { width: 4px; }
 .pn-insight-rect-content::-webkit-scrollbar-track { background: transparent; }
-.pn-insight-rect-content::-webkit-scrollbar-thumb { background: rgba(193, 28, 132, 0.3); border-radius: 2px; }
+.pn-insight-rect-content::-webkit-scrollbar-thumb { background: rgba(212, 160, 23, 0.3); border-radius: 2px; }
 .pn-insight-rect-icon {
     font-size: 22px;
     margin-bottom: 2px;
@@ -2475,9 +2475,9 @@ body.pn-panel-open .pn-container.pn-focused {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    border: 3px solid #c11c84;
+    border: 3px solid #d4a017;
     z-index: 5;
-    box-shadow: 0 0 8px rgba(193, 28, 132, 0.5), 0 0 16px rgba(193, 28, 132, 0.2);
+    box-shadow: 0 0 8px rgba(212, 160, 23, 0.5), 0 0 16px rgba(212, 160, 23, 0.2);
 }
 /* When PN insight rect active, hide exit button */
 body.pn-insight-rect-active .pn-exit-btn {
@@ -2486,13 +2486,13 @@ body.pn-insight-rect-active .pn-exit-btn {
 }
 /* Active insight row highlight in panel */
 .pn-insight-row.pn-insight-active {
-    background: rgba(193, 28, 132, 0.16);
-    border-left: 2px solid #c11c84;
+    background: rgba(212, 160, 23, 0.16);
+    border-left: 2px solid #d4a017;
     padding-left: 6px;
 }
 /* Hover preview highlight */
 .pn-insight-row.pn-insight-hover {
-    background: rgba(193, 28, 132, 0.08);
+    background: rgba(212, 160, 23, 0.08);
 }
 
 /* Search bar inside detail panel */
