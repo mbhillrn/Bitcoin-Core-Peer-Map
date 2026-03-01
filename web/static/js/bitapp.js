@@ -678,6 +678,14 @@
     let pnMiniHoverNet = null;           // which network segment is hovered on the mini donut
     const PRIVATE_NETS = new Set(['onion', 'i2p', 'cjdns']);
 
+    // [PRIVATE-NET] Insight rectangle state (mirrors public AS insight rect)
+    let pnInsightRectEl = null;          // DOM ref for PN insight rectangle overlay
+    let pnInsightRectVisible = false;    // Whether the PN insight rectangle is currently shown
+    let pnInsightActiveType = null;      // 'stable' | 'fastest' | 'data-bytessent' | 'data-bytesrecv'
+    let pnInsightActivePeerId = null;    // Peer ID of the active (selected) insight
+    let pnInsightActiveData = null;      // Full data object for the active insight
+    let pnInsightHoverType = null;       // Type being hovered (for preview)
+
     // Network filter: Set of enabled network keys. When ALL networks are enabled, equivalent to "All".
     const ALL_NETS = new Set(['ipv4', 'ipv6', 'onion', 'i2p', 'cjdns']);
     let enabledNets = new Set(ALL_NETS);  // start with all enabled
@@ -1528,6 +1536,7 @@
             pnDetailBodyEl = document.getElementById('pn-detail-body');
             pnDetailNetNameEl = document.getElementById('pn-detail-net-name');
             pnDetailMetaEl = document.getElementById('pn-detail-meta');
+            pnInsightRectEl = document.getElementById('pn-insight-rect');
         }
         // Attach blank-space click handler once on pnDetailBodyEl (dismiss sub-tooltips)
         if (pnDetailBodyEl && !pnDetailBodyHandlerAttached) {
@@ -1625,6 +1634,14 @@
         pnHoveredNet = null;
         pnDonutFocused = false;
         pnPreviewPeerIds = null;
+
+        // Clear insight rect state
+        hidePnInsightRect();
+        pnInsightActiveType = null;
+        pnInsightActivePeerId = null;
+        pnInsightActiveData = null;
+        pnInsightHoverType = null;
+
         document.body.classList.remove('private-net-mode', 'pn-panel-open');
 
         // Hide sub-tooltips
@@ -2185,7 +2202,7 @@
         html += '<div class="pn-search-wrap"><input type="text" class="pn-search-input" id="pn-overview-search" placeholder="Search peers..." autocomplete="off" spellcheck="false"></div>';
 
         // ── Insights section ──
-        html += '<div class="modal-section-title">Insights</div>';
+        html += '<div class="modal-section-title">Scores and Insights</div>';
         const nowSec = Math.floor(Date.now() / 1000);
 
         // Most Stable — longest average connection
@@ -2197,7 +2214,7 @@
             }
         }
         if (bestStablePeer) {
-            html += '<div class="pn-insight-row" data-peer-id="' + bestStablePeer.id + '">';
+            html += '<div class="pn-insight-row" data-peer-id="' + bestStablePeer.id + '" data-insight-type="stable" data-peer-net="' + (bestStablePeer.network || 'onion') + '">';
             html += '<span class="pn-insight-icon">\u23f3</span>';
             html += '<span class="pn-insight-label">Most Stable</span>';
             html += '<span class="pn-insight-val">#' + bestStablePeer.id + ' \u2014 ' + pnFmtDuration(bestStableDur) + '</span>';
@@ -2212,10 +2229,10 @@
             }
         }
         if (bestPingPeer) {
-            html += '<div class="pn-insight-row" data-peer-id="' + bestPingPeer.id + '">';
+            html += '<div class="pn-insight-row" data-peer-id="' + bestPingPeer.id + '" data-insight-type="fastest" data-peer-net="' + (bestPingPeer.network || 'onion') + '">';
             html += '<span class="pn-insight-icon">\u26a1</span>';
             html += '<span class="pn-insight-label">Fastest</span>';
-            html += '<span class="pn-insight-val">#' + bestPingPeer.id + ' \u2014 ' + bestPing + ' ms</span>';
+            html += '<span class="pn-insight-val">#' + bestPingPeer.id + ' \u2014 ' + bestPing.toFixed(1) + ' ms</span>';
             html += '</div>';
         }
 
@@ -2227,7 +2244,7 @@
             }
         }
         if (bestSentPeer) {
-            html += '<div class="pn-insight-row" data-peer-id="' + bestSentPeer.id + '">';
+            html += '<div class="pn-insight-row" data-peer-id="' + bestSentPeer.id + '" data-insight-type="data-bytessent" data-peer-net="' + (bestSentPeer.network || 'onion') + '">';
             html += '<span class="pn-insight-icon">\u2b06</span>';
             html += '<span class="pn-insight-label">Most Bytes Sent</span>';
             html += '<span class="pn-insight-val">#' + bestSentPeer.id + ' \u2014 ' + fmtBytesShort(bestSent) + '</span>';
@@ -2242,12 +2259,11 @@
             }
         }
         if (bestRecvPeer) {
-            html += '<div class="pn-insight-row" data-peer-id="' + bestRecvPeer.id + '">';
+            html += '<div class="pn-insight-row" data-peer-id="' + bestRecvPeer.id + '" data-insight-type="data-bytesrecv" data-peer-net="' + (bestRecvPeer.network || 'onion') + '">';
             html += '<span class="pn-insight-icon">\u2b07</span>';
             html += '<span class="pn-insight-label">Most Bytes Recv</span>';
             html += '<span class="pn-insight-val">#' + bestRecvPeer.id + ' \u2014 ' + fmtBytesShort(bestRecv) + '</span>';
             html += '</div>';
-
         }
 
         // ── Networks breakdown (clickable to go to per-network panel) ──
@@ -2301,14 +2317,77 @@
         // Network link rows: handled by generic pn-interactive-row handler
         // (shows submenu with peers in that network on hover/click)
 
-        // Insight rows — click to select that peer
+        // Insight rows — hover to preview in rectangle, click to select/pin
         pnDetailBodyEl.querySelectorAll('.pn-insight-row').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                if (pnInsightActiveType) return; // Don't override a pinned selection
+                const peerId = parseInt(row.dataset.peerId);
+                const insightType = row.dataset.insightType;
+                const peerNet = row.dataset.peerNet;
+                if (!peerId || !insightType) return;
+
+                // Find the peer in current data
+                const allPN = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+                const rawPeers = allPN.map(n => lastPeers.find(p => p.id === n.peerId)).filter(Boolean);
+                const peer = rawPeers.find(p => p.id === peerId);
+                if (!peer) return;
+
+                pnInsightHoverType = insightType;
+                row.classList.add('pn-insight-hover');
+
+                // Preview: show rectangle, draw line to this peer
+                var data = buildPnInsightData(peer, insightType);
+                showPnInsightRect(insightType, data);
+                pnPreviewPeerIds = [peerId];
+                privateNetLinePeer = peerId;
+            });
+
+            row.addEventListener('mouseleave', () => {
+                if (pnInsightActiveType) return; // Don't dismiss if pinned
+                row.classList.remove('pn-insight-hover');
+                pnInsightHoverType = null;
+                hidePnInsightRect();
+                pnPreviewPeerIds = null;
+                privateNetLinePeer = null;
+            });
+
             row.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const peerId = parseInt(row.dataset.peerId);
-                if (peerId) {
-                    selectPrivatePeer(peerId);
+                const insightType = row.dataset.insightType;
+                if (!peerId || !insightType) return;
+
+                // If clicking the already-active insight, deselect
+                if (pnInsightActiveType === insightType && pnInsightActivePeerId === peerId) {
+                    hidePnInsightRect();
+                    clearPnInsightState();
+                    return;
                 }
+
+                // Find the peer in current data
+                const allPN = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+                const rawPeers = allPN.map(n => lastPeers.find(p => p.id === n.peerId)).filter(Boolean);
+                const peer = rawPeers.find(p => p.id === peerId);
+                if (!peer) return;
+
+                // Clear any previous active
+                pnDetailBodyEl.querySelectorAll('.pn-insight-row').forEach(r => {
+                    r.classList.remove('pn-insight-active', 'pn-insight-hover');
+                });
+
+                // Pin this insight
+                pnInsightActiveType = insightType;
+                pnInsightActivePeerId = peerId;
+                pnInsightActiveData = buildPnInsightData(peer, insightType);
+                row.classList.add('pn-insight-active');
+
+                // Show rectangle and set line
+                showPnInsightRect(insightType, pnInsightActiveData);
+                privateNetLinePeer = peerId;
+                pnPreviewPeerIds = [peerId];
+
+                // Select the peer (zoom to it, etc.)
+                selectPrivatePeer(peerId);
             });
         });
 
@@ -2449,6 +2528,139 @@
             pnCenterCount.style.color = '';
             pnCenterSub.innerHTML = pnPct + '% of total<br>connections';
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PRIVATE NET INSIGHT RECTANGLE — replaces donut for Scores & Insights selections
+    // ═══════════════════════════════════════════════════════════
+
+    /** Show the PN insight rectangle overlay, hiding the donut SVG and center text.
+     *  @param {string} type — 'stable' | 'fastest' | 'data-bytessent' | 'data-bytesrecv'
+     *  @param {Object} data — { peerId, peerNet, icon, title, statText, network label } */
+    function showPnInsightRect(type, data) {
+        cachePnElements();
+        if (!pnInsightRectEl) return;
+
+        var netColor = getPnNetColor(data.peerNet || 'onion');
+
+        var icon = '', title = '';
+        if (type === 'stable') {
+            icon = '\u23f3';
+            title = 'Most Stable Connection';
+        } else if (type === 'fastest') {
+            icon = '\u26a1';
+            title = 'Fastest Connection';
+        } else if (type === 'data-bytessent') {
+            icon = '\u2b06\ufe0f';
+            title = 'Most Data Sent To';
+        } else if (type === 'data-bytesrecv') {
+            icon = '\u2b07\ufe0f';
+            title = 'Most Data Recv By';
+        }
+
+        var networkLabel = PN_NET_LABELS[data.peerNet] || data.peerNet || 'Unknown';
+
+        var html = '';
+        html += '<div class="pn-insight-rect-inner">';
+        html += '<div class="pn-insight-rect-badge">Scores &amp; Insights</div>';
+        html += '<button class="pn-insight-rect-close" title="Back">\u2190</button>';
+        html += '<div class="pn-insight-rect-content">';
+        html += '<div class="pn-insight-rect-icon">' + icon + '</div>';
+        html += '<div class="pn-insight-rect-title">' + pnEsc(title) + '</div>';
+        html += '<div class="pn-insight-rect-rank" style="color:' + netColor + '">Rank #1</div>';
+        html += '<div class="pn-insight-rect-network" style="color:' + netColor + '">' + pnEsc(networkLabel) + '</div>';
+        html += '<div class="pn-insight-rect-meta">Peer #' + data.peerId + '</div>';
+        if (data.statText) {
+            html += '<div class="pn-insight-rect-stat" style="color:' + netColor + '">' + pnEsc(data.statText) + '</div>';
+        }
+        html += '</div>';
+        html += '<div class="pn-insight-rect-origin" style="background:' + netColor + '; border-color:' + netColor + '; box-shadow: 0 0 8px ' + netColor + '80, 0 0 16px ' + netColor + '33"></div>';
+        html += '</div>';
+
+        pnInsightRectEl.innerHTML = html;
+
+        // Hide donut SVG and center, show rectangle
+        if (pnDonutSvg) pnDonutSvg.style.opacity = '0';
+        var pnDonutCenter = document.getElementById('pn-donut-center');
+        if (pnDonutCenter) pnDonutCenter.style.opacity = '0';
+        pnInsightRectEl.classList.add('visible');
+        pnInsightRectVisible = true;
+        document.body.classList.add('pn-insight-rect-active');
+
+        // Bind close button
+        var closeBtn = pnInsightRectEl.querySelector('.pn-insight-rect-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                hidePnInsightRect();
+                clearPnInsightState();
+            });
+        }
+    }
+
+    /** Hide the PN insight rectangle and restore the donut SVG + center text */
+    function hidePnInsightRect() {
+        cachePnElements();
+        if (!pnInsightRectEl) return;
+        pnInsightRectEl.classList.remove('visible');
+        pnInsightRectVisible = false;
+        document.body.classList.remove('pn-insight-rect-active');
+        // Show donut SVG and center
+        if (pnDonutSvg) pnDonutSvg.style.opacity = '';
+        var pnDonutCenter = document.getElementById('pn-donut-center');
+        if (pnDonutCenter) pnDonutCenter.style.opacity = '';
+    }
+
+    /** Clear all insight selection state */
+    function clearPnInsightState() {
+        pnInsightActiveType = null;
+        pnInsightActivePeerId = null;
+        pnInsightActiveData = null;
+        pnInsightHoverType = null;
+        privateNetLinePeer = null;
+        privateNetSelectedPeer = null;
+        pnPreviewPeerIds = null;
+        // Remove active class from insight rows
+        if (pnDetailBodyEl) {
+            pnDetailBodyEl.querySelectorAll('.pn-insight-row').forEach(function(r) {
+                r.classList.remove('pn-insight-active', 'pn-insight-hover');
+            });
+        }
+        renderPnDonut();
+    }
+
+    /** Get the position of the PN insight rect origin circle (bottom center dot).
+     *  Returns {x, y} in page coordinates, or null. */
+    function getPnInsightRectOrigin() {
+        if (!pnInsightRectEl || !pnInsightRectVisible) return null;
+        var originDot = pnInsightRectEl.querySelector('.pn-insight-rect-origin');
+        if (originDot) {
+            var rect = originDot.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            }
+        }
+        return null;
+    }
+
+    /** Build the insight data object for a given peer and type */
+    function buildPnInsightData(peer, type) {
+        var nowSec = Math.floor(Date.now() / 1000);
+        var data = {
+            peerId: peer.id,
+            peerNet: peer.network || 'onion'
+        };
+        if (type === 'stable') {
+            var dur = peer.conntime > 0 ? (nowSec - peer.conntime) : 0;
+            data.statText = pnFmtDuration(dur);
+        } else if (type === 'fastest') {
+            data.statText = peer.ping_ms > 0 ? peer.ping_ms.toFixed(1) + ' ms' : '\u2014';
+        } else if (type === 'data-bytessent') {
+            data.statText = fmtBytesShort(peer.bytessent || 0) + ' sent';
+        } else if (type === 'data-bytesrecv') {
+            data.statText = fmtBytesShort(peer.bytesrecv || 0) + ' recv';
+        }
+        return data;
     }
 
     /** Build peer list HTML for the sub-tooltip */
@@ -2692,6 +2904,12 @@
         const savedLinePeer = privateNetLinePeer;
         const savedSelectedPeer = privateNetSelectedPeer;
 
+        // Save insight rect state before rebuild
+        const savedInsightType = pnInsightActiveType;
+        const savedInsightPeerId = pnInsightActivePeerId;
+        const savedInsightData = pnInsightActiveData;
+        const savedInsightRectVisible = pnInsightRectVisible;
+
         renderPnDonut();
 
         // Restore donut visual state after SVG rebuild
@@ -2714,6 +2932,13 @@
             }
         }
 
+        // If insight rect was visible, re-hide the donut SVG/center (renderPnDonut restores them)
+        if (savedInsightRectVisible && savedInsightType) {
+            if (pnDonutSvg) pnDonutSvg.style.opacity = '0';
+            var pnDonutCenter = document.getElementById('pn-donut-center');
+            if (pnDonutCenter) pnDonutCenter.style.opacity = '0';
+        }
+
         // Only update detail panel content — do NOT close/reopen it
         if (pnDetailPanelEl && pnDetailPanelEl.classList.contains('visible')) {
             if (pnSelectedNet) {
@@ -2722,6 +2947,37 @@
                 updatePnOverviewPanel();
             }
         }
+
+        // Restore insight rect state after panel rebuild (updatePnOverviewPanel rebuilds HTML)
+        if (savedInsightType && savedInsightPeerId) {
+            pnInsightActiveType = savedInsightType;
+            pnInsightActivePeerId = savedInsightPeerId;
+            privateNetLinePeer = savedInsightPeerId;
+            pnPreviewPeerIds = [savedInsightPeerId];
+
+            // Try to find the updated peer data for a fresh stat
+            const allPN = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+            const rawPeers = allPN.map(n => lastPeers.find(p => p.id === n.peerId)).filter(Boolean);
+            const updatedPeer = rawPeers.find(p => p.id === savedInsightPeerId);
+            if (updatedPeer) {
+                pnInsightActiveData = buildPnInsightData(updatedPeer, savedInsightType);
+                showPnInsightRect(savedInsightType, pnInsightActiveData);
+            } else if (savedInsightData) {
+                pnInsightActiveData = savedInsightData;
+                showPnInsightRect(savedInsightType, savedInsightData);
+            }
+
+            // Re-highlight the active insight row in the rebuilt panel
+            if (pnDetailBodyEl) {
+                pnDetailBodyEl.querySelectorAll('.pn-insight-row').forEach(r => {
+                    if (r.dataset.insightType === savedInsightType &&
+                        parseInt(r.dataset.peerId) === savedInsightPeerId) {
+                        r.classList.add('pn-insight-active');
+                    }
+                });
+            }
+        }
+
         renderPeerTable();
     }
 
@@ -2933,9 +3189,9 @@
         ctx.restore();
     }
 
-    /** Network type → RGB color for private-net lines */
+    /** Network type → RGB color for private-net lines (must match PN_NET_COLORS_HEX) */
     const PN_LINE_COLORS = {
-        onion: { r: 218, g: 54, b: 51 },
+        onion: { r: 21, g: 101, b: 192 },
         i2p:   { r: 210, g: 153, b: 34 },
         cjdns: { r: 188, g: 140, b: 255 }
     };
@@ -3039,10 +3295,17 @@
         ctx.lineWidth = lineW;
 
         for (const node of privateNodes) {
-            // Determine origin: legend dot per network when available, else donut center
+            // Determine origin: insight rect origin > legend dot per network > donut center
             let originX = fallbackOriginX;
             let originY = fallbackOriginY;
-            if (pnMiniHover && !privateNetMode) {
+            if (pnInsightRectVisible && privateNetMode) {
+                // When insight rect is visible, lines come from the origin circle at the bottom
+                const iro = getPnInsightRectOrigin();
+                if (iro) {
+                    originX = (iro.x - canvasRect.left) * (W / canvasRect.width);
+                    originY = (iro.y - canvasRect.top) * (H / canvasRect.height);
+                }
+            } else if (pnMiniHover && !privateNetMode) {
                 const dotPos = getPnMiniLegendDotPos(node.net);
                 if (dotPos) {
                     originX = (dotPos.x - canvasRect.left) * (W / canvasRect.width);
