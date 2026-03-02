@@ -2089,16 +2089,9 @@ window.ASDiversity = (function () {
             html += summaryInteractiveRow(net.label, net.peerCount + 'p / ' + net.providerCount + 'prov', net);
         }
         // "Private Networks" link at bottom of Networks section
-        var hasPrivateNets = false;
-        for (var pni = 0; pni < lastPeersRaw.length; pni++) {
-            var pnNet = lastPeersRaw[pni].net;
-            if (pnNet === 'onion' || pnNet === 'i2p' || pnNet === 'cjdns') { hasPrivateNets = true; break; }
-        }
-        if (hasPrivateNets) {
-            html += '<div class="as-detail-sub-row as-show-private-nets" style="cursor:pointer; padding-top:2px; padding-bottom:2px">';
-            html += '<span class="as-detail-sub-label" style="color:var(--accent); font-size:11px">Private Networks</span>';
-            html += '</div>';
-        }
+        html += '<div class="as-detail-sub-row as-show-private-nets" style="cursor:pointer; padding-top:2px; padding-bottom:2px">';
+        html += '<span class="as-detail-sub-label" style="color:var(--accent); font-size:11px">Private Networks</span>';
+        html += '</div>';
 
         // ── Section 4: Hosting ──
         html += '<div class="modal-section-title" title="Peer connections grouped by hosting type. Cloud/Hosting = datacenter, Residential = home ISP, Proxy/VPN = anonymizing relay, Mobile = cellular.">Hosting</div>';
