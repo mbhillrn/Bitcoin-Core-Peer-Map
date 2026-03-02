@@ -108,6 +108,8 @@
         borderHue:      212,         // hue degrees (accent blue, matches grid default)
         // HUD overlay backgrounds
         hudSolidBg:    false,        // when true, HUD overlays get semi-opaque backgrounds
+        // Donut legend display
+        showDonutLegends: false,     // when true, top-8 ISP and network lists animate on donut hover
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -3087,6 +3089,23 @@
                         else { item.classList.remove('dimmed'); item.classList.add('highlighted'); }
                     });
                 }
+                // When legends hidden, show network info in mini donut center
+                if (!advSettings.showDonutLegends) {
+                    const seg = segs.find(s => s.net === net);
+                    const label = PN_NET_LABELS[net] || net.toUpperCase();
+                    const miniCenter = document.getElementById('pn-mini-center');
+                    if (miniCenter) {
+                        const labelEl = miniCenter.querySelector('.pn-mini-center-label');
+                        const countEl = miniCenter.querySelector('.pn-mini-center-count');
+                        const subEl = miniCenter.querySelector('.pn-mini-center-sub');
+                        if (labelEl) labelEl.textContent = label;
+                        if (countEl) {
+                            countEl.textContent = seg ? seg.count : '';
+                            countEl.style.color = seg ? seg.color : '';
+                        }
+                        if (subEl) subEl.textContent = 'peers';
+                    }
+                }
             });
             el.addEventListener('mouseleave', () => {
                 pnMiniHoverNet = null;
@@ -3097,6 +3116,21 @@
                     miniLegendEl.querySelectorAll('.pn-mini-legend-item').forEach(item => {
                         item.classList.remove('dimmed', 'highlighted');
                     });
+                }
+                // When legends hidden, restore default mini donut center text
+                if (!advSettings.showDonutLegends) {
+                    const miniCenter = document.getElementById('pn-mini-center');
+                    if (miniCenter) {
+                        const labelEl = miniCenter.querySelector('.pn-mini-center-label');
+                        const countEl = miniCenter.querySelector('.pn-mini-center-count');
+                        const subEl = miniCenter.querySelector('.pn-mini-center-sub');
+                        if (labelEl) labelEl.textContent = 'Private';
+                        if (countEl) {
+                            countEl.textContent = total;
+                            countEl.style.color = '';
+                        }
+                        if (subEl) subEl.textContent = 'Peers';
+                    }
                 }
             });
             el.addEventListener('click', (e) => {
@@ -7687,6 +7721,7 @@
         visItems.forEach(item => {
             html += `<div class="dsp-row"><span class="dsp-label">${item.label}</span><label class="dsp-toggle"><input type="checkbox" data-vis-target="${item.id}" ${item.visible ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         });
+        html += `<div class="dsp-row"><span class="dsp-label" title="Animate donuts to display top 8 ISP or anonymous networks on hover">Display Top ISP/Net</span><label class="dsp-toggle"><input type="checkbox" id="dsp-donut-legends" ${advSettings.showDonutLegends ? 'checked' : ''}><span class="dsp-toggle-slider"></span></label></div>`;
         html += '<button class="dsp-advanced-btn" id="dsp-advanced-btn">Advanced &#9881;</button>';
         html += '<a class="dsp-feedback-link" href="https://github.com/mbhillrn/Bitcoin-Core-Peer-Map/discussions" target="_blank" rel="noopener" title="Click here to open a browser to the repo discussion">Suggestions &amp; Bug Reports &#8599;</a>';
         popup.innerHTML = html;
@@ -7764,6 +7799,33 @@
                 }
             });
         });
+
+        // Bind Display Top ISP/Net toggle
+        const donutLegendsInput = document.getElementById('dsp-donut-legends');
+        if (donutLegendsInput) {
+            donutLegendsInput.addEventListener('change', () => {
+                advSettings.showDonutLegends = donutLegendsInput.checked;
+                saveAdvSettings();
+                // Toggle legend visibility class on the AS diversity container
+                const asCont = document.getElementById('as-diversity-container');
+                if (asCont) {
+                    if (advSettings.showDonutLegends) {
+                        asCont.classList.remove('legends-hidden');
+                    } else {
+                        asCont.classList.add('legends-hidden');
+                    }
+                }
+                // Toggle legend visibility on the PN mini donut
+                const pnMiniLegend = document.getElementById('pn-mini-legend');
+                if (pnMiniLegend) {
+                    pnMiniLegend.style.display = advSettings.showDonutLegends ? '' : 'none';
+                }
+                // Notify AS diversity module of the legend visibility state
+                if (window.ASDiversity && window.ASDiversity.setLegendsHidden) {
+                    window.ASDiversity.setLegendsHidden(!advSettings.showDonutLegends);
+                }
+            });
+        }
 
         // Close on outside click
         setTimeout(() => {
@@ -8648,6 +8710,15 @@
 
         const ASD = window.ASDiversity;
         ASD.init();
+
+        // Apply initial "Display Top ISP/Net" toggle state
+        if (!advSettings.showDonutLegends) {
+            const asCont = document.getElementById('as-diversity-container');
+            if (asCont) asCont.classList.add('legends-hidden');
+            const pnMiniLegend = document.getElementById('pn-mini-legend');
+            if (pnMiniLegend) pnMiniLegend.style.display = 'none';
+            ASD.setLegendsHidden(true);
+        }
 
         // Provide integration hooks
         ASD.setHooks({

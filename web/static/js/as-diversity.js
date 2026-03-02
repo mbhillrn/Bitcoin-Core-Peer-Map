@@ -53,6 +53,7 @@ window.ASDiversity = (function () {
     let donutFocused = false;      // True when in focused mode (donut at top-center)
     let focusedHoverAs = null;     // AS hovered in focused mode (for center text display)
     let othersListOpen = false;    // True when Others popup is showing next to the donut
+    let legendsHidden = false;     // True when "Display Top ISP/Net" toggle is OFF
 
     // Donut segment animation state
     let donutAnimState = 'idle';   // 'idle' | 'expanding' | 'expanded' | 'reverting'
@@ -1298,6 +1299,12 @@ window.ASDiversity = (function () {
         // In focused mode with hover active, preserve the hover display during data updates
         if (donutFocused && focusedHoverAs && !selectedAs) {
             showFocusedCenterText(focusedHoverAs);
+            return;
+        }
+
+        // With legends hidden and hover active, preserve provider info during data updates
+        if (legendsHidden && !donutFocused && focusedHoverAs && !selectedAs) {
+            showLegendHoverCenterText(focusedHoverAs);
             return;
         }
 
@@ -4871,6 +4878,71 @@ window.ASDiversity = (function () {
         attachOthersBackHandler();
     }
 
+    /** Show provider info in donut center when hovering a segment with legends hidden.
+     *  Displays: Rank #N / ISP / PROVIDER-NAME / AS12345 / 16 PEERS */
+    function showLegendHoverCenterText(asNum) {
+        if (!donutCenter) return;
+        var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
+        if (!seg) return;
+
+        // Determine rank (1-based position in donutSegments, excluding Others)
+        var rank = 0;
+        for (var i = 0; i < donutSegments.length; i++) {
+            if (!donutSegments[i].isOthers) {
+                rank++;
+                if (donutSegments[i].asNumber === asNum) break;
+            }
+        }
+
+        var diversityEl = donutCenter.querySelector('.as-score-diversity');
+        var headingEl = donutCenter.querySelector('.as-score-heading');
+        var scoreVal = donutCenter.querySelector('.as-score-value');
+        var qualityEl = donutCenter.querySelector('.as-score-quality');
+        var scoreLbl = donutCenter.querySelector('.as-score-label');
+
+        // Top line: "Rank #N" or "Bucket:" for Others
+        if (diversityEl) {
+            if (seg.isOthers) {
+                diversityEl.textContent = 'Bucket:';
+            } else {
+                diversityEl.textContent = 'Rank #' + rank;
+            }
+            diversityEl.style.color = '#d4a017';
+            diversityEl.style.display = '';
+        }
+
+        // Second line: "ISP" label
+        if (headingEl) {
+            headingEl.textContent = seg.isOthers ? '' : 'ISP';
+            headingEl.style.color = 'var(--logo-primary)';
+            headingEl.style.display = seg.isOthers ? 'none' : '';
+        }
+
+        // Provider name — use smart line-breaking
+        var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
+        var displayLines = formatNameForDonut(name);
+        if (scoreVal) {
+            scoreVal.textContent = displayLines;
+            scoreVal.className = 'as-score-value as-focused-provider';
+            scoreVal.style.color = seg.color;
+            scoreVal.title = (seg.asName || seg.asNumber) + '\n' + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
+        }
+
+        // AS number
+        if (qualityEl) {
+            qualityEl.textContent = seg.asNumber === 'Others' ? (seg.asName || '') : seg.asNumber;
+            qualityEl.className = 'as-score-quality';
+            qualityEl.style.color = seg.color;
+        }
+
+        // Peer count
+        if (scoreLbl) {
+            scoreLbl.textContent = seg.peerCount + ' PEER' + (seg.peerCount !== 1 ? 'S' : '');
+            scoreLbl.className = 'as-score-label as-provider-peers';
+            scoreLbl.style.color = '';
+        }
+    }
+
     /** Show scrollable Others provider list as a floating popup to the right of the donut.
      *  Each item is hoverable (preview lines) and clickable (opens provider panel). */
     function showOthersListInDonut() {
@@ -5052,6 +5124,12 @@ window.ASDiversity = (function () {
             showFocusedCenterText(asNum);
         }
 
+        // When legends are hidden (not focused), show provider info in donut center
+        if (legendsHidden && !donutFocused && !selectedAs) {
+            focusedHoverAs = asNum;
+            showLegendHoverCenterText(asNum);
+        }
+
         // Temporarily remove all-hovered highlight so only this segment is bright
         if ((hoveredAll || summarySelected) && containerEl) {
             containerEl.classList.remove('as-all-hovered');
@@ -5075,6 +5153,12 @@ window.ASDiversity = (function () {
 
         // In focused mode, restore center text to default score display
         if (donutFocused && !selectedAs) {
+            focusedHoverAs = null;
+            renderCenter();
+        }
+
+        // When legends are hidden (not focused), restore default center text
+        if (legendsHidden && !donutFocused && !selectedAs) {
             focusedHoverAs = null;
             renderCenter();
         }
@@ -6694,8 +6778,8 @@ window.ASDiversity = (function () {
             var origin = getInsightRectOrigin();
             if (origin) return origin;
         }
-        // In focused mode, lines always come from donut center (legend is hidden)
-        if (donutFocused) return getDonutCenter();
+        // In focused mode or with legends hidden, lines come from donut center
+        if (donutFocused || legendsHidden) return getDonutCenter();
 
         // First: direct legend dot match (works for top-8 and selected AS)
         var direct = getLegendDotPosition(asNum);
@@ -6718,6 +6802,11 @@ window.ASDiversity = (function () {
 
         // Final fallback: donut center (only when legend genuinely not rendered)
         return getDonutCenter();
+    }
+
+    /** Set legends hidden state (called from bitapp.js when toggle changes) */
+    function setLegendsHidden(hidden) {
+        legendsHidden = !!hidden;
     }
 
     /** Get the currently selected AS number */
@@ -6995,5 +7084,8 @@ window.ASDiversity = (function () {
         // Network panels (IPv4/IPv6)
         openNetworkPanel: openNetworkPanel,
         getActiveNetworkPanel: function () { return activeNetworkPanel; },
+        // Legend visibility
+        setLegendsHidden: setLegendsHidden,
+        isLegendsHidden: function () { return legendsHidden; },
     };
 })();

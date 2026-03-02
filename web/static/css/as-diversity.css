@@ -515,6 +515,14 @@ body.insight-rect-active .as-focused-close {
     max-height: 260px;
     overflow-y: auto;
 }
+/* When "Display Top ISP/Net" toggle is OFF, suppress legend expansion even on hover */
+.as-diversity-container.legends-hidden .as-legend,
+.as-diversity-container.legends-hidden:hover:not(:has(.pn-mini-donut:hover)) .as-legend {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+}
 /* "TOP 8" header above the legend list */
 .as-legend-header {
     font-family: var(--font-data);
