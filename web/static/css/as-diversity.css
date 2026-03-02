@@ -1027,6 +1027,11 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     outline: 1px solid rgba(88, 166, 255, 0.3);
     outline-offset: -1px;
 }
+.as-provider-row-selected {
+    background: rgba(88, 166, 255, 0.18) !important;
+    outline: 1px solid rgba(88, 166, 255, 0.3);
+    outline-offset: -1px;
+}
 .as-sub-tt-id {
     color: var(--accent);
     font-weight: 700;

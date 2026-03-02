@@ -2569,6 +2569,12 @@ window.ASDiversity = (function () {
         subSubFilterPeerIds = null;
         subSubFilterAsNum = null;
         subSubFilterColor = null;
+        // Clear provider row selection highlight in the sub-tooltip
+        var subTip = document.getElementById('as-sub-tooltip');
+        if (subTip) {
+            var prevSel = subTip.querySelectorAll('.as-provider-row-selected');
+            for (var si = 0; si < prevSel.length; si++) prevSel[si].classList.remove('as-provider-row-selected');
+        }
         // Clear legend focus when sub-sub dismisses
         if (legendFocusAs) {
             legendFocusAs = null;
@@ -3043,6 +3049,14 @@ window.ASDiversity = (function () {
                     // Keep legend focused on this provider while sub-sub is pinned
                     legendFocusAs = asNum;
                     renderLegend();
+
+                    // Highlight this provider row as selected in the sub-tooltip
+                    var tip = document.getElementById('as-sub-tooltip');
+                    if (tip) {
+                        var prevSel = tip.querySelectorAll('.as-provider-row-selected');
+                        for (var si = 0; si < prevSel.length; si++) prevSel[si].classList.remove('as-provider-row-selected');
+                    }
+                    provRow.classList.add('as-provider-row-selected');
 
                     var html = buildPeerListHtmlForSubSub(matchedPeers);
                     showSubSubTooltip(html, e);
@@ -3936,6 +3950,14 @@ window.ASDiversity = (function () {
                     legendFocusAs = asNum;
                     renderLegend();
 
+                    // Highlight this provider row as selected in the sub-tooltip
+                    var tip = document.getElementById('as-sub-tooltip');
+                    if (tip) {
+                        var prevSel = tip.querySelectorAll('.as-provider-row-selected');
+                        for (var si = 0; si < prevSel.length; si++) prevSel[si].classList.remove('as-provider-row-selected');
+                    }
+                    provRow.classList.add('as-provider-row-selected');
+
                     var idSet = {};
                     for (var i = 0; i < peerIds.length; i++) idSet[peerIds[i]] = true;
                     var matchedPeers = [];
@@ -4068,6 +4090,14 @@ window.ASDiversity = (function () {
                     // Keep legend focused on this provider while sub-sub is pinned
                     legendFocusAs = asNum;
                     renderLegend();
+
+                    // Highlight this provider row as selected in the sub-tooltip
+                    var tip = document.getElementById('as-sub-tooltip');
+                    if (tip) {
+                        var prevSel = tip.querySelectorAll('.as-provider-row-selected');
+                        for (var si = 0; si < prevSel.length; si++) prevSel[si].classList.remove('as-provider-row-selected');
+                    }
+                    provRow.classList.add('as-provider-row-selected');
 
                     // Find matching peer objects from lastPeersRaw
                     var idSet = {};
@@ -6190,13 +6220,40 @@ window.ASDiversity = (function () {
                     // Sub-tooltip is open — DON'T rebuild panel DOM or change filters.
                     // Keep current peer table filter and dim state intact so drill-down
                     // (e.g. Country > Provider > Peer) isn't disrupted by data refresh.
-                    // Just keep lines drawing for the current selection.
+                    // Refresh lines/center with fresh data while preserving hover state.
                     if (savedCategory && savedLabel) {
                         var freshPeerIds = findPeerIdsByCategoryLabel(seg, savedCategory, savedLabel);
                         if (freshPeerIds && freshPeerIds.length > 0) {
                             subFilterPeerIds = freshPeerIds;
                             subFilterCategory = savedCategory;
                             subFilterLabel = savedLabel;
+                        }
+                    }
+                    // Re-apply lines and center text (renderCenter/renderDonut already ran and reset them)
+                    if (hoveredPeerId) {
+                        // Peer is being hovered — preserve that peer's visual state
+                        var hPeer = lastPeersRaw.find(function (p) { return p.id === hoveredPeerId; });
+                        if (hPeer) {
+                            var hAsNum = parseAsNumber(hPeer.as);
+                            var hColor = hAsNum ? getColorForAsNum(hAsNum) : '#6e7681';
+                            previewProviderLines([hoveredPeerId]);
+                            if (donutFocused) showPeerInDonutCenter(hPeer, hColor);
+                        }
+                    } else if (subFilterPeerIds && subFilterPeerIds.length > 0) {
+                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, subFilterPeerIds, seg.color);
+                        if (_filterPeerTable) _filterPeerTable(subFilterPeerIds);
+                        if (_dimMapPeers) _dimMapPeers(subFilterPeerIds);
+                        if (donutFocused) {
+                            showFocusedCenterText(selectedAs);
+                            animateDonutExpand(selectedAs);
+                        }
+                    } else {
+                        if (_drawLinesForAs) _drawLinesForAs(selectedAs, seg.peerIds, seg.color);
+                        if (_filterPeerTable) _filterPeerTable(seg.peerIds);
+                        if (_dimMapPeers) _dimMapPeers(seg.peerIds);
+                        if (donutFocused) {
+                            showFocusedCenterText(selectedAs);
+                            animateDonutExpand(selectedAs);
                         }
                     }
                 } else {
@@ -6282,10 +6339,20 @@ window.ASDiversity = (function () {
                             if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, [hoveredPeerId], ssColor);
                             if (_filterPeerTable) _filterPeerTable([hoveredPeerId]);
                             if (_dimMapPeers) _dimMapPeers([hoveredPeerId]);
+                            // Preserve hovered peer's center text
+                            if (donutFocused) {
+                                var hPeer = lastPeersRaw.find(function (p) { return p.id === hoveredPeerId; });
+                                if (hPeer) showPeerInDonutCenter(hPeer, ssColor);
+                            }
                         } else {
                             if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, freshProvPeerIds, ssColor);
                             if (_filterPeerTable) _filterPeerTable(freshProvPeerIds);
                             if (_dimMapPeers) _dimMapPeers(freshProvPeerIds);
+                            // Restore center text to the selected provider
+                            if (donutFocused) {
+                                showFocusedCenterText(subSubFilterAsNum);
+                                animateDonutExpand(subSubFilterAsNum);
+                            }
                         }
                     }
                 }
@@ -6308,23 +6375,39 @@ window.ASDiversity = (function () {
                         }
                         if (freshPeerIds && freshPeerIds.length > 0) {
                             subFilterPeerIds = freshPeerIds;
-                            if (_filterPeerTable) _filterPeerTable(freshPeerIds);
-                            if (_dimMapPeers) _dimMapPeers(freshPeerIds);
-                            if (_drawLinesForAllAs && donutSegments.length > 0) {
-                                var idSet = {};
-                                for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
-                                var groups = [];
-                                for (var si = 0; si < donutSegments.length; si++) {
-                                    var seg = donutSegments[si];
-                                    var filteredIds = [];
-                                    for (var pi = 0; pi < seg.peerIds.length; pi++) {
-                                        if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
-                                    }
-                                    if (filteredIds.length > 0) {
-                                        groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                            // If a provider row is being hovered in the sub-tooltip, preserve that
+                            if (legendFocusAs) {
+                                var hovProvGroup = asGroups.find(function (g) { return g.asNumber === legendFocusAs; });
+                                if (hovProvGroup) {
+                                    var hovPeerIds = hovProvGroup.peerIds;
+                                    var hovColor = getColorForAsNum(legendFocusAs);
+                                    if (_drawLinesForAs) _drawLinesForAs(legendFocusAs, hovPeerIds, hovColor);
+                                    if (_filterPeerTable) _filterPeerTable(hovPeerIds);
+                                    if (_dimMapPeers) _dimMapPeers(hovPeerIds);
+                                    if (donutFocused) {
+                                        showFocusedCenterText(legendFocusAs);
+                                        animateDonutExpand(legendFocusAs);
                                     }
                                 }
-                                _drawLinesForAllAs(groups);
+                            } else {
+                                if (_filterPeerTable) _filterPeerTable(freshPeerIds);
+                                if (_dimMapPeers) _dimMapPeers(freshPeerIds);
+                                if (_drawLinesForAllAs && donutSegments.length > 0) {
+                                    var idSet = {};
+                                    for (var i = 0; i < freshPeerIds.length; i++) idSet[freshPeerIds[i]] = true;
+                                    var groups = [];
+                                    for (var si = 0; si < donutSegments.length; si++) {
+                                        var seg = donutSegments[si];
+                                        var filteredIds = [];
+                                        for (var pi = 0; pi < seg.peerIds.length; pi++) {
+                                            if (idSet[seg.peerIds[pi]]) filteredIds.push(seg.peerIds[pi]);
+                                        }
+                                        if (filteredIds.length > 0) {
+                                            groups.push({ asNum: seg.asNumber, peerIds: filteredIds, color: seg.color });
+                                        }
+                                    }
+                                    _drawLinesForAllAs(groups);
+                                }
                             }
                         }
                     } else if (subFilterCategory === 'insight-stable') {
@@ -6352,13 +6435,24 @@ window.ASDiversity = (function () {
                         if (provGroup) {
                             subFilterPeerIds = provGroup.peerIds;
                             var color = getColorForAsNum(subFilterLabel);
-                            if (_drawLinesForAs) _drawLinesForAs(subFilterLabel, provGroup.peerIds, color);
-                            if (_filterPeerTable) _filterPeerTable(provGroup.peerIds);
-                            if (_dimMapPeers) _dimMapPeers(provGroup.peerIds);
-                            // Preserve donut state for this provider
-                            if (donutFocused) {
-                                showFocusedCenterText(subFilterLabel);
-                                animateDonutExpand(subFilterLabel);
+                            // If a peer is being hovered, preserve that single-peer view
+                            if (hoveredPeerId && provGroup.peerIds.indexOf(hoveredPeerId) >= 0) {
+                                if (_drawLinesForAs) _drawLinesForAs(subFilterLabel, [hoveredPeerId], color);
+                                if (_filterPeerTable) _filterPeerTable([hoveredPeerId]);
+                                if (_dimMapPeers) _dimMapPeers([hoveredPeerId]);
+                                if (donutFocused) {
+                                    var hPeer = lastPeersRaw.find(function (p) { return p.id === hoveredPeerId; });
+                                    if (hPeer) showPeerInDonutCenter(hPeer, color);
+                                }
+                            } else {
+                                if (_drawLinesForAs) _drawLinesForAs(subFilterLabel, provGroup.peerIds, color);
+                                if (_filterPeerTable) _filterPeerTable(provGroup.peerIds);
+                                if (_dimMapPeers) _dimMapPeers(provGroup.peerIds);
+                                // Preserve donut state for this provider
+                                if (donutFocused) {
+                                    showFocusedCenterText(subFilterLabel);
+                                    animateDonutExpand(subFilterLabel);
+                                }
                             }
                         }
                     } else if (subFilterCategory === 'conn-out') {
@@ -6411,6 +6505,11 @@ window.ASDiversity = (function () {
                                             if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, [hoveredPeerId], ssColor);
                                             if (_filterPeerTable) _filterPeerTable([hoveredPeerId]);
                                             if (_dimMapPeers) _dimMapPeers([hoveredPeerId]);
+                                            // Preserve hovered peer's center text
+                                            if (donutFocused) {
+                                                var hPeer = lastPeersRaw.find(function (p) { return p.id === hoveredPeerId; });
+                                                if (hPeer) showPeerInDonutCenter(hPeer, ssColor);
+                                            }
                                         } else {
                                             if (_drawLinesForAs) _drawLinesForAs(subSubFilterAsNum, ssProvGroup.peerIds, ssColor);
                                             if (_filterPeerTable) _filterPeerTable(ssProvGroup.peerIds);
