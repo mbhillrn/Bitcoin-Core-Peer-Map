@@ -320,7 +320,7 @@ body.insight-rect-active .as-focused-close {
     left: 50%;
     transform: translateX(-50%) scale(0.9);
     width: 320px;
-    height: 190px;
+    height: 210px;
     z-index: 10;
     pointer-events: auto;
     opacity: 0;
@@ -350,15 +350,15 @@ body.insight-rect-active .as-focused-close {
 /* "Score & Insights" badge at top — integrates into the rect top border */
 .as-insight-rect-badge {
     position: absolute;
-    top: -11px;
+    top: -13px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(22, 27, 34, 0.95);
     border: 2px solid #d4a017;
-    border-radius: 10px;
-    padding: 2px 14px;
+    border-radius: 12px;
+    padding: 3px 16px;
     font-family: var(--font-display);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.2px;
     text-transform: uppercase;
@@ -370,7 +370,7 @@ body.insight-rect-active .as-focused-close {
 .as-insight-rect-badge::after {
     content: '\2605';
     margin-left: 4px;
-    font-size: 10px;
+    font-size: 12px;
     color: #d4a017;
 }
 /* Close/back button — positioned just outside the rectangle to the right */
@@ -425,7 +425,7 @@ body.insight-rect-active .as-focused-close {
 }
 .as-insight-rect-title {
     font-family: var(--font-display);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -434,7 +434,7 @@ body.insight-rect-active .as-focused-close {
 }
 .as-insight-rect-rank {
     font-family: var(--font-data);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -443,7 +443,7 @@ body.insight-rect-active .as-focused-close {
 }
 .as-insight-rect-provider {
     font-family: var(--font-display);
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 800;
     line-height: 1.2;
     margin-bottom: 4px;
@@ -460,7 +460,7 @@ body.insight-rect-active .as-focused-close {
 }
 .as-insight-rect-meta {
     font-family: var(--font-data);
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary, #8b949e);
     line-height: 1.5;
 }
@@ -469,7 +469,7 @@ body.insight-rect-active .as-focused-close {
 }
 .as-insight-rect-stat {
     font-family: var(--font-data);
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     margin-top: 4px;
     line-height: 1.3;
@@ -514,6 +514,31 @@ body.insight-rect-active .as-focused-close {
     pointer-events: auto;
     max-height: 260px;
     overflow-y: auto;
+}
+/* When "Display Top ISP/Net" toggle is OFF, suppress legend expansion even on hover */
+.as-diversity-container.legends-hidden .as-legend,
+.as-diversity-container.legends-hidden:hover:not(:has(.pn-mini-donut:hover)) .as-legend {
+    max-height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+}
+/* Legend-hover provider name inside donut center (non-focused, legends hidden) */
+.as-score-value.as-legend-hover-provider {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: pre-line;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Prevent donut center from stealing hover during legend-hover preview */
+.as-donut-center.legend-hover-active {
+    pointer-events: none;
 }
 /* "TOP 8" header above the legend list */
 .as-legend-header {
@@ -1027,6 +1052,11 @@ body.theme-light .as-loading { color: var(--text-secondary); }
     outline: 1px solid rgba(88, 166, 255, 0.3);
     outline-offset: -1px;
 }
+.as-provider-row-selected {
+    background: rgba(88, 166, 255, 0.18) !important;
+    outline: 1px solid rgba(88, 166, 255, 0.3);
+    outline-offset: -1px;
+}
 .as-sub-tt-id {
     color: var(--accent);
     font-weight: 700;
@@ -1284,6 +1314,14 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-conn-dir-row:hover,
 .as-conn-out-row:hover {
     background: rgba(88, 166, 255, 0.06);
+}
+.as-conn-prov-row.sub-filter-active {
+    background: rgba(88, 166, 255, 0.16);
+}
+.as-conn-dir-row.sub-filter-active,
+.as-conn-out-row.sub-filter-active {
+    background: rgba(88, 166, 255, 0.16);
+    color: var(--text-primary);
 }
 
 /* Summary interactive rows (sections 3-7) — clickable with provider drill-down */
@@ -2321,7 +2359,7 @@ body.pn-panel-open .pn-container.pn-focused {
     left: 50%;
     transform: translateX(-50%) scale(0.9);
     width: 320px;
-    height: 190px;
+    height: 210px;
     z-index: 10;
     pointer-events: auto;
     opacity: 0;
@@ -2351,15 +2389,15 @@ body.pn-panel-open .pn-container.pn-focused {
 /* "Scores & Insights" badge at top — integrates into the rect top border */
 .pn-insight-rect-badge {
     position: absolute;
-    top: -11px;
+    top: -13px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(22, 27, 34, 0.95);
     border: 2px solid #d4a017;
-    border-radius: 10px;
-    padding: 2px 14px;
+    border-radius: 12px;
+    padding: 3px 16px;
     font-family: var(--font-display);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.2px;
     text-transform: uppercase;
@@ -2371,7 +2409,7 @@ body.pn-panel-open .pn-container.pn-focused {
 .pn-insight-rect-badge::after {
     content: '\2605';
     margin-left: 4px;
-    font-size: 10px;
+    font-size: 12px;
     color: #d4a017;
 }
 /* Close/back button */
@@ -2426,7 +2464,7 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-insight-rect-title {
     font-family: var(--font-display);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -2435,7 +2473,7 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-insight-rect-rank {
     font-family: var(--font-data);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -2443,7 +2481,7 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-insight-rect-network {
     font-family: var(--font-display);
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 800;
     line-height: 1.2;
     margin-bottom: 4px;
@@ -2455,13 +2493,13 @@ body.pn-panel-open .pn-container.pn-focused {
 }
 .pn-insight-rect-meta {
     font-family: var(--font-data);
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-secondary, #8b949e);
     line-height: 1.5;
 }
 .pn-insight-rect-stat {
     font-family: var(--font-data);
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     margin-top: 4px;
     line-height: 1.3;
