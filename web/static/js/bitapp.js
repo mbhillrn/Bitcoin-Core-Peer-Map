@@ -2487,6 +2487,12 @@
                 const category = rowEl.dataset.category;
                 const label = rowEl.querySelector('.as-detail-sub-label').textContent;
 
+                // Dismiss insight rect if switching to a non-insight selection
+                if (pnInsightRectVisible) {
+                    hidePnInsightRect();
+                    clearPnInsightState();
+                }
+
                 // Toggle: clicking same row unpins
                 if (pnSubTooltipPinned && pnPinnedSubSrc === rowEl) {
                     hidePnSubTooltip();
@@ -7328,6 +7334,11 @@
                     hideTooltip();
                     closePnBigPopup();
                     hidePnSubTooltip();
+                    // Dismiss insight rect if active
+                    if (pnInsightRectVisible) {
+                        hidePnInsightRect();
+                        clearPnInsightState();
+                    }
                     // In private mode, donut stays centered; otherwise un-focus if no panel
                     if (!privateNetMode && !pnSelectedNet) {
                         pnDonutFocused = false;
