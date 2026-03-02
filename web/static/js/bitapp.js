@@ -1702,6 +1702,12 @@
         hideTooltip();
         hidePnSubTooltip();
 
+        // Dismiss insight rect if selecting a different peer than the active insight's peer
+        if (pnInsightRectVisible && pnInsightActivePeerId !== peerId) {
+            hidePnInsightRect();
+            clearPnInsightState();
+        }
+
         // Move donut to top-center (focused state)
         cachePnElements();
         pnDonutFocused = true;
@@ -1780,8 +1786,22 @@
 
         // Update center text
         if (pnCenterLabel && pnCenterCount && pnCenterSub) {
+            // If a peer row is hovered in a sub-tooltip, preserve that peer's info
+            if (highlightedPeerId && pnSubTooltipPinned) {
+                var peer = lastPeers.find(function(p) { return p.id === highlightedPeerId; });
+                if (peer) {
+                    var netLabel = PN_NET_LABELS[peer.network] || peer.network || 'PEER';
+                    var netColor = getPnNetColor(peer.network);
+                    pnCenterLabel.textContent = netLabel.toUpperCase();
+                    pnCenterLabel.style.color = netColor;
+                    pnCenterCount.textContent = '#' + highlightedPeerId;
+                    pnCenterCount.style.fontSize = '22px';
+                    pnCenterCount.style.fontFamily = '';
+                    pnCenterCount.style.color = netColor;
+                    pnCenterSub.textContent = peer.direction === 'IN' ? 'inbound' : 'outbound';
+                }
             // If a category row preview is active (hover or pinned), preserve it across refresh
-            if (pnCenterPreviewLabel && pnCenterPreviewPeerIds) {
+            } else if (pnCenterPreviewLabel && pnCenterPreviewPeerIds) {
                 var cnt = pnCenterPreviewPeerIds.length;
                 pnCenterLabel.textContent = cnt + ' PEER' + (cnt !== 1 ? 'S' : '');
                 pnCenterLabel.style.color = 'var(--logo-accent, #7ec8e3)';
@@ -1970,6 +1990,12 @@
         e.stopPropagation();
         const net = e.currentTarget.dataset.net;
         if (!net) return;
+
+        // Dismiss insight rect when switching to a network selection
+        if (pnInsightRectVisible) {
+            hidePnInsightRect();
+            clearPnInsightState();
+        }
 
         // Toggle: click same segment deselects
         if (pnSelectedNet === net) {
@@ -2433,6 +2459,7 @@
         bodyEl.querySelectorAll('.pn-interactive-row').forEach(rowEl => {
             rowEl.addEventListener('mouseenter', (e) => {
                 if (pnSubTooltipPinned) return;
+                if (pnInsightActiveType) return; // Don't preview when insight is selected
                 const peerIds = parsePnPeerIds(rowEl);
                 const category = rowEl.dataset.category;
                 const label = rowEl.querySelector('.as-detail-sub-label').textContent;
@@ -2448,6 +2475,7 @@
             });
             rowEl.addEventListener('mouseleave', () => {
                 if (pnSubTooltipPinned) return;
+                if (pnInsightActiveType) return; // Was suppressed on enter
                 hidePnSubTooltip();
                 pnPreviewPeerIds = null;
                 // Restore PN donut center to its previous state
