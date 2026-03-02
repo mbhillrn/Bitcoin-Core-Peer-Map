@@ -1,3 +1,5 @@
+v7.7.1 — Fixed public donut staying expanded with stale provider name in center after dismissing a "Connections by Provider" sub-filter via map click or Escape key. Fixed private network donut center not showing selected peer info (#ID, network, direction) when clicking a peer from a sub-menu — deferred mouseleave events from the hidden tooltip were overwriting the peer text with stale category preview data.
+
 v7.7.0 — Added Scores & Insights rectangle to the Private Network donut with hover preview, click-to-select, line drawing, and data refresh persistence. Added Display Top ISP/Net toggle in Map Settings (default OFF) that hides legend lists and shows provider info directly in donut centers on slice hover. Fixed multi-level panel preview, selection highlighting, and data refresh state preservation across both public and private donuts.
 
 v7.6.7 — Fixed donut center text not updating when IPv4 or IPv6 network panel is selected from the top bar. The center now shows "N PEERS / IPv4 / X% of peers" (with network color) and correctly preserves this through 10-second data refreshes, hover previews, and sub-filter drill-downs within the network panel.
