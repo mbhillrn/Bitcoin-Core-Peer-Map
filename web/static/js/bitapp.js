@@ -8876,6 +8876,9 @@
                 pinnedNode = null;
                 hideTooltip();
             },
+            enterPrivateNetMode: function (targetNet) {
+                enterPrivateNetMode(null, targetNet || null);
+            },
         });
 
         // Donut is always active — feed it initial data if available
