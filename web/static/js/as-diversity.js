@@ -1292,6 +1292,9 @@ window.ASDiversity = (function () {
     function renderCenter() {
         if (!donutCenter) return;
 
+        // Clear legend-hover pointer-events lock whenever center is re-rendered
+        clearLegendHoverActive();
+
         // If peer detail panel is active, don't touch center text — showPeerInDonutCenter manages it
         if (peerDetailActive) return;
 
@@ -4879,11 +4882,15 @@ window.ASDiversity = (function () {
     }
 
     /** Show provider info in donut center when hovering a segment with legends hidden.
-     *  Displays: Rank #N / ISP / PROVIDER-NAME / AS12345 / 16 PEERS */
+     *  Displays: Rank #N / ISP / PROVIDER-NAME / AS12345 / 16 PEERS
+     *  Uses title-matching font (Cinzel 15px uppercase) to stay inside donut hole. */
     function showLegendHoverCenterText(asNum) {
         if (!donutCenter) return;
         var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
         if (!seg) return;
+
+        // Disable pointer-events on center so it doesn't steal hover from segments
+        donutCenter.classList.add('legend-hover-active');
 
         // Determine rank (1-based position in donutSegments, excluding Others)
         var rank = 0;
@@ -4918,12 +4925,12 @@ window.ASDiversity = (function () {
             headingEl.style.display = seg.isOthers ? 'none' : '';
         }
 
-        // Provider name — use smart line-breaking
+        // Provider name — title-matching font, smart line-breaking
         var name = seg.isOthers ? 'Others' : (seg.asShort || seg.asName || seg.asNumber);
         var displayLines = formatNameForDonut(name);
         if (scoreVal) {
             scoreVal.textContent = displayLines;
-            scoreVal.className = 'as-score-value as-focused-provider';
+            scoreVal.className = 'as-score-value as-legend-hover-provider';
             scoreVal.style.color = seg.color;
             scoreVal.title = (seg.asName || seg.asNumber) + '\n' + seg.peerCount + ' peers (' + seg.percentage.toFixed(1) + '%)';
         }
@@ -4941,6 +4948,11 @@ window.ASDiversity = (function () {
             scoreLbl.className = 'as-score-label as-provider-peers';
             scoreLbl.style.color = '';
         }
+    }
+
+    /** Remove the legend-hover pointer-events lock from donut center */
+    function clearLegendHoverActive() {
+        if (donutCenter) donutCenter.classList.remove('legend-hover-active');
     }
 
     /** Show scrollable Others provider list as a floating popup to the right of the donut.
@@ -5160,6 +5172,7 @@ window.ASDiversity = (function () {
         // When legends are hidden (not focused), restore default center text
         if (legendsHidden && !donutFocused && !selectedAs) {
             focusedHoverAs = null;
+            clearLegendHoverActive();
             renderCenter();
         }
 

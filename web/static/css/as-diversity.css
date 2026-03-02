@@ -523,6 +523,23 @@ body.insight-rect-active .as-focused-close {
     pointer-events: none !important;
     overflow: hidden !important;
 }
+/* Legend-hover provider name inside donut center (non-focused, legends hidden) */
+.as-score-value.as-legend-hover-provider {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: pre-line;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Prevent donut center from stealing hover during legend-hover preview */
+.as-donut-center.legend-hover-active {
+    pointer-events: none;
+}
 /* "TOP 8" header above the legend list */
 .as-legend-header {
     font-family: var(--font-data);
