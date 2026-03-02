@@ -2328,6 +2328,7 @@
         pnDetailBodyEl.querySelectorAll('.pn-insight-row').forEach(row => {
             row.addEventListener('mouseenter', () => {
                 if (pnInsightActiveType) return; // Don't override a pinned selection
+                if (pnSubTooltipPinned) return;  // Don't preview when sub-tooltip is open
                 const peerId = parseInt(row.dataset.peerId);
                 const insightType = row.dataset.insightType;
                 const peerNet = row.dataset.peerNet;
@@ -2351,6 +2352,7 @@
 
             row.addEventListener('mouseleave', () => {
                 if (pnInsightActiveType) return; // Don't dismiss if pinned
+                if (pnSubTooltipPinned) return;  // Was suppressed on enter
                 row.classList.remove('pn-insight-hover');
                 pnInsightHoverType = null;
                 hidePnInsightRect();
@@ -2788,7 +2790,7 @@
             });
         });
 
-        // Peer row hover → preview individual peer line
+        // Peer row hover → preview individual peer line + donut center
         tip.querySelectorAll('.as-sub-tt-peer[data-peer-id]').forEach(row => {
             row.addEventListener('mouseenter', () => {
                 const peerId = parseInt(row.dataset.peerId);
@@ -2796,7 +2798,22 @@
                     highlightedPeerId = peerId;
                     // Save current preview (from parent row hover) and show single peer
                     if (!tip._savedPreviewPeerIds) tip._savedPreviewPeerIds = pnPreviewPeerIds;
+                    if (!tip._savedCenterLabel) tip._savedCenterLabel = pnCenterPreviewLabel;
+                    if (!tip._savedCenterPeerIds) tip._savedCenterPeerIds = pnCenterPreviewPeerIds;
                     pnPreviewPeerIds = [peerId];
+                    // Preview this peer's info in the PN donut center
+                    const peer = lastPeers.find(p => p.id === peerId);
+                    if (peer && pnCenterLabel && pnCenterCount && pnCenterSub) {
+                        const netLabel = PN_NET_LABELS[peer.network] || peer.network || 'PEER';
+                        const netColor = getPnNetColor(peer.network);
+                        pnCenterLabel.textContent = netLabel.toUpperCase();
+                        pnCenterLabel.style.color = netColor;
+                        pnCenterCount.textContent = '#' + peerId;
+                        pnCenterCount.style.fontSize = '22px';
+                        pnCenterCount.style.fontFamily = '';
+                        pnCenterCount.style.color = netColor;
+                        pnCenterSub.textContent = peer.direction === 'IN' ? 'inbound' : 'outbound';
+                    }
                 }
             });
             row.addEventListener('mouseleave', () => {
@@ -2805,6 +2822,15 @@
                 // Restore parent row preview (unless already cleared by hidePnSubTooltip)
                 pnPreviewPeerIds = tip._savedPreviewPeerIds || null;
                 tip._savedPreviewPeerIds = null;
+                // Restore parent donut center text
+                if (tip._savedCenterLabel && tip._savedCenterPeerIds) {
+                    const allPN = nodes.filter(n => n.alive && PRIVATE_NETS.has(n.net));
+                    previewPnCenterText(tip._savedCenterPeerIds, tip._savedCenterLabel, allPN.length);
+                } else {
+                    restorePnCenterText();
+                }
+                tip._savedCenterLabel = null;
+                tip._savedCenterPeerIds = null;
             });
         });
 

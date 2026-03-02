@@ -6525,7 +6525,8 @@ window.ASDiversity = (function () {
                         }
                     }
                     // Preserve insight rect state for all insight categories
-                    if (insightActiveAsNum && donutFocused) {
+                    // (but skip if a peer is being hovered — that takes priority)
+                    if (insightActiveAsNum && donutFocused && !hoveredPeerId) {
                         if (insightRectVisible) {
                             var insRectData = getInsightDataForActive();
                             if (insRectData) showInsightRect(insightActiveType, insRectData);
