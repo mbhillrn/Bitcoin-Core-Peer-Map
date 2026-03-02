@@ -2081,23 +2081,23 @@ window.ASDiversity = (function () {
                 html += '</div>';
             }
         }
-        // "Show Private Networks" link at bottom of Connections by Provider
-        var hasPrivateNets = false;
-        for (var pni = 0; pni < lastPeersRaw.length; pni++) {
-            var pnNet = lastPeersRaw[pni].net;
-            if (pnNet === 'onion' || pnNet === 'i2p' || pnNet === 'cjdns') { hasPrivateNets = true; break; }
-        }
-        if (hasPrivateNets) {
-            html += '<div class="as-detail-sub-row as-show-private-nets" style="cursor:pointer; padding-top:4px; padding-bottom:4px">';
-            html += '<span class="as-detail-sub-label" style="color:var(--accent); font-size:11px">\u25B6 Show Private Networks</span>';
-            html += '</div>';
-        }
 
         // ── Section 3: Networks ──
         html += '<div class="modal-section-title" title="Peer connections grouped by network protocol. IPv4/IPv6 are clearnet, Tor/I2P/CJDNS are anonymous overlay networks.">Networks</div>';
         for (var ni = 0; ni < data.networks.length; ni++) {
             var net = data.networks[ni];
             html += summaryInteractiveRow(net.label, net.peerCount + 'p / ' + net.providerCount + 'prov', net);
+        }
+        // "Private Networks" link at bottom of Networks section
+        var hasPrivateNets = false;
+        for (var pni = 0; pni < lastPeersRaw.length; pni++) {
+            var pnNet = lastPeersRaw[pni].net;
+            if (pnNet === 'onion' || pnNet === 'i2p' || pnNet === 'cjdns') { hasPrivateNets = true; break; }
+        }
+        if (hasPrivateNets) {
+            html += '<div class="as-detail-sub-row as-show-private-nets" style="cursor:pointer; padding-top:2px; padding-bottom:2px">';
+            html += '<span class="as-detail-sub-label" style="color:var(--accent); font-size:11px">Private Networks</span>';
+            html += '</div>';
         }
 
         // ── Section 4: Hosting ──
@@ -2707,7 +2707,7 @@ window.ASDiversity = (function () {
 
     /** Build provider list HTML for the sub-tooltip in summary drill-down mode.
      *  providers: [{asNumber, name, color, peerCount, peerIds, peers}] */
-    function buildProviderListHtml(providers, catLabel) {
+    function buildProviderListHtml(providers, catLabel, navAsNum) {
         var privateNetMap = { 'Tor': 'onion', 'I2P': 'i2p', 'CJDNS': 'cjdns' };
         var html = '';
         html += '<div class="as-sub-tt-section" style="border-bottom:none; margin-bottom:2px">';
@@ -2715,6 +2715,10 @@ window.ASDiversity = (function () {
         // For private network categories, add link to private network panel
         if (privateNetMap[catLabel]) {
             html += '<div class="as-sub-tt-nav as-private-net-link" data-net="' + privateNetMap[catLabel] + '" style="font-size:9px; color:var(--accent); cursor:pointer; margin-top:2px">\u25B6 Open ' + catLabel + ' Network panel</div>';
+        }
+        // Optional nav link to open a provider/segment panel
+        if (navAsNum) {
+            html += '<div class="as-sub-tt-nav as-grid-provider-click" data-as="' + navAsNum + '" style="font-size:9px; color:var(--accent); cursor:pointer; margin-top:2px">\u25B6 Open ' + catLabel + ' panel</div>';
         }
         // For service flag categories, expand abbreviations to full descriptions
         if (catLabel) {
@@ -3440,7 +3444,7 @@ window.ASDiversity = (function () {
                     if (subTooltipPinned || peerDetailActive) return;
                     var peerIds = JSON.parse(rowEl.dataset.peerIds);
                     var providers = JSON.parse(rowEl.dataset.providers);
-                    var html = buildProviderListHtml(providers, 'Others');
+                    var html = buildProviderListHtml(providers, 'Others', 'Others');
                     showSubTooltip(html, e);
                     previewSummaryLines(peerIds);
                     previewSummaryCenterText(peerIds, 'Others');
@@ -3512,13 +3516,16 @@ window.ASDiversity = (function () {
 
                     restoreDonutAfterPreview();
 
-                    // Pin the sub-tooltip with provider list
-                    var html = buildProviderListHtml(providers, 'Others');
+                    // Pin the sub-tooltip with provider list + "Open Others panel" nav link
+                    var html = buildProviderListHtml(providers, 'Others', 'Others');
                     showSubTooltip(html, e);
                     pinSubTooltip(html, rowEl, function (tip) {
                         attachProviderClickHandlers(tip);
+                        attachProviderNavHandlers(tip);
                     });
-                    attachProviderClickHandlers(document.getElementById('as-sub-tooltip'));
+                    var tipEl2 = document.getElementById('as-sub-tooltip');
+                    attachProviderClickHandlers(tipEl2);
+                    attachProviderNavHandlers(tipEl2);
                 });
             })(connOthersRows[coi2]);
         }
