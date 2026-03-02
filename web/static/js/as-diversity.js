@@ -4287,6 +4287,11 @@ window.ASDiversity = (function () {
             var rows = bodyEl.querySelectorAll('.sub-filter-active');
             for (var ri = 0; ri < rows.length; ri++) rows[ri].classList.remove('sub-filter-active');
         }
+        // Revert donut expansion and center text (a conn-provider sub-filter
+        // may have expanded a segment and shown provider name in center)
+        animateDonutRevert();
+        renderCenter();
+        renderLegend();
     }
 
     function highlightActiveSummaryRow() {
@@ -4571,6 +4576,11 @@ window.ASDiversity = (function () {
                     var rows = bodyEl.querySelectorAll('.sub-filter-active');
                     for (var i = 0; i < rows.length; i++) rows[i].classList.remove('sub-filter-active');
                 }
+                // Revert donut expansion and center text (conn-provider sub-filter
+                // may have expanded a segment and shown provider name in center)
+                animateDonutRevert();
+                renderCenter();
+                renderLegend();
             } else if (selectedAs) {
                 clearSubFilter();
             }

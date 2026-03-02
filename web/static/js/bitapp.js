@@ -2790,7 +2790,10 @@
         if (tip) {
             // Clear saved preview state BEFORE hiding, so deferred mouseleave
             // events (triggered by display:none) can't restore stale peer IDs
+            // or stale donut center text (category label/peerIds)
             tip._savedPreviewPeerIds = null;
+            tip._savedCenterLabel = null;
+            tip._savedCenterPeerIds = null;
             tip.classList.add('hidden');
             tip.style.display = 'none';
             tip.style.pointerEvents = 'none';
@@ -2931,7 +2934,11 @@
         const tip = document.getElementById('pn-sub-sub-tooltip');
         if (tip) {
             // Clear saved preview state BEFORE hiding (same deferred mouseleave fix)
+            // Also clear saved center label/peerIds so deferred mouseleave can't
+            // restore stale category text over the selected peer's donut info
             tip._savedPreviewPeerIds = null;
+            tip._savedCenterLabel = null;
+            tip._savedCenterPeerIds = null;
             tip.classList.add('hidden');
             tip.style.display = 'none';
             tip.style.pointerEvents = 'none';
