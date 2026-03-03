@@ -1294,13 +1294,15 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 }
 
 /* Connection provider rows (3-row layout per provider) */
-.as-conn-prov-row {
+.as-conn-prov-row,
+.as-conn-others-row {
     cursor: pointer;
     border-radius: 3px;
     transition: background 0.15s ease;
     font-weight: 600;
 }
-.as-conn-prov-row:hover {
+.as-conn-prov-row:hover,
+.as-conn-others-row:hover {
     background: rgba(88, 166, 255, 0.06);
 }
 .as-conn-dir-row,
@@ -1315,7 +1317,8 @@ body.theme-light .as-loading { color: var(--text-secondary); }
 .as-conn-out-row:hover {
     background: rgba(88, 166, 255, 0.06);
 }
-.as-conn-prov-row.sub-filter-active {
+.as-conn-prov-row.sub-filter-active,
+.as-conn-others-row.sub-filter-active {
     background: rgba(88, 166, 255, 0.16);
 }
 .as-conn-dir-row.sub-filter-active,
