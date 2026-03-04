@@ -6242,7 +6242,7 @@ window.ASDiversity = (function () {
     /** Expand service flag abbreviations to full descriptions */
     function expandServiceFlags(abbrev) {
         if (!abbrev || abbrev === '\u2014') return '\u2014';
-        var flags = abbrev.split('/');
+        var flags = abbrev.split(/\s+/);
         var expanded = [];
         for (var i = 0; i < flags.length; i++) {
             var flag = flags[i].trim();
