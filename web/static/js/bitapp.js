@@ -3606,10 +3606,10 @@
         function expandSvc(abbrev) {
             if (!abbrev || abbrev === '\u2014') return '\u2014';
             const SERVICE_MAP = {
-                'N': 'NETWORK', 'BF': 'BLOOM', 'W': 'WITNESS', 'CF': 'COMPACT_FILTERS',
+                'N': 'NETWORK', 'B': 'BLOOM', 'W': 'WITNESS', 'CF': 'COMPACT_FILTERS',
                 'NL': 'NETWORK_LIMITED', 'P': 'P2P_V2',
             };
-            return abbrev.split('/').map(f => {
+            return abbrev.split(/\s+/).map(f => {
                 const t = f.trim();
                 return SERVICE_MAP[t] || t;
             }).join('<br>');

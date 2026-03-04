@@ -1125,7 +1125,11 @@ async def api_peers():
 
         # Services abbreviation
         services = peer.get('servicesnames', [])
-        services_abbrev = ' '.join([s[0] if s else '' for s in services[:5]])
+        svc_abbrev_map = {
+            'NETWORK': 'N', 'WITNESS': 'W', 'NETWORK_LIMITED': 'NL',
+            'P2P_V2': 'P', 'COMPACT_FILTERS': 'CF', 'BLOOM': 'B',
+        }
+        services_abbrev = ' '.join([svc_abbrev_map.get(s, s[:2]) for s in services])
 
         # Connection time formatted - two most significant non-zero units, no spaces
         conntime = peer.get('conntime', 0)
