@@ -1,4 +1,4 @@
-# MBCore Dashboard: Bitcoin Core Peer Map and Network Analyzer
+# MBCore Dashboard: Bitcoin Core Geolocated Peer Map and Network Provider Analyzer
 
 ### A real-time monitoring dashboard for your Bitcoin Core node. Geolocates connected peers on an interactive world map, analyzes service provider diversity across your connections, and provides tools to manage peers directly from a browser-based GUI.
 
