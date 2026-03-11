@@ -5282,8 +5282,8 @@ window.ASDiversity = (function () {
     function onSegmentHover(e) {
         var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
-        // Don't show AS hover tooltip when a sub-tooltip is pinned
-        if (subTooltipPinned) return;
+        // Don't show AS hover tooltip when a sub-tooltip is pinned or peer detail is active
+        if (subTooltipPinned || peerDetailActive) return;
         hoveredAs = asNum;
         // No floating tooltip — legend highlighting replaces it
         highlightLegendItem(asNum);
@@ -5317,7 +5317,7 @@ window.ASDiversity = (function () {
     }
 
     function onSegmentLeave() {
-        if (subTooltipPinned) return;
+        if (subTooltipPinned || peerDetailActive) return;
         hoveredAs = null;
         clearLegendHighlight();
 
