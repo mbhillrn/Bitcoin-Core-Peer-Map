@@ -5282,8 +5282,8 @@ window.ASDiversity = (function () {
     function onSegmentHover(e) {
         var asNum = e.currentTarget.dataset.as;
         if (!asNum) return;
-        // Don't show AS hover tooltip when a sub-tooltip is pinned
-        if (subTooltipPinned) return;
+        // Don't show AS hover tooltip when a sub-tooltip is pinned or peer detail is active
+        if (subTooltipPinned || peerDetailActive) return;
         hoveredAs = asNum;
         // No floating tooltip — legend highlighting replaces it
         highlightLegendItem(asNum);
@@ -5306,8 +5306,7 @@ window.ASDiversity = (function () {
         }
 
         // Draw hover lines if nothing is selected, or if summary is selected (temporary override)
-        // Don't override lines when a peer detail panel is active (peer selected from list)
-        if (!selectedAs && !peerDetailActive) {
+        if (!selectedAs) {
             var seg = donutSegments.find(function (s) { return s.asNumber === asNum; });
             if (seg && _drawLinesForAs) {
                 _drawLinesForAs(asNum, seg.peerIds, seg.color);
@@ -5318,7 +5317,7 @@ window.ASDiversity = (function () {
     }
 
     function onSegmentLeave() {
-        if (subTooltipPinned) return;
+        if (subTooltipPinned || peerDetailActive) return;
         hoveredAs = null;
         clearLegendHighlight();
 
@@ -5336,13 +5335,13 @@ window.ASDiversity = (function () {
         }
 
         // If there's an active sub-filter, restore to that instead of showing all
-        if (summarySelected && subFilterPeerIds && subFilterPeerIds.length > 0 && !selectedAs && !peerDetailActive) {
+        if (summarySelected && subFilterPeerIds && subFilterPeerIds.length > 0 && !selectedAs) {
             restoreSummaryFromPreview();
             return;
         }
 
         // If hoveredAll or summarySelected is active, restore all-lines state
-        if ((hoveredAll || summarySelected) && !selectedAs && !peerDetailActive) {
+        if ((hoveredAll || summarySelected) && !selectedAs) {
             activateHoverAll();
             if (_filterPeerTable) _filterPeerTable(null);
             if (_dimMapPeers) _dimMapPeers(null);
@@ -5350,7 +5349,7 @@ window.ASDiversity = (function () {
         }
 
         // ONLY clear lines if nothing is selected — selection keeps its lines
-        if (!selectedAs && !peerDetailActive) {
+        if (!selectedAs) {
             if (_clearAsLines) _clearAsLines();
             if (_filterPeerTable) _filterPeerTable(null);
             if (_dimMapPeers) _dimMapPeers(null);
