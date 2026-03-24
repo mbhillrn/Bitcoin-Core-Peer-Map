@@ -1,6 +1,6 @@
-# MBCore Dashboard: Bitcoin Core Geolocated Peer Map and Network Provider Analysis for your Personal Node
+# MBCore Dashboard: Geolocated Peer Map and Network Provider Analysis for your Personal Bitcoin Core Node
 
-### A real-time monitoring dashboard for your Bitcoin Core node. Geolocates connected peers on an interactive world map, analyzes service provider diversity across your connections, and provides tools to manage peers directly from a browser-based GUI.
+### A real-time monitoring dashboard for your personal Bitcoin Core node. Geolocates connected peers on an interactive world map, analyzes service provider diversity across your connections, and provides tools to manage peers directly from a browser-based GUI.
 
 ![MBCore Dashboard](docs/images/firsthero.png)
 
