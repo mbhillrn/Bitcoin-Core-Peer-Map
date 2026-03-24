@@ -1,3 +1,5 @@
+v7.8.1 — README.md minor edit
+
 v7.8.0 — Fixed donut hover overriding peer selection. When a peer was selected from the peer list, hovering over the donut chart would draw lines to all peers in the hovered AS segment, overriding the single-peer focus. Donut hover and leave events now fully block when a peer detail panel is active, matching the existing behavior when navigating through donut sub-menus.
 
 v7.7.4 — Fixed service flag abbreviations showing only the first character of each flag name (e.g. NETWORK_LIMITED displayed as "N" instead of "NL", COMPACT_FILTERS as "C" instead of "CF"). Backend now uses a proper abbreviation map. Fixed frontend expand functions that were splitting on "/" instead of whitespace, preventing tooltip expansion of individual flags.
